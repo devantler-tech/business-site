@@ -43,7 +43,7 @@ release_valid() {
     all(.jobs.admit.steps[]|select(.run=="bash scripts/admit-runtime-release.sh"); .env.RELEASE_MODE=="\u0024{{ inputs.mode }}") and
     .jobs.release.needs=="admit" and .jobs.release.if==null and
     (.jobs.release.uses|test("^devantler-tech/\\.github/\\.github/workflows/create-release\\.yaml@[0-9a-f]{40}$")) and
-    .jobs.release.permissions=={"contents":"read"} and
+    .jobs.release.permissions=={"contents":"read","id-token":"write"} and
     .jobs.release.secrets=={"APP_PRIVATE_KEY":"\u0024{{ secrets.APP_PRIVATE_KEY }}"} and
     .jobs.release.with=={"disable-issue-side-effects":true,"warn-missing-breaking-bang":true,"dry-run":"\u0024{{ github.event_name == \u0027workflow_dispatch\u0027 && inputs.mode == \u0027dry-run\u0027 }}"}
   ' >/dev/null
@@ -91,6 +91,7 @@ done
 release_valid <<<"$release" || fail 'unsafe release trigger, default or credential boundary'
 for mutation in '.jobs.admit.if="always()"' '.on.workflow_dispatch.inputs.mode.default="release"' '.on.push={branches:["main"]}' \
   '.jobs.release.with["dry-run"]=false' '.jobs.release.secrets="inherit"' '.jobs.release.needs=null' \
+  '.jobs.release.permissions.contents="write"' '.jobs.release.permissions.issues="write"' \
   '.jobs.release.uses|=sub("@[0-9a-f]{40}$";"@main")' '.jobs.release.uses|=sub("@[0-9a-f]{40}$";"@v20.1.19")' \
   '.jobs.release.uses|=sub("[0-9a-f]$";"")' '.jobs.release.uses|=sub("^devantler-tech/";"foreign/")' \
   '.jobs.release.uses|=sub("create-release";"publish-app")'; do

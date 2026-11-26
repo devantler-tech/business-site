@@ -2,9 +2,17 @@ package runtimeapp
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
 	"errors"
 	"maps"
+	"math/big"
 	"testing"
+	"time"
 
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 	"github.com/open-feature/go-sdk/openfeature"
@@ -22,6 +30,82 @@ func previewTestSettings() map[string]string {
 		"PORTAL_CLIENT_SECRET_PROJECTION_FILE": "/run/webapp-inputs/preview-oidc-client-secret",
 		"PORTAL_OPERATOR_SUBJECTS":             customeridentity.DexSubject("10001234567890", customeridentity.ZitadelConnectorID),
 	}
+}
+
+func TestUnifiedPreviewRequiresIsolatedStorageOnTheProductionPortal(t *testing.T) {
+	const previewKey = "PORTAL_CLIENT_PREVIEW_DATABASE_URL"
+	const caKey = "PORTAL_CLIENT_PREVIEW_DATABASE_CA"
+	const isolatedURL = "postgres://portal_preview_web@preview-fixture.business-site-dev.svc.cluster.local:5432/portal_preview?sslmode=verify-full"
+	production := map[string]string{
+		"PORTAL_IDENTITY_PROFILE":              "production",
+		"PORTAL_DATABASE_URL":                  "postgres://portal_web@portal-db.fixture.invalid:5432/portal?sslmode=verify-full",
+		"PORTAL_OIDC_ISSUER":                   "https://login.devantler.tech",
+		"PORTAL_OIDC_CLIENT_ID":                "business-portal",
+		"PORTAL_CALLBACK_URL":                  "https://portal.devantler.tech/callback",
+		"PORTAL_CLIENT_SECRET_PROJECTION_FILE": "/run/webapp-inputs/portal-client-secret",
+		"PORTAL_OPERATOR_SUBJECTS":             customeridentity.DexSubject("10001234567890", customeridentity.ZitadelConnectorID),
+		previewKey:                             isolatedURL,
+		caKey:                                  unifiedPreviewFixtureCA(t),
+	}
+	settings, err := parsePortalSettings([]byte(previewKey + "=" + isolatedURL + "\n" + caKey + "=" + production[caKey] + "\n"))
+	if err != nil || settings[previewKey] != isolatedURL || settings[caKey] != production[caKey] {
+		t.Error("the bounded private projection did not admit the isolated preview setting")
+	}
+	cfg, err := ReadConfig(func(key string) string { return production[key] })
+	if err != nil || cfg.previewDatabase != isolatedURL || !cfg.FitsPortalHost("portal.devantler.tech") || cfg.FitsPortalHost("dev.devantler.tech") {
+		t.Fatal("unified preview did not retain the regular portal callback")
+	}
+	store, err := cfg.unifiedPreviewStoreConfig()
+	if err != nil || store.ConnConfig.TLSConfig.RootCAs == nil {
+		t.Fatal("unified preview did not select its independent trust root")
+	}
+	for _, test := range []struct{ name, key, value string }{
+		{"ordinary database reuse", previewKey, production["PORTAL_DATABASE_URL"]},
+		{"preview database used as main store", "PORTAL_DATABASE_URL", isolatedURL},
+		{"preview database address override", previewKey, isolatedURL + "&host=portal-db.fixture.invalid"},
+		{"preview database cannot select the main CA", previewKey, isolatedURL + "&sslrootcert=/run/webapp-inputs/portal-database-ca"},
+		{"missing preview trust root", caKey, ""},
+		{"missing preview database", previewKey, ""},
+		{"invalid preview trust root", caKey, base64.StdEncoding.EncodeToString([]byte("not a certificate"))},
+		{"preview database without hostname validation", previewKey, "postgres://portal_preview_web@preview-fixture.business-site-dev.svc.cluster.local:5432/portal_preview?sslmode=require"},
+		{"preview database carries another login", previewKey, "postgres://portal_web@preview-fixture.business-site-dev.svc.cluster.local:5432/portal_preview?sslmode=verify-full"},
+		{"wrong callback host", "PORTAL_CALLBACK_URL", "https://other.example.invalid/callback"},
+		{"wrong audience", "PORTAL_OIDC_CLIENT_ID", "different-portal"},
+		{"missing operator allowlist", "PORTAL_OPERATOR_SUBJECTS", ""},
+		{"wrong identity profile", "PORTAL_IDENTITY_PROFILE", "preview"},
+		{"expired staging configuration", "PORTAL_IDENTITY_PROFILE", ""},
+		{"missing ordinary database", "PORTAL_DATABASE_URL", ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg, err := ReadConfig(func(key string) string {
+				if key == test.key {
+					return test.value
+				}
+				return production[key]
+			})
+			if !errors.Is(err, ErrConfig) || cfg != (Config{}) {
+				t.Fatal("unsafe unified preview settings were admitted")
+			}
+		})
+	}
+}
+
+func unifiedPreviewFixtureCA(t *testing.T) string {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	certificate := &x509.Certificate{
+		SerialNumber: big.NewInt(1), NotBefore: now.Add(-time.Minute), NotAfter: now.Add(time.Hour),
+		IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, certificate, certificate, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return base64.StdEncoding.EncodeToString(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
 }
 
 func TestPreviewRuntimeBindsThePrivateHost(t *testing.T) {

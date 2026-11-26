@@ -70,11 +70,12 @@ func (s *Foundation) recordPreviewPurchase(ctx context.Context, session durableR
 	// Acquire the session lock after the final flag lookup. A session rotation
 	// or logout that completes first invalidates these bytes. Otherwise the
 	// receipt and session change serialize while the transaction holds the row.
-	var storedDeadline time.Time
-	err = tx.QueryRow(ctx, `SELECT expiry FROM portal_sessions
- WHERE token=$1 AND data=$2 AND expiry>clock_timestamp() FOR SHARE`, session.key, session.data).Scan(&storedDeadline)
-	now := time.Now()
-	if err != nil || ctx.Err() != nil || !now.Before(storedDeadline) || !now.Before(deadline) || !now.Before(p.expires) {
+	if s.previewAuthority != nil {
+		grant, ok := s.currentPreviewAuthority(ctx, p.previewOwner())
+		if !ok || !samePreviewSnapshot(grant.session, session) {
+			return ErrDenied
+		}
+	} else if !previewSessionCurrent(ctx, tx, session) {
 		return ErrDenied
 	}
 	if err = tx.Commit(ctx); err != nil {

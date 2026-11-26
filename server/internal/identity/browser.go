@@ -128,36 +128,20 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 	if err != nil {
 		return nil, err
 	}
-	csrf := nosurf.New(mux)
-	csrf.SetBaseCookie(http.Cookie{Name: "__Host-portal_csrf", Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: 1800})
-	csrf.SetFailureHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { b.render(w, r, 403, "error", "", "") }))
-	secured := sm.LoadAndSave(csrf)
-	gated := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	routes := b.withCSRF(mux)
+	if s.previewSessions {
+		routes, err = b.withUnifiedPreview(mux, routes)
+		if err != nil {
+			return nil, err
+		}
+	}
+	secured := sm.LoadAndSave(routes)
+	gated := func(w http.ResponseWriter, r *http.Request, next http.Handler) {
 		if !s.ready(r.Context()) {
 			http.NotFound(w, r)
 			return
 		}
-		if (r.URL.Path == "/portal/requests" || strings.HasPrefix(r.URL.Path, "/portal/requests/")) && !s.requestsReady(r.Context()) {
-			http.NotFound(w, r)
-			return
-		}
-		if r.URL.Path == "/portal/contact/verify" && !s.contactVerificationReady(r.Context()) {
-			http.NotFound(w, r)
-			return
-		}
-		if (r.URL.Path == "/portal/operator/requests" || strings.HasPrefix(r.URL.Path, "/portal/operator/requests/")) && !s.triageReady(r.Context()) {
-			http.NotFound(w, r)
-			return
-		}
-		if strings.HasPrefix(r.URL.Path, "/portal/operator/requests/") && strings.HasSuffix(r.URL.Path, "/proposals") && !s.proposalsReady(r.Context()) {
-			http.NotFound(w, r)
-			return
-		}
-		if strings.HasPrefix(r.URL.Path, "/portal/operator/requests/") && strings.HasSuffix(r.URL.Path, "/proposal-visibility") && !s.sharingReady(r.Context()) {
-			http.NotFound(w, r)
-			return
-		}
-		if strings.HasPrefix(r.URL.Path, "/portal/operator/requests/") && (strings.HasSuffix(r.URL.Path, "/work-review") || strings.HasSuffix(r.URL.Path, "/work-approvals") || strings.HasSuffix(r.URL.Path, "/work-revocations")) && !s.workApprovalGate(r.Context()) {
+		if !s.previewSessions && !s.browserRouteAvailable(r) {
 			http.NotFound(w, r)
 			return
 		}
@@ -193,18 +177,20 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 		// this API namespace bypasses session/CSRF middleware; operatorCall still
 		// verifies the machine proof and exact action before running anything.
 		if strings.HasPrefix(r.URL.Path, operatorAPIRoot+"/") && len(r.Header.Values("Authorization")) > 0 {
+			if !s.browserRouteAvailable(r) {
+				http.NotFound(w, r)
+				return
+			}
 			mux.ServeHTTP(w, r)
 			return
 		}
-		if _, captured := r.Context().Value(proposalResponseSnapshotKey{}).(proposalResponseCapture); captured {
-			// These human decisions already loaded and captured their session
-			// before the common SDK gates. Never load or recapture it here.
-			csrf.ServeHTTP(w, r)
-			return
-		}
-		secured.ServeHTTP(w, r)
-	})
-	decisions := sm.LoadAndSave(b.captureProposalDecisionSession(gated))
+		next.ServeHTTP(w, r)
+	}
+	// Decision requests load their session before the shared feature checks.
+	// Pass them through the same preview router without loading it a second time.
+	decisions := sm.LoadAndSave(b.captureProposalDecisionSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gated(w, r, routes)
+	})))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if atRoot {
 			r, w = b.internal(r), rootRedirects{w}
@@ -219,8 +205,38 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 			decisions.ServeHTTP(w, r)
 			return
 		}
-		gated.ServeHTTP(w, r)
+		gated(w, r, secured)
 	}), nil
+}
+
+func (b *browser) withCSRF(handler http.Handler) http.Handler {
+	csrf := nosurf.New(handler)
+	csrf.SetBaseCookie(http.Cookie{Name: "__Host-portal_csrf", Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: 1800})
+	csrf.SetFailureHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { b.render(w, r, 403, "error", "", "") }))
+	return csrf
+}
+
+func (s *Foundation) browserRouteAvailable(r *http.Request) bool {
+	path, ctx := r.URL.Path, r.Context()
+	switch {
+	case path == "/portal/requests" || strings.HasPrefix(path, "/portal/requests/"):
+		return s.requestsReady(ctx)
+	case path == "/portal/contact/verify":
+		return s.contactVerificationReady(ctx)
+	case path == "/portal/operator/requests" || strings.HasPrefix(path, "/portal/operator/requests/"):
+		if !s.triageReady(ctx) {
+			return false
+		}
+		switch {
+		case strings.HasSuffix(path, "/proposals"):
+			return s.proposalsReady(ctx)
+		case strings.HasSuffix(path, "/proposal-visibility"):
+			return s.sharingReady(ctx)
+		case strings.HasSuffix(path, "/work-review"), strings.HasSuffix(path, "/work-approvals"), strings.HasSuffix(path, "/work-revocations"):
+			return s.workApprovalGate(ctx)
+		}
+	}
+	return true
 }
 
 const oidcScope = "openid"
@@ -305,10 +321,12 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /portal/operator/customers", b.operatorCustomersPage)
 	mux.HandleFunc("POST /portal/operator/support", b.operatorSupportPage)
 	mux.HandleFunc("GET /portal/operator/invitations/new", b.operatorInvitationPage)
-	if b.foundation != nil && b.foundation.operatorOnly {
+	if b.foundation.previewAvailable() {
 		mux.HandleFunc("POST /portal/preview", b.enterClientPreview)
-		mux.HandleFunc("POST /portal/preview/leave", b.leaveClientPreview)
 		mux.HandleFunc("POST /portal/requests/{id}/preview-orders", b.submitPreviewPurchase)
+	}
+	if b.foundation.canLeaveClientPreview() {
+		mux.HandleFunc("POST /portal/preview/leave", b.leaveClientPreview)
 	}
 	for _, route := range operatorRoutes {
 		mux.HandleFunc(route.method+" "+operatorAPIRoot+route.path, b.operatorAPI(route))
@@ -633,7 +651,7 @@ func (b *browser) sessionPrincipal(issuer, subject, incarnation string, expiry i
 	}
 	p := Principal{issuer: issuer, subject: subject, audience: b.foundation.broker.clientID, expires: time.Unix(expiry, 0), membershipIncarnation: incarnation}
 	if previewIncarnation != "" {
-		if !b.foundation.operatorOnly {
+		if !b.foundation.canLeaveClientPreview() {
 			return Principal{}
 		}
 		p.preview = previewOperator{subject: subject, incarnation: incarnation}
@@ -719,7 +737,12 @@ func (b *browser) render(w http.ResponseWriter, r *http.Request, status int, kin
 // data shares the same localized, escaped layout with the private contact form.
 func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	d := pageData{Lang: language(r), Kind: kind, Client: client, CSRF: token, Title: "Your client portal", Intro: "A private space for your work with Devantler Tech.", Action: "Sign in", SignedIn: "You are signed in", Logout: "Sign out", Error: "Sign-in could not be completed. The portal is invitation-only: try again with the account from your invitation, or contact Devantler Tech.", Unavailable: "The portal is unavailable. Please try again later.", Back: "Back to the website", Theme: "Appearance", System: "System", Light: "Light", Dark: "Dark", Operator: "Operator", Boundary: "Ordering and payments are not available yet."}
-	d.ClientPreview = token != "" && b.foundation != nil && b.foundation.operatorOnly && b.principal(r.Context()).isClientPreview()
+	if b.foundation.canLeaveClientPreview() && b.principal(r.Context()).isClientPreview() {
+		if d.CSRF == "" {
+			d.CSRF = nosurf.Token(r)
+		}
+		d.ClientPreview = d.CSRF != ""
+	}
 	other, path := "da", r.URL.Path
 	if d.Lang == "da" {
 		other = "en"
@@ -727,6 +750,9 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	// Recovery links must not GET a POST-only route or replay an OIDC callback.
 	if kind == "error" || kind == "unavailable" || path == "/portal/logout" || path == "/portal/callback" {
 		path = "/portal/sign-in"
+		if d.ClientPreview {
+			path = "/portal/"
+		}
 	}
 	if path == "/portal/contact/verify" {
 		path = "/portal/contact"
@@ -755,6 +781,14 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 		d.Dark = "Mørk"
 		d.Operator = "Operatør"
 		d.Boundary = "Bestilling og betaling er endnu ikke tilgængelig."
+	}
+	if d.ClientPreview && (kind == "unavailable" || kind == "error") {
+		d.Error = "This action is unavailable in client preview."
+		d.Unavailable = "Client preview is temporarily unavailable."
+		if d.Lang == "da" {
+			d.Error = "Denne handling er ikke tilgængelig i portalen til test."
+			d.Unavailable = "Portalen til test er ikke tilgængelig. Prøv igen senere."
+		}
 	}
 	if kind == "home" && d.ClientPreview {
 		d.Client = "Demo workspace"

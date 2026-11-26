@@ -62,6 +62,16 @@ func (b *browser) captureDurableResponse(ctx context.Context, original contactAu
 	if original.token == "" || ctx.Err() != nil || !time.Now().Before(original.deadline) {
 		return durableResponseSnapshot{}, false
 	}
+	if b.foundation.previewAuthority != nil {
+		grant, ok := b.foundation.currentPreviewAuthority(ctx, original.principal.previewOwner())
+		if !ok || !original.principal.isClientPreview() || grant.session.original.principal != original.principal ||
+			grant.session.original.token != original.token || !grant.session.original.deadline.Equal(original.deadline) {
+			return durableResponseSnapshot{}, false
+		}
+		snapshot := grant.session
+		snapshot.original = original
+		return snapshot, true
+	}
 	fresh, cancel := context.WithDeadline(ctx, original.deadline)
 	defer cancel()
 	store, ok := b.sessions.Store.(scs.CtxStore)
@@ -106,6 +116,9 @@ func (b *browser) durableSnapshotAllowed(ctx context.Context, snapshot durableRe
 	// The SDK wait precedes fresh durable reads. This SQL is scoped to the
 	// original client, not whichever client a replacement membership might own.
 	p := original.principal
+	if b.foundation.previewAuthority != nil {
+		return b.unifiedPreviewResponseAllowed(fresh, snapshot, client, role, query)
+	}
 	sql := `SELECT EXISTS(SELECT 1 FROM portal_memberships m JOIN portal_sessions s ON s.token=$4 AND s.expiry>clock_timestamp() AND s.data=$5
  WHERE m.issuer=$1 AND m.subject=$2 AND m.client_id=$3 AND m.role=$6 AND NOT m.revoked AND m.incarnation::text=$7`
 	args := []any{p.issuer, p.subject, client, snapshot.key, snapshot.data, role, p.membershipIncarnation}
@@ -129,6 +142,23 @@ func (b *browser) durableSnapshotAllowed(ctx context.Context, snapshot durableRe
 	var allowed bool
 	err := query.QueryRow(fresh, sql+")", args...).Scan(&allowed)
 	return err == nil && allowed && ctx.Err() == nil && fresh.Err() == nil && b.foundation.flags.State() == openfeature.ReadyState && time.Now().Before(original.deadline) && time.Now().Before(original.principal.expires)
+}
+
+func (b *browser) unifiedPreviewResponseAllowed(ctx context.Context, snapshot durableResponseSnapshot, client, role string, query privateResponseQuery) bool {
+	p := snapshot.original.principal
+	grant, ok := b.foundation.currentPreviewAuthority(ctx, p.previewOwner())
+	if !ok || !p.isClientPreview() || client != previewWorkspace || role != "client" || !samePreviewSnapshot(grant.session, snapshot) {
+		return false
+	}
+	var allowed bool
+	err := query.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2
+ AND client_id=$3 AND role='client' AND NOT revoked AND incarnation::text=$4)`,
+		p.issuer, p.subject, previewWorkspace, p.membershipIncarnation).Scan(&allowed)
+	if err != nil || !allowed || b.foundation.flags.State() != openfeature.ReadyState {
+		return false
+	}
+	_, ok = b.foundation.currentPreviewAuthority(ctx, p.previewOwner())
+	return ok && b.foundation.flags.State() == openfeature.ReadyState
 }
 
 // renderContact buffers the entire private Go frame before committing headers.

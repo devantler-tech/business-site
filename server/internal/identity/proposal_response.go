@@ -25,6 +25,12 @@ func proposalDecisionRequest(r *http.Request) bool {
 // failed captures too, so a later session can never become a fresh baseline.
 func (b *browser) captureProposalDecisionSession(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The unified preview captures its fictional authority in the preview
+		// router after it binds the request to the isolated workspace.
+		if b.foundation.previewSessions && b.sessions.Exists(r.Context(), previewSessionKey) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		ctx, cancel, snapshot, ok := b.captureWorkResponse(r)
 		defer cancel()
 		ctx = context.WithValue(ctx, proposalResponseSnapshotKey{}, proposalResponseCapture{snapshot: snapshot, ok: ok})
