@@ -239,6 +239,12 @@ func readOrderEnd(ctx context.Context, tx pgx.Tx, o *projectOrder) error {
 	if err != nil {
 		return errTriageStorage
 	}
+	if e.CancelAt != nil {
+		// Stripe's billing clock is UTC. Keep the displayed date independent
+		// of the application host's timezone.
+		utc := e.CancelAt.UTC()
+		e.CancelAt = &utc
+	}
 	o.End = &e
 	if err = tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM portal_card_checkouts WHERE order_id=$1 AND purpose='monthly' AND subscription_id IS NOT NULL)`, o.ID).Scan(&o.Subscribed); err != nil {
 		return errTriageStorage
