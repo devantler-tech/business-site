@@ -350,7 +350,9 @@ func TestAppointmentHoldBindsThePersistedQuote(t *testing.T) {
 	if !errors.As(err, &failure) || failure.Code != "42501" {
 		t.Fatalf("the runtime could replace a held quote: %v", err)
 	}
-	_, err = b.pool.Exec(ctx, `INSERT INTO portal_appointment_introductions(client_id,reservation_id,revision) VALUES($1,$2,2)`, client, id)
+	_, err = b.pool.Exec(ctx, `INSERT INTO portal_appointment_introductions
+ (client_id,sequence,reservation_id,revision,cancellation_notice_minutes,cancellation_terms_version)
+ VALUES($1,1,$2,2,1440,'synthetic-policy-v1')`, client, id)
 	if !errors.As(err, &failure) || failure.Code != "23514" {
 		t.Fatalf("PostgreSQL accepted a quoted reservation as a free introduction: %v", err)
 	}

@@ -289,8 +289,15 @@ func TestRetentionPurgesOnlyFormerClientsAppointmentRevisions(t *testing.T) {
 		if _, err := b.pool.Exec(ctx, insertAppointmentRevision, root, client, 1, start, start.Add(30*time.Minute), start.Add(-time.Hour)); err != nil {
 			t.Fatal("prepare a fictional reservation revision", err)
 		}
-		if _, err := b.pool.Exec(ctx, `INSERT INTO portal_appointment_introductions(client_id,reservation_id,revision) VALUES($1,$2,1)`, client, root); err != nil {
+		if _, err := b.pool.Exec(ctx, `INSERT INTO portal_appointment_introductions
+ (client_id,sequence,reservation_id,revision,cancellation_notice_minutes,cancellation_terms_version)
+ VALUES($1,1,$2,1,1440,'synthetic-policy-v1')`, client, root); err != nil {
 			t.Fatal("prepare the fictional introduction", err)
+		}
+		if client == "former-booking-client" {
+			if _, err := b.pool.Exec(ctx, `INSERT INTO portal_appointment_introduction_cancellations(reservation_id) VALUES($1)`, root); err != nil {
+				t.Fatal("prepare the former client's cancellation", err)
+			}
 		}
 	}
 	migrator := migrationDB(t)
@@ -300,13 +307,14 @@ func TestRetentionPurgesOnlyFormerClientsAppointmentRevisions(t *testing.T) {
 	if n := purgeAged(t, migrator); n != 1 {
 		t.Fatalf("expected to erase one former client, erased %d", n)
 	}
-	var reservations, revisions, introductions int
+	var reservations, revisions, introductions, cancellations int
 	var active bool
 	err := b.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM portal_appointment_reservations),
- (SELECT count(*) FROM portal_appointment_revisions), (SELECT count(*) FROM portal_appointment_introductions), EXISTS(
- SELECT 1 FROM portal_appointment_introductions WHERE client_id='active-booking-client')`).Scan(&reservations, &revisions, &introductions, &active)
-	if err != nil || reservations != 1 || revisions != 1 || introductions != 1 || !active {
-		t.Fatalf("reservation retention crossed clients: roots=%d revisions=%d introductions=%d active=%t err=%v", reservations, revisions, introductions, active, err)
+ (SELECT count(*) FROM portal_appointment_revisions), (SELECT count(*) FROM portal_appointment_introductions),
+ (SELECT count(*) FROM portal_appointment_introduction_cancellations), EXISTS(
+ SELECT 1 FROM portal_appointment_introductions WHERE client_id='active-booking-client')`).Scan(&reservations, &revisions, &introductions, &cancellations, &active)
+	if err != nil || reservations != 1 || revisions != 1 || introductions != 1 || cancellations != 0 || !active {
+		t.Fatalf("reservation retention crossed clients: roots=%d revisions=%d introductions=%d cancellations=%d active=%t err=%v", reservations, revisions, introductions, cancellations, active, err)
 	}
 }
 

@@ -21,6 +21,8 @@ type appointmentHold struct {
 	HeldUntil             time.Time
 	Quote                 appointmentQuoteRef
 	IntroductionConfirmed bool
+	IntroductionCancelled bool
+	cancellableUntil      *time.Time
 	recordedAt            time.Time
 }
 
@@ -169,9 +171,11 @@ func readAppointmentCommitments(ctx context.Context, tx pgx.Tx, reservation stri
 	rows, err := tx.Query(ctx, `SELECT r.starts_at,r.ends_at FROM portal_appointment_revisions r
  WHERE r.reservation_id<>$1 AND r.starts_at<$4 AND r.ends_at>$3 AND (
    (r.held_until>$2 AND NOT EXISTS(SELECT 1 FROM portal_appointment_revisions later
-     WHERE later.reservation_id=r.reservation_id AND later.revision>r.revision))
+     WHERE later.reservation_id=r.reservation_id AND later.revision>r.revision)
+     AND NOT EXISTS(SELECT 1 FROM portal_appointment_introductions i WHERE i.reservation_id=r.reservation_id))
    OR EXISTS(SELECT 1 FROM portal_appointment_introductions i
-     WHERE i.reservation_id=r.reservation_id AND i.revision=r.revision))
+     WHERE i.reservation_id=r.reservation_id AND i.revision=r.revision
+       AND NOT EXISTS(SELECT 1 FROM portal_appointment_introduction_cancellations c WHERE c.reservation_id=i.reservation_id)))
  LIMIT $5`, reservation, now, coverage.Start, coverage.End, booking.MaxIntervals+1)
 	if err != nil {
 		return nil, errTriageStorage
@@ -193,12 +197,16 @@ func readLatestAppointmentHold(ctx context.Context, tx pgx.Tx, reservation, clie
 	var hold appointmentHold
 	err := tx.QueryRow(ctx, `SELECT v.revision,v.starts_at,v.ends_at,v.held_until,v.recorded_at,
  COALESCE(r.quote_request_id,''),COALESCE(r.quote_version,0),COALESCE(r.quote_sha256::text,''),
- EXISTS(SELECT 1 FROM portal_appointment_introductions i WHERE i.reservation_id=r.id AND i.revision=v.revision)
+ i.reservation_id IS NOT NULL,c.reservation_id IS NOT NULL,i.cancellable_until
  FROM portal_appointment_revisions v JOIN portal_appointment_reservations r
- ON r.id=v.reservation_id AND r.client_id=v.client_id WHERE v.reservation_id=$1 AND v.client_id=$2
+ ON r.id=v.reservation_id AND r.client_id=v.client_id
+ LEFT JOIN portal_appointment_introductions i ON i.reservation_id=r.id AND i.revision=v.revision
+ LEFT JOIN portal_appointment_introduction_cancellations c ON c.reservation_id=i.reservation_id
+ WHERE v.reservation_id=$1 AND v.client_id=$2
  ORDER BY v.revision DESC LIMIT 1`, reservation, client).
 		Scan(&hold.Revision, &hold.Slot.Start, &hold.Slot.End, &hold.HeldUntil, &hold.recordedAt,
-			&hold.Quote.Request, &hold.Quote.Version, &hold.Quote.Hash, &hold.IntroductionConfirmed)
+			&hold.Quote.Request, &hold.Quote.Version, &hold.Quote.Hash,
+			&hold.IntroductionConfirmed, &hold.IntroductionCancelled, &hold.cancellableUntil)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return appointmentHold{}, nil
 	}
