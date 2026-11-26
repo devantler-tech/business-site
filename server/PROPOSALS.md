@@ -49,6 +49,8 @@ inbox and choose a request. Enter scope and deliverables (1,200 Unicode code poi
 each), whole-DKK one-time and monthly prices, and separate terms (600 code points
 each). Each price allows zero to 10,000,000 DKK and persists as integer minor
 units, never floating point. Final tax and contractual terms require separate review.
+Typed appointment drafts also record the duration in whole minutes and separate
+English and Danish appointment terms, each limited to 2,000 Unicode code points.
 
 Saving returns to that request with every prior snapshot unchanged, latest first.
 Its original submission time and inbox position do not change. The complete
@@ -61,8 +63,9 @@ them. Storage failure returns unavailable, not an empty successful history.
 POST `/portal/operator/requests/{id}/proposals` prepares a draft. Current
 server-owned operator membership authorizes the actual request/client. Browser
 roles, owners, email and groups grant no authority. Native CSRF, fixed Host/Origin,
-session expiry and no-store apply. Only this form receives a 60,000-byte encoded
-body bound; other forms retain their bounds. Text renders inert and escaped.
+session expiry and no-store apply. The proposal form has a 98,304-byte URL-encoded
+body limit so the permitted Unicode text fits with the other form fields. Other
+forms have their own limits. Text renders inert and escaped.
 
 Operator detail pages finish optional proposal and sharing checks before reading
 private records, including disabled or unavailable evaluations. Each enabled

@@ -54,10 +54,12 @@ Validity ends at the deadline: it requires database time strictly before expiry,
 including after the final SDK wait. Principal expiry, cancellation or closed
 release decisions prevent commit or release of a valid result.
 
-Membership restoration never revives a prior approval. Once the same acceptor
-and an eligible operator have current access again, a new explicit operator
-review may bind the new incarnations to the existing exact client consent.
-This is not a rule requiring the client to repeat unchanged consent.
+Membership restoration never revives a prior approval. For a historical
+unclassified proposal, a new operator review can use the existing exact client
+consent once the same acceptor and an eligible operator regain current access.
+A typed software approval requires the acceptor's original membership
+incarnation throughout. Restoring access under a new incarnation leaves that
+acceptance ineligible for both its previous approval and a fresh approval.
 
 ## Immutable history and current selection
 
