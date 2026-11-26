@@ -46,6 +46,12 @@ case "$4" in
   repos/devantler-tech/business-site/actions/runs/123/attempts/2|repos/devantler-tech/business-site/actions/runs/123/attempts/3)
     if [[ -f "$FIXTURE/run-attempt.json" ]]; then cat "$FIXTURE/run-attempt.json"; else cat "$FIXTURE/run.json"; fi ;;
   'repos/devantler-tech/business-site/actions/runs?per_page=100')
+    if [[ "${BUSY_WORKFLOW_INVENTORY:-false}" == true ]]; then
+      jq -n '{total_count:101,workflow_runs:[range(223;123;-1)|{id:.,head_branch:"draft",event:"pull_request",path:".github/workflows/ci.yaml"}]}'
+    else
+      jq '{total_count:1,workflow_runs:[.]}' "$FIXTURE/run.json"
+    fi ;;
+  'repos/devantler-tech/business-site/actions/workflows/ci.yaml/runs?branch=main&event=push&per_page=100')
     jq '{total_count:1,workflow_runs:[.]}' "$FIXTURE/run.json" ;;
   'repos/devantler-tech/business-site/actions/runs/123/artifacts?per_page=100')
     jq --argjson copies "${COPIES:-1}" '. as $a | {total_count:$copies,artifacts:[range($copies)|$a]}' "$FIXTURE/artifact.json" ;;
@@ -96,6 +102,9 @@ admit || fail 'the actual successful original main archive must be admitted'
 printf 'source=%s\nci-run-id=123\nci-run-attempt=2\nimage-digest=%s\npublic-digest=%s\nversion=\n' "$source" "$image" "$public" >"$scratch/expected"
 cmp "$scratch/expected" "$scratch/output" || fail 'real admitted receipt outputs changed'
 [[ "$(grep -c '/zip$' "$scratch/calls")" == 1 ]] || fail 'valid input must download exactly one archive'
+reset_fixture
+admit BUSY_WORKFLOW_INVENTORY=true || fail 'unrelated workflow runs displaced the original main CI evidence'
+cmp "$scratch/expected" "$scratch/output" || fail 'busy repository changed the admitted receipt'
 for value in '' false TRUE yes; do
   reset_fixture
   refused RUNTIME_PUBLICATION_ENABLED="$value"
