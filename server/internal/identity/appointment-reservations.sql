@@ -4,7 +4,14 @@ CREATE TABLE public.portal_appointment_reservations (
   id public.portal_consent_key PRIMARY KEY,
   client_id text NOT NULL REFERENCES public.portal_workspaces(id),
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-  UNIQUE(id,client_id)
+  quote_request_id text,
+  quote_version integer,
+  quote_sha256 public.portal_consent_hash,
+  quote_kind text GENERATED ALWAYS AS (CASE WHEN quote_request_id IS NOT NULL THEN 'appointment'::text END) STORED,
+  UNIQUE(id,client_id),
+  CHECK(num_nonnulls(quote_request_id,quote_version,quote_sha256) IN (0,3)),
+  FOREIGN KEY(quote_request_id,client_id,quote_version,quote_sha256,quote_kind)
+    REFERENCES public.portal_proposals(request_id,client_id,version,content_sha256,service_kind)
 );
 
 CREATE INDEX portal_appointment_client ON public.portal_appointment_reservations(client_id);
@@ -23,3 +30,22 @@ CREATE TABLE public.portal_appointment_revisions (
   CHECK(extract(epoch FROM ends_at-starts_at)%60=0),
   CHECK(held_until>recorded_at AND held_until<=starts_at)
 );
+
+CREATE FUNCTION public.portal_guard_appointment_duration() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM public.portal_appointment_reservations r
+    JOIN public.portal_proposals p ON p.request_id=r.quote_request_id AND p.client_id=r.client_id
+      AND p.version=r.quote_version AND p.content_sha256=r.quote_sha256 AND p.service_kind=r.quote_kind
+    WHERE r.id=NEW.reservation_id AND r.client_id=NEW.client_id
+      AND extract(epoch FROM NEW.ends_at-NEW.starts_at) <> p.duration_minutes * 60
+  ) THEN
+    RAISE EXCEPTION 'appointment quote duration refused' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.portal_guard_appointment_duration() FROM PUBLIC;
+CREATE TRIGGER portal_appointment_duration BEFORE INSERT ON public.portal_appointment_revisions
+  FOR EACH ROW EXECUTE FUNCTION public.portal_guard_appointment_duration();

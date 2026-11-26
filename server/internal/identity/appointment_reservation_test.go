@@ -25,6 +25,7 @@ func TestAppointmentReservationsKeepClientBoundRevisions(t *testing.T) {
 	}
 	migrator := migrationDB(t)
 	if _, err := migrator.Exec(ctx, `DROP TABLE portal_appointment_revisions,portal_appointment_reservations;
+ DROP FUNCTION portal_guard_appointment_duration();
  DELETE FROM portal_schema_version WHERE version=34`); err != nil {
 		t.Fatal("prepare the previous fixture schema", err)
 	}
@@ -93,7 +94,7 @@ func TestAppointmentHoldsSerializeCompetingClients(t *testing.T) {
 	slot := booking.Interval{Start: start, End: start.Add(30 * time.Minute)}
 	later := booking.Interval{Start: start.Add(2 * time.Hour), End: start.Add(150 * time.Minute)}
 	root := secret()
-	if _, err := policy.append(ctx, first, root, "fictional-first-hold", 0, slot); err != nil {
+	if _, err := policy.append(ctx, first, root, "fictional-first-hold", 0, slot, appointmentQuoteRef{}); err != nil {
 		t.Fatal("first hold failed", err)
 	}
 	var competingPID int
@@ -103,7 +104,7 @@ func TestAppointmentHoldsSerializeCompetingClients(t *testing.T) {
 	result := make(chan error, 1)
 	go func() {
 		defer close(result)
-		_, err := policy.append(ctx, second, secret(), "fictional-second-hold", 0, later)
+		_, err := policy.append(ctx, second, secret(), "fictional-second-hold", 0, later, appointmentQuoteRef{})
 		result <- err
 	}()
 	defer func() {
@@ -133,7 +134,7 @@ func TestAppointmentHoldsSerializeCompetingClients(t *testing.T) {
 		t.Fatal("prepare an expired fixture hold", err)
 	}
 	err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
-		_, err := policy.append(ctx, tx, secret(), "fictional-second-hold", 0, later)
+		_, err := policy.append(ctx, tx, secret(), "fictional-second-hold", 0, later, appointmentQuoteRef{})
 		return err
 	})
 	if err != nil {
@@ -156,7 +157,7 @@ func TestAppointmentHoldRetriesPreserveTheSelectedRevision(t *testing.T) {
 		var saved appointmentHold
 		err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
 			var err error
-			saved, err = policy.append(ctx, tx, id, client, expected, slot)
+			saved, err = policy.append(ctx, tx, id, client, expected, slot, appointmentQuoteRef{})
 			return err
 		})
 		return saved, err
@@ -196,7 +197,7 @@ func TestAppointmentHoldRefusesAStaleTransactionSnapshot(t *testing.T) {
 	start, policy := appointmentHoldFixture(t)
 	slot := booking.Interval{Start: start, End: start.Add(30 * time.Minute)}
 	err := pgx.BeginTxFunc(ctx, pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
-		_, err := policy.append(ctx, tx, secret(), "fictional-booking-client", 0, slot)
+		_, err := policy.append(ctx, tx, secret(), "fictional-booking-client", 0, slot, appointmentQuoteRef{})
 		return err
 	})
 	if !errors.Is(err, errTriageStorage) {
@@ -222,7 +223,7 @@ func TestAppointmentHoldRequiresCurrentCalendarAndBuffers(t *testing.T) {
 	id := secret()
 	reserve := func(id string, expected int, slot booking.Interval) error {
 		return pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
-			_, err := policy.append(ctx, tx, id, "fictional-booking-client", expected, slot)
+			_, err := policy.append(ctx, tx, id, "fictional-booking-client", expected, slot, appointmentQuoteRef{})
 			return err
 		})
 	}
@@ -250,9 +251,106 @@ func TestAppointmentHoldRequiresCurrentCalendarAndBuffers(t *testing.T) {
 	if err := reserve(id, 1, candidate); !errors.Is(err, booking.ErrUnavailable) {
 		t.Fatalf("stale calendar data admitted a hold: %v", err)
 	}
+	policy.provider = appointmentBusyFunc(func(_ context.Context, coverage booking.Interval) (booking.BusySnapshot, error) {
+		return booking.BusySnapshot{ObservedAt: time.Now().Add(time.Minute), Coverage: coverage, Complete: true}, nil
+	})
+	if err := reserve(id, 1, candidate); !errors.Is(err, booking.ErrUnavailable) {
+		t.Fatalf("a future calendar timestamp admitted a hold: %v", err)
+	}
 	var count int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM portal_appointment_revisions`).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("a refused hold replaced the original revision: count=%d err=%v", count, err)
+	}
+}
+
+func TestAppointmentHoldBindsThePersistedQuote(t *testing.T) {
+	b := proposalFixture(t)
+	ctx := t.Context()
+	const client = "private-client-key"
+	if _, err := b.pool.Exec(ctx, `INSERT INTO portal_workspaces(id) VALUES($1) ON CONFLICT DO NOTHING`, client); err != nil {
+		t.Fatal(err)
+	}
+	for _, description := range []string{"First appointment scope", "Revised appointment scope"} {
+		form := serviceProposalForm(t, b, proposalServiceAppointment)
+		form.Set("scope", description)
+		form.Set("appointment_minutes", "30")
+		saveFixtureProposal(t, b, form)
+	}
+	quote := func(version int) appointmentQuoteRef {
+		ref := appointmentQuoteRef{Request: proposalRequestID, Version: version}
+		if err := b.pool.QueryRow(ctx, `SELECT content_sha256 FROM portal_proposals WHERE request_id=$1 AND client_id=$2 AND version=$3`,
+			ref.Request, client, version).Scan(&ref.Hash); err != nil {
+			t.Fatal(err)
+		}
+		return ref
+	}
+	original, revised := quote(1), quote(2)
+	start, policy := appointmentHoldFixture(t)
+	slot := booking.Interval{Start: start, End: start.Add(30 * time.Minute)}
+	id := secret()
+	reserve := func(who string, reference appointmentQuoteRef, expected int, slot booking.Interval) (appointmentHold, error) {
+		var saved appointmentHold
+		err := pgx.BeginFunc(ctx, b.pool, func(tx pgx.Tx) error {
+			var err error
+			saved, err = policy.append(ctx, tx, id, who, expected, slot, reference)
+			return err
+		})
+		return saved, err
+	}
+	short := booking.Interval{Start: slot.Start, End: slot.End.Add(-15 * time.Minute)}
+	if _, err := reserve(client, original, 0, short); !errors.Is(err, errProposalConflict) {
+		t.Fatalf("a hold shortened the quoted duration: %v", err)
+	}
+	if _, err := reserve("fictional-other-client", original, 0, slot); !errors.Is(err, errProposalConflict) {
+		t.Fatalf("a hold used another client's quote: %v", err)
+	}
+	first, err := reserve(client, original, 0, slot)
+	if err != nil || first.Quote != original || first.Revision != 1 {
+		t.Fatal("the original quote was not held", err)
+	}
+	next := booking.Interval{Start: slot.End, End: slot.End.Add(30 * time.Minute)}
+	for _, changed := range []appointmentQuoteRef{revised, {}} {
+		if _, err := reserve(client, changed, 1, next); !errors.Is(err, errProposalConflict) {
+			t.Fatalf("a reschedule replaced the reservation's quote: %v", err)
+		}
+	}
+	rescheduled, err := reserve(client, original, 1, next)
+	if err != nil || rescheduled.Quote != original || rescheduled.Revision != 2 {
+		t.Fatal("rescheduling lost the original quote", err)
+	}
+	var stored appointmentHold
+	err = pgx.BeginFunc(ctx, b.pool, func(tx pgx.Tx) error {
+		var err error
+		stored, err = readLatestAppointmentHold(ctx, tx, id, client)
+		return err
+	})
+	if err != nil || stored.Quote != original || !stored.Slot.Start.Equal(next.Start) || stored.Revision != 2 {
+		t.Fatal("the original quote and current revision could not be recovered", err)
+	}
+
+	// The restricted writer cannot invent a quote reference or change an
+	// existing binding even when the requested duration would be identical.
+	_, err = b.pool.Exec(ctx, `INSERT INTO portal_appointment_reservations(id,client_id,quote_request_id,quote_version,quote_sha256)
+ VALUES($1,$2,$3,$4,$5)`, secret(), client, original.Request, revised.Version, original.Hash)
+	var failure *pgconn.PgError
+	if !errors.As(err, &failure) || failure.Code != "23503" {
+		t.Fatalf("PostgreSQL accepted a mismatched quote version and hash: %v", err)
+	}
+	_, err = b.pool.Exec(ctx, insertAppointmentRevision, id, client, 3, short.Start, short.End, time.Now().Add(time.Minute))
+	if !errors.As(err, &failure) || failure.Code != "23514" {
+		t.Fatalf("PostgreSQL accepted a shortened slot for the held quote: %v", err)
+	}
+	_, err = b.pool.Exec(ctx, `UPDATE portal_appointment_reservations SET quote_version=$2,quote_sha256=$3 WHERE id=$1`, id, revised.Version, revised.Hash)
+	if !errors.As(err, &failure) || failure.Code != "42501" {
+		t.Fatalf("the runtime could replace a held quote: %v", err)
+	}
+	enroll(t, b.svc, b.f, "quoted-appointment-client", client, "client")
+	migrator := migrationDB(t)
+	if _, err := migrator.Exec(ctx, `UPDATE portal_memberships SET revoked=true WHERE client_id=$1`, client); err != nil {
+		t.Fatal(err)
+	}
+	if erased := purgeAged(t, migrator); erased != 1 {
+		t.Fatalf("retention could not erase the bound appointment's former client: %d", erased)
 	}
 }
 

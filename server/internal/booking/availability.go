@@ -42,7 +42,8 @@ type Policy struct {
 
 // BusySnapshot contains no event title, location, attendee, UID or description.
 // A provider must preserve recurrence/all-day/timezone semantics before marking
-// the bounded coverage complete. Its adapter owns that verification.
+// coverage complete. Its adapter owns that verification and records ObservedAt
+// on the application host.
 type BusySnapshot struct {
 	ObservedAt time.Time
 	Coverage   Interval
