@@ -134,7 +134,7 @@ func (s *Foundation) saveContact(ctx context.Context, p Principal, d contactData
 	if err != nil {
 		return ErrDenied
 	}
-	if p.isClientPreview() && (ctx.Err() != nil || !time.Now().Before(p.expires)) {
+	if p.isClientPreview() && (!s.ready(ctx) || ctx.Err() != nil || !time.Now().Before(p.expires)) {
 		return ErrDenied
 	}
 	if err = tx.Commit(ctx); err != nil {

@@ -128,6 +128,10 @@ type Foundation struct {
 	operators map[string]bool
 	// operatorOnly refuses external customer identities in the private preview.
 	operatorOnly bool
+	// The primary portal owns the browser session. A linked preview serves
+	// fictional records from its own store on the same HTTP surface.
+	clientPreview, previewAuthority *Foundation
+	previewSessions                 bool
 	// customers is the optional organization-scoped provider for operator actions.
 	customers CustomerDirectory
 	// agents is immutable policy and a distinct verifier, installed at startup.
@@ -252,7 +256,12 @@ func (s *Foundation) ready(ctx context.Context) bool {
 		return false
 	}
 	enabled, err := s.flags.BooleanValue(ctx, "portal-identity", false, openfeature.NewEvaluationContext("", nil))
-	return err == nil && enabled && s.flags.State() == openfeature.ReadyState
+	if err != nil || !enabled {
+		return false
+	}
+	// Fictional capabilities depend on the current ordinary portal identity
+	// gate, including at the final checkpoints that call ready.
+	return (s.previewAuthority == nil || s.previewAuthority.ready(ctx)) && s.flags.State() == openfeature.ReadyState
 }
 
 // Attempt secrets are for the trusted browser handler, never logs, public
