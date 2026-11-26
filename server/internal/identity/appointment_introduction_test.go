@@ -101,7 +101,7 @@ func TestAppointmentIntroductionCommitsOneFreshHoldPerClient(t *testing.T) {
  (client_id,sequence,reservation_id,revision,cancellation_notice_minutes,cancellation_terms_version)
  VALUES($1,2,$2,1,1440,'synthetic-policy-v1')`, client, second)
 	if !errors.As(err, &failure) || failure.Code != "23514" {
-		t.Fatalf("PostgreSQL accepted rebooking while the first introduction was active: %v", err)
+		t.Fatalf("PostgreSQL accepted another booking while the first introduction was active: %v", err)
 	}
 	_, err = pool.Exec(ctx, `DELETE FROM portal_appointment_introductions WHERE client_id=$1`, client)
 	if !errors.As(err, &failure) || failure.Code != "42501" {
@@ -113,7 +113,7 @@ func TestAppointmentIntroductionCommitsOneFreshHoldPerClient(t *testing.T) {
 	}
 }
 
-func TestAppointmentIntroductionCancellationReleasesSlotAndAllowsRebooking(t *testing.T) {
+func TestAppointmentIntroductionCancellationReleasesSlotAndAllowsAnotherBooking(t *testing.T) {
 	pool := fixtureDB(t)
 	ctx := t.Context()
 	const client, other = "fictional-cancel-client", "fictional-other-client"
@@ -177,15 +177,15 @@ func TestAppointmentIntroductionCancellationReleasesSlotAndAllowsRebooking(t *te
 	if err := reserve(secret(), other, slot); err != nil {
 		t.Fatal("the cancelled slot remained occupied during its original hold", err)
 	}
-	rebooked := secret()
-	if err := reserve(rebooked, client, next); err != nil {
+	replacement := secret()
+	if err := reserve(replacement, client, next); err != nil {
 		t.Fatal("prepare the replacement reservation", err)
 	}
-	if saved, err := change(rebooked, client, policy.confirmIntroduction); err != nil || !saved.IntroductionConfirmed || saved.IntroductionCancelled {
+	if saved, err := change(replacement, client, policy.confirmIntroduction); err != nil || !saved.IntroductionConfirmed || saved.IntroductionCancelled {
 		t.Fatalf("cancelling forfeited or duplicated the same client's introduction: %v", err)
 	}
 	if retry, err := change(original, client, cancelIntroduction); err != nil || !retry.IntroductionCancelled {
-		t.Fatalf("replaying the old cancellation failed after rebooking: %v", err)
+		t.Fatalf("replaying the old cancellation failed after the replacement booking: %v", err)
 	}
 	var total, active int
 	if err := pool.QueryRow(ctx, `SELECT count(*),count(*) FILTER(WHERE c.reservation_id IS NULL)
