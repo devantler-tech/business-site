@@ -42,7 +42,7 @@ func TestWorkApprovalRequiresSettledFundingNeverReversed(t *testing.T) {
 	}
 }
 
-func TestWorkApprovalRefusesReenrolledTypedAcceptor(t *testing.T) {
+func TestWorkApprovalRefusesNewMembershipForTypedAcceptor(t *testing.T) {
 	b := acceptedServiceQuoteFixture(t, proposalServiceSoftware)
 	placeEarlyStartOrder(t, b)
 	fake, cfg := newFakeNumina(t)

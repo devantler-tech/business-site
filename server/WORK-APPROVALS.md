@@ -41,7 +41,7 @@ unclassified proposals retain format 2. A typed software approval uses format 3
 to bind the software classification and the exact accepted quote hash. It
 checks that the acceptor still has the original membership incarnation. The
 same transaction records the permanent software fulfillment and its order
-binding. Retries and reapprovals keep this binding. Execution still needs its
+binding. Retries and later approvals keep this binding. Execution still needs its
 own current approval and delivery checks. The private evidence must stay out
 of logs and public output.
 Changes to the agreement, the order, the funding charge (its state, amounts,

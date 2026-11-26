@@ -517,7 +517,7 @@ func TestWorkApprovalBindsOneTypedSoftwareFulfillment(t *testing.T) {
 	}
 	original := readRoot()
 	if next := savedApproval(t, b, op); next.ID == approval.ID || readRoot() != original {
-		t.Fatal("reapproval did not preserve the original fulfillment")
+		t.Fatal("a later approval did not preserve the original fulfillment")
 	}
 	if err := b.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM portal_service_fulfillments),
  (SELECT count(*) FROM portal_service_consumers)`).Scan(&roots, &consumers); err != nil || roots != 1 || consumers != 1 {
