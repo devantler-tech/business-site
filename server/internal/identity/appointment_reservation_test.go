@@ -179,3 +179,24 @@ func TestAppointmentHoldRetriesPreserveTheSelectedRevision(t *testing.T) {
 		t.Fatal("the superseded slot still counted as occupied", err)
 	}
 }
+
+func TestAppointmentHoldRefusesAStaleTransactionSnapshot(t *testing.T) {
+	pool := fixtureDB(t)
+	ctx := t.Context()
+	if _, err := pool.Exec(ctx, `INSERT INTO portal_workspaces(id) VALUES('fictional-booking-client')`); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now().UTC().Truncate(time.Minute).Add(48 * time.Hour)
+	slot := booking.Interval{Start: start, End: start.Add(30 * time.Minute)}
+	err := pgx.BeginTxFunc(ctx, pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
+		_, err := appendAppointmentHold(ctx, tx, secret(), "fictional-booking-client", 0, slot, 10*time.Minute)
+		return err
+	})
+	if !errors.Is(err, errTriageStorage) {
+		t.Fatalf("a stale snapshot could record a hold: %v", err)
+	}
+	var count int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM portal_appointment_reservations`).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("the refused transaction left a reservation: count=%d err=%v", count, err)
+	}
+}
