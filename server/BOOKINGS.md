@@ -60,12 +60,15 @@ The policy's enabled field alone grants neither of those authorities.
 | Child                                                              | Boundary                                              | Required evidence                                                                                                                                                                         |
 |--------------------------------------------------------------------|-------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | [#656](https://github.com/devantler-tech/business-site/issues/656) | Internal policy and availability                      | Focused real policy tests, default-off/incomplete-state refusals and DST/buffer/capacity controls                                                                                         |
-| [#657](https://github.com/devantler-tech/business-site/issues/657) | Durable reservations and introductory entitlement     | Real PostgreSQL overlap races, expiry/retry/restart, stable client IDs, one free entitlement, final conflict checks and current paid-service authority; booking migration v32 is reserved |
+| [#657](https://github.com/devantler-tech/business-site/issues/657) | Durable reservations and introductory entitlement     | Real PostgreSQL overlap races, expiry/retry/restart, stable client IDs, one free entitlement, final conflict checks and current paid-service authority |
 | [#658](https://github.com/devantler-tech/business-site/issues/658) | Private CalDAV adapter and owned-event reconciliation | Actual library contract tests, recurring/all-day intervals, conditional writes, ambiguous failures and owned-only cancellation/rescheduling; later private iCloud acceptance              |
 | [#659](https://github.com/devantler-tech/business-site/issues/659) | Native EN/DA customer/operator journeys               | Session/CSRF/current-membership isolation, honest states, mobile/keyboard/appearance, two synthetic clients, deployment and recovery                                                      |
 
 The selected direction builds the small portal-specific policy and state machine in the existing
 Go/PostgreSQL application, reusing calendar protocol libraries through the narrow interface.
+A client-bound reservation ID and its append-only revisions are stored by migration v34,
+after the shared service contract. The booking service will decide whether the latest
+revision is valid and available before it grants a hold or confirms an appointment.
 A second booking application would introduce another identity, business-state and presentation
 boundary. No new service, subscription or paid enrollment is selected. The maintained MIT
 [go-webdav CalDAV package](https://pkg.go.dev/github.com/emersion/go-webdav/caldav) is the adapter

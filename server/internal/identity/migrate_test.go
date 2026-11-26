@@ -68,10 +68,13 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 
 // Rewinds touch only the disposable migrator's synthetic schema, never deployed
 // runtime grants or a production rollback. Remove new dependent tables before v13.
-// rewindServiceContractsFixture removes v33 while retaining the published v32 state.
+// rewindServiceContractsFixture removes v33 and later migrations while retaining
+// the published v32 state.
 func rewindServiceContractsFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_service_consumers,portal_service_fulfillments;
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_appointment_revisions,portal_appointment_reservations;
+ DELETE FROM portal_schema_version WHERE version=34;
+ DROP TABLE portal_service_consumers,portal_service_fulfillments;
  DROP TRIGGER portal_service_confirmation ON portal_mail_outbox;
  DROP TRIGGER portal_service_order ON portal_orders;
  DROP TRIGGER portal_service_acceptance ON portal_proposal_acceptances;

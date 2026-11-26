@@ -273,6 +273,40 @@ func TestRetentionPurgesServiceFulfillmentAndConsumer(t *testing.T) {
 	}
 }
 
+func TestRetentionPurgesOnlyFormerClientsAppointmentRevisions(t *testing.T) {
+	b := newBrowserFixture(t)
+	ctx := t.Context()
+	for _, client := range []string{"former-booking-client", "active-booking-client"} {
+		if _, err := b.pool.Exec(ctx, `INSERT INTO portal_workspaces(id) VALUES($1)`, client); err != nil {
+			t.Fatal("prepare a fictional booking workspace", err)
+		}
+		enroll(t, b.svc, b.f, client, client, "client")
+		root := secret()
+		if _, err := b.pool.Exec(ctx, `INSERT INTO portal_appointment_reservations(id,client_id) VALUES($1,$2)`, root, client); err != nil {
+			t.Fatal("prepare a fictional reservation", err)
+		}
+		start := time.Now().UTC().Truncate(time.Minute).Add(48 * time.Hour)
+		if _, err := b.pool.Exec(ctx, insertAppointmentRevision, root, client, 1, start, start.Add(30*time.Minute), start.Add(-time.Hour)); err != nil {
+			t.Fatal("prepare a fictional reservation revision", err)
+		}
+	}
+	migrator := migrationDB(t)
+	if _, err := migrator.Exec(ctx, `UPDATE portal_memberships SET revoked=true WHERE client_id='former-booking-client'`); err != nil {
+		t.Fatal(err)
+	}
+	if n := purgeAged(t, migrator); n != 1 {
+		t.Fatalf("expected to erase one former client, erased %d", n)
+	}
+	var reservations, revisions int
+	var active bool
+	err := b.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM portal_appointment_reservations),
+ (SELECT count(*) FROM portal_appointment_revisions), EXISTS(
+ SELECT 1 FROM portal_appointment_revisions WHERE client_id='active-booking-client')`).Scan(&reservations, &revisions, &active)
+	if err != nil || reservations != 1 || revisions != 1 || !active {
+		t.Fatalf("reservation retention crossed clients: roots=%d revisions=%d active=%t err=%v", reservations, revisions, active, err)
+	}
+}
+
 // purgeAged dates every membership event four years back and purges.
 func purgeAged(t *testing.T, migrator *pgxpool.Pool) int {
 	t.Helper()

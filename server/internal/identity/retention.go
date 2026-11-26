@@ -87,6 +87,7 @@ var purgeRecords = []string{
 	`DELETE FROM portal_requests WHERE client_id=$1`,
 	`DELETE FROM portal_contacts WHERE client_id=$1`,
 	`DELETE FROM portal_invitations WHERE client_id=$1`,
+	`DELETE FROM portal_appointment_reservations WHERE client_id=$1`,
 	`DELETE FROM portal_workspaces WHERE id=$1`,
 }
 
@@ -94,7 +95,7 @@ var purgeRecords = []string{
 // tables hang off portal_orders.
 var clientTables = []string{"portal_memberships", "portal_invitations", "portal_contacts", "portal_requests", "portal_proposals",
 	"portal_proposal_visibility", "portal_proposal_reviews", "portal_proposal_acceptances", "portal_invoices", "portal_credit_transfers",
-	"portal_credit_revisions", "portal_numina_contacts", "portal_orders", "portal_work_approvals", "portal_work_revocations", "portal_work_current", "portal_launch_places", "portal_request_closures"}
+	"portal_credit_revisions", "portal_numina_contacts", "portal_orders", "portal_work_approvals", "portal_work_revocations", "portal_work_current", "portal_launch_places", "portal_request_closures", "portal_appointment_reservations"}
 
 // membershipLineages pairs every membership event with the first event of
 // its membership. An insert or baseline starts the chain, and each update or
