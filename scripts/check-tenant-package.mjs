@@ -103,7 +103,16 @@ export function validateTenantPackage(input) {
   assert.equal(spec.runAsUser, 65532);
   assert.equal(spec.runAsGroup, 65532);
   assert.equal(spec.readOnlyRootFilesystem, true);
-  assert.deepEqual(spec.args, ["--public", "/app/public", "--listen", "0.0.0.0:8080", "--company-disclosure-projection", "/run/webapp-inputs/disclosure", "--public-host", "devantler.tech", "--portal-host", "portal.devantler.tech", "--portal-settings-projection", "/run/webapp-inputs/portal-settings"]);
+  assert.deepEqual(spec.args, [
+    "--public", "/app/public",
+    "--listen", "0.0.0.0:8080",
+    "--company-disclosure-projection", "/run/webapp-inputs/disclosure",
+    "--public-host", "devantler.tech",
+    "--portal-host", "portal.devantler.tech",
+    "--portal-settings-projection", "/run/webapp-inputs/portal-settings",
+    "--portal-upstream-logout-url", "https://accounts.devantler.tech/oidc/v1/end_session",
+    "--portal-upstream-logout-client-id", "399712320588158469",
+  ]);
   // The platform composes this one Secret. Its settings item keeps sign-in off
   // until it holds activation keys; no migration or other private input is admitted.
   assert.deepEqual(spec.secretProjections, [{

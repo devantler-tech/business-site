@@ -139,10 +139,13 @@ The database URI names host `business-site-portal-db-rw.business-site.svc`,
 port 5432, database `portal` and login `portal_web` with its password, and the query
 `sslmode=verify-full&sslrootcert=/run/webapp-inputs/portal-database-ca`.
 
-The two upstream logout keys come together and only with the five dependency keys. With
-them, sign-out and a refused sign-in also end the ZITADEL session; the ZITADEL client must
-list `https://portal.devantler.tech/signed-out` and `https://devantler.tech/` as post-logout
-addresses. `PORTAL_OPERATOR_SUBJECTS` also comes only with the five dependency keys. It lists, comma-separated, the customer Dex subjects of the operators, who sign in with GitHub through the `platform` connector at `https://portal.devantler.tech/operator/sign-in`; startup refuses any other subject. The five dependency keys come all together or not at all. With them but no
+The production overlay ships the upstream logout endpoint and its public client ID as
+a pair. An existing complete projection takes precedence. The package defaults take
+effect when a complete portal starts with both projected logout keys absent. Sign-out
+and a refused sign-in then also end the ZITADEL session. The ZITADEL client must list
+`https://portal.devantler.tech/signed-out` and `https://devantler.tech/` as post-logout addresses.
+
+`PORTAL_OPERATOR_SUBJECTS` also comes only with the five dependency keys. It lists, comma-separated, the customer Dex subjects of the operators, who sign in with GitHub through the `platform` connector at `https://portal.devantler.tech/operator/sign-in`; startup refuses any other subject. The five dependency keys come all together or not at all. With them but no
 activation keys, startup checks the database login and grants and discovers
 Dex, but sign-in stays off. The runtime skips well-formed portal settings outside
 its supported set and logs how many it skipped. Repeated keys, empty values,

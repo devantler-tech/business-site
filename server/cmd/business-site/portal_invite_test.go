@@ -130,6 +130,10 @@ func TestPortalSettingsProjectionRefusals(t *testing.T) {
 		{[]string{"--portal-settings-projection", safe, "--check-public"}, runtimeapp.ErrPortalSettings, false},
 		{[]string{"--portal-settings-projection", safe, "--version"}, runtimeapp.ErrPortalSettings, false},
 		{[]string{"--portal-settings-projection", safe, "--check-serving-public"}, runtimeapp.ErrPortalSettings, false},
+		{[]string{"--portal-settings-projection", safe, "--public-host", "devantler.tech", "--portal-host", "portal.devantler.tech",
+			"--portal-upstream-logout-url", "https://accounts.example.invalid/end"}, runtimeapp.ErrPortalSettings, false},
+		{[]string{"--public-host", "devantler.tech", "--portal-host", "portal.devantler.tech",
+			"--portal-upstream-logout-url", "https://accounts.example.invalid/end", "--portal-upstream-logout-client-id", "example-client"}, runtimeapp.ErrPortalSettings, false},
 		{[]string{"--portal-settings-projection", portalSettingsFile(t, "PORTAL_IDENTITY_PROFILE=production\n", 0444)}, runtimeapp.ErrPortalSettings, false},
 		{[]string{"--portal-settings-projection", portalSettingsFile(t, "PORTAL_IDENTITY_LEASE_UNTIL=2026-11-15T00:00:00Z\n", 0440)}, runtimeapp.ErrPortalSettings, false},
 		{[]string{"--portal-settings-projection", safe}, runtimeapp.ErrPortalSettings, true},
@@ -148,6 +152,26 @@ func TestPortalSettingsProjectionRefusals(t *testing.T) {
 		if os.Getenv("PORTAL_IDENTITY_PROFILE") != "" {
 			t.Fatal("a refused settings projection installed a value")
 		}
+	}
+}
+
+func TestReleaseLogoutDefaultsPermitPublicOnlyStartup(t *testing.T) {
+	unsetPortalEnvironment(t)
+	dir := configuredPublicArtifact(t)
+	settings := portalSettingsFile(t, "# Portal sign-in is off.\n", 0440)
+	listenReached := false
+	listen := func(_, _ string) (net.Listener, error) {
+		listenReached = true
+		return nil, errors.New("fixture stops before opening a socket")
+	}
+	args := []string{
+		"--public", dir, "--portal-settings-projection", settings,
+		"--public-host", "devantler.tech", "--portal-host", "portal.devantler.tech",
+		"--portal-upstream-logout-url", "https://accounts.example.invalid/end",
+		"--portal-upstream-logout-client-id", "example-client",
+	}
+	if err := runWithListen(t.Context(), args, io.Discard, listen); !listenReached || err == nil {
+		t.Fatalf("public-only startup with packaged logout defaults did not reach the listener: %v", err)
 	}
 }
 
