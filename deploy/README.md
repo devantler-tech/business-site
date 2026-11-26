@@ -157,6 +157,17 @@ and deletion grants are always refused. See [machine callers](../server/CUSTOMER
 for the complete format, token limits and action names. Deploy this runtime before adding
 these keys to a settings projection; an older runtime refuses unknown keys.
 
+The regular production portal can offer operators a fictional client workspace
+in their existing session. Leave `PORTAL_CLIENT_PREVIEW_DATABASE_URL` and
+`PORTAL_CLIENT_PREVIEW_DATABASE_CA` unset until a release that accepts them is
+serving. Supply them together. The URL uses `postgres://`, the isolated
+`portal_preview` database, its `portal_preview_web` login on port 5432 and
+`?sslmode=verify-full`. The CA value is the separate database's PEM trust root
+encoded as a single Base64 line. Use the preview database's restricted runtime
+login and current migration. Restart the runtime after changing the settings.
+The operator can return to their workspace through the regular portal if the
+preview database is unavailable.
+
 With sign-in on, invite customers from a web pod as
 [CUSTOMER-IDENTITY.md](../server/CUSTOMER-IDENTITY.md#invite-a-customer) describes.
 
