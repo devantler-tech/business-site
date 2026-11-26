@@ -24,11 +24,7 @@ func TestAppointmentReservationsKeepClientBoundRevisions(t *testing.T) {
 		t.Fatal(err)
 	}
 	migrator := migrationDB(t)
-	if _, err := migrator.Exec(ctx, `DROP TABLE portal_appointment_revisions,portal_appointment_reservations;
- DROP FUNCTION portal_guard_appointment_duration();
- DELETE FROM portal_schema_version WHERE version=34`); err != nil {
-		t.Fatal("prepare the previous fixture schema", err)
-	}
+	rewindAppointmentReservationsFixture(t, migrator)
 	if err := MigrateWithRuntimeRole(ctx, migrator, "portal_runtime"); err != nil {
 		t.Fatal("apply the reservation migration", err)
 	}
