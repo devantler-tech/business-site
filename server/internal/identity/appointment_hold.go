@@ -89,7 +89,7 @@ func (holds appointmentHoldPolicy) append(ctx context.Context, tx pgx.Tx, reserv
 			return appointmentHold{}, errProposalConflict
 		}
 	}
-	calendarRange, commitmentRange, err := booking.RequiredCoverage(holds.policy, slot)
+	calendarRange, commitmentRange, err := booking.RequiredCoverage(holds.policy, now, slot)
 	if err != nil || holds.provider == nil {
 		return appointmentHold{}, booking.ErrUnavailable
 	}

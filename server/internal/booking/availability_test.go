@@ -16,6 +16,8 @@ func TestAvailabilityRequiresExplicitPolicy(t *testing.T) {
 		edit func(*Policy)
 	}{
 		{"disabled", func(p *Policy) { p.Enabled = false }},
+		{"missing horizon", func(p *Policy) { p.HorizonDays = 0 }},
+		{"horizon exceeds the approved window", func(p *Policy) { p.HorizonDays = 31 }},
 		{"missing lead time", func(p *Policy) { p.LeadTime = nil }},
 		{"missing before buffer", func(p *Policy) { p.BufferBefore = nil }},
 		{"missing after buffer", func(p *Policy) { p.BufferAfter = nil }},
@@ -244,6 +246,25 @@ func TestAvailabilityExplicitOpeningsAcrossDST(t *testing.T) {
 	}
 }
 
+func TestAvailabilityBoundsBookingHorizonInCopenhagen(t *testing.T) {
+	for _, tc := range []struct {
+		day, now, last string
+	}{
+		{"2026-03-30", "2026-02-28T16:30:00+01:00", "2026-03-30T16:30:00+02:00"},
+		{"2026-10-26", "2026-09-26T16:30:00+02:00", "2026-10-26T16:30:00+01:00"},
+	} {
+		t.Run(tc.day, func(t *testing.T) {
+			p, in := fixture(t, tc.day)
+			in.Now = instant(tc.now)
+			in.Calendar.ObservedAt = in.Now
+			got, err := Available(p, in)
+			if err != nil || len(got) != 1 || !got[0].Start.Equal(instant(tc.last)) {
+				t.Fatalf("want only the boundary slot %s, got %v, err=%v", tc.last, got, err)
+			}
+		})
+	}
+}
+
 func TestAvailabilityAllDayAndUnsortedBusyIntervals(t *testing.T) {
 	p, in := fixture(t, "2026-11-16")
 	in.Calendar.Busy = []Interval{in.Search}
@@ -276,7 +297,7 @@ func fixture(t *testing.T, day string) (Policy, Input) {
 	search := Interval{start, start.AddDate(0, 0, 1)}
 	now := start.Add(-24 * time.Hour)
 	p := Policy{
-		Enabled: true, SlotStep: 30 * time.Minute, WeeklyCapacity: 10 * time.Hour,
+		Enabled: true, HorizonDays: 30, SlotStep: 30 * time.Minute, WeeklyCapacity: 10 * time.Hour,
 		LeadTime: duration(0), BufferBefore: duration(0), BufferAfter: duration(0),
 		CancellationNotice: duration(0), CancellationTermsVersion: "synthetic-policy-v1",
 	}

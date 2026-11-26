@@ -223,6 +223,16 @@ func TestAppointmentHoldRequiresCurrentCalendarAndBuffers(t *testing.T) {
 			return err
 		})
 	}
+	beyond := booking.Interval{Start: slot.Start.AddDate(0, 0, 30), End: slot.End.AddDate(0, 0, 30)}
+	current := policy.provider
+	policy.provider = appointmentBusyFunc(func(context.Context, booking.Interval) (booking.BusySnapshot, error) {
+		t.Error("the provider was queried outside the booking horizon")
+		return booking.BusySnapshot{}, booking.ErrUnavailable
+	})
+	if err := reserve(id, 0, beyond); !errors.Is(err, booking.ErrUnavailable) {
+		t.Fatalf("a hold outside the booking horizon was not refused: %v", err)
+	}
+	policy.provider = current
 	if err := reserve(id, 0, slot); err != nil {
 		t.Fatal("eligible slot was refused", err)
 	}
@@ -369,7 +379,7 @@ func appointmentHoldFixture(t *testing.T) (time.Time, appointmentHoldPolicy) {
 	zero, lead := time.Duration(0), 24*time.Hour
 	return monday, appointmentHoldPolicy{
 		policy: booking.Policy{
-			Enabled: true, SlotStep: 15 * time.Minute, WeeklyCapacity: 150 * time.Minute,
+			Enabled: true, HorizonDays: 30, SlotStep: 15 * time.Minute, WeeklyCapacity: 150 * time.Minute,
 			LeadTime: &lead, BufferBefore: &zero, BufferAfter: &zero, CancellationNotice: &lead,
 			CancellationTermsVersion: "fixture-v1",
 			Openings:                 []booking.Opening{{Date: monday.Format("2006-01-02"), Start: 9 * time.Hour, End: 15 * time.Hour}},

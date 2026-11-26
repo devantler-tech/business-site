@@ -29,6 +29,7 @@ type Opening struct {
 // zero from a choice the operator has not made. Durations are whole minutes.
 type Policy struct {
 	Enabled                  bool
+	HorizonDays              int // Calendar days in Copenhagen, up to 30.
 	SlotStep                 time.Duration
 	WeeklyCapacity           time.Duration
 	LeadTime                 *time.Duration
@@ -82,10 +83,10 @@ const MaxSnapshotAge = 30 * time.Second
 const MaxIntervals = 4096
 
 // RequiredCoverage returns the buffered calendar range and complete local
-// weeks needed to evaluate a search.
-func RequiredCoverage(p Policy, search Interval) (calendar, commitments Interval, err error) {
+// weeks needed to evaluate a search that starts within the booking horizon.
+func RequiredCoverage(p Policy, now time.Time, search Interval) (calendar, commitments Interval, err error) {
 	loc, err := time.LoadLocation("Europe/Copenhagen")
-	if err != nil || !validPolicy(p) || !validSearch(search) {
+	if err != nil || !validPolicy(p) || now.IsZero() || !validSearch(search) || search.Start.After(p.latestStart(now, loc)) {
 		return Interval{}, Interval{}, ErrUnavailable
 	}
 	calendar, commitments = requiredCoverage(p, search, loc)
@@ -107,6 +108,7 @@ func Available(p Policy, in Input) ([]Interval, error) {
 	}
 	blocked = mergeIntervals(blocked)
 	day := midnight(in.Search.Start.In(loc))
+	latest := p.latestStart(in.Now, loc)
 	var result []Interval
 	for day.Before(in.Search.End) {
 		start, end, open := window(p, day)
@@ -116,7 +118,8 @@ func Available(p Policy, in Input) ([]Interval, error) {
 			if used <= p.WeeklyCapacity-in.Duration {
 				for at := start; !at.Add(in.Duration).After(end); at = at.Add(p.SlotStep) {
 					candidate := Interval{at.UTC(), at.Add(in.Duration).UTC()}
-					if candidate.Start.Before(in.Search.Start) || candidate.End.After(in.Search.End) || candidate.Start.Before(in.Now.Add(*p.LeadTime)) {
+					if candidate.Start.Before(in.Search.Start) || candidate.End.After(in.Search.End) ||
+						candidate.Start.Before(in.Now.Add(*p.LeadTime)) || candidate.Start.After(latest) {
 						continue
 					}
 					occupied := Interval{candidate.Start.Add(-*p.BufferBefore), candidate.End.Add(*p.BufferAfter)}
@@ -136,7 +139,9 @@ func wholeMinutes(d time.Duration, limit time.Duration) bool {
 }
 
 func validPolicy(p Policy) bool {
-	if !p.Enabled || p.SlotStep <= 0 || !wholeMinutes(p.SlotStep, 24*time.Hour) || p.WeeklyCapacity <= 0 || !wholeMinutes(p.WeeklyCapacity, 7*24*time.Hour) || strings.TrimSpace(p.CancellationTermsVersion) == "" || len(p.CancellationTermsVersion) > 128 {
+	if !p.Enabled || p.HorizonDays <= 0 || p.HorizonDays > 30 ||
+		p.SlotStep <= 0 || !wholeMinutes(p.SlotStep, 24*time.Hour) || p.WeeklyCapacity <= 0 || !wholeMinutes(p.WeeklyCapacity, 7*24*time.Hour) ||
+		strings.TrimSpace(p.CancellationTermsVersion) == "" || len(p.CancellationTermsVersion) > 128 {
 		return false
 	}
 	for _, d := range []*time.Duration{p.LeadTime, p.CancellationNotice} {
@@ -165,6 +170,10 @@ func validPolicy(p Policy) bool {
 		}
 	}
 	return true
+}
+
+func (p Policy) latestStart(now time.Time, loc *time.Location) time.Time {
+	return now.In(loc).AddDate(0, 0, p.HorizonDays)
 }
 
 func validDate(s string) bool {
