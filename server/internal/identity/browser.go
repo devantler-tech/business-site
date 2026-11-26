@@ -723,7 +723,12 @@ func (b *browser) render(w http.ResponseWriter, r *http.Request, status int, kin
 // data shares the same localized, escaped layout with the private contact form.
 func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	d := pageData{Lang: language(r), Kind: kind, Client: client, CSRF: token, Title: "Your client portal", Intro: "A private space for your work with Devantler Tech.", Action: "Sign in", SignedIn: "You are signed in", Logout: "Sign out", Error: "Sign-in could not be completed. The portal is invitation-only: try again with the account from your invitation, or contact Devantler Tech.", Unavailable: "The portal is unavailable. Please try again later.", Back: "Back to the website", Theme: "Appearance", System: "System", Light: "Light", Dark: "Dark", Operator: "Operator", Boundary: "Ordering and payments are not available yet."}
-	d.ClientPreview = token != "" && b.foundation.canLeaveClientPreview() && b.principal(r.Context()).isClientPreview()
+	if b.foundation.canLeaveClientPreview() && b.principal(r.Context()).isClientPreview() {
+		if d.CSRF == "" {
+			d.CSRF = nosurf.Token(r)
+		}
+		d.ClientPreview = d.CSRF != ""
+	}
 	other, path := "da", r.URL.Path
 	if d.Lang == "da" {
 		other = "en"

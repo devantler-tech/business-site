@@ -256,7 +256,12 @@ func (s *Foundation) ready(ctx context.Context) bool {
 		return false
 	}
 	enabled, err := s.flags.BooleanValue(ctx, "portal-identity", false, openfeature.NewEvaluationContext("", nil))
-	return err == nil && enabled && s.flags.State() == openfeature.ReadyState
+	if err != nil || !enabled {
+		return false
+	}
+	// Fictional capabilities depend on the current ordinary portal identity
+	// gate, including at the final checkpoints that call ready.
+	return (s.previewAuthority == nil || s.previewAuthority.ready(ctx)) && s.flags.State() == openfeature.ReadyState
 }
 
 // Attempt secrets are for the trusted browser handler, never logs, public

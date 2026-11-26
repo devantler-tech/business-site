@@ -121,7 +121,7 @@ func previewSessionCurrent(ctx context.Context, tx pgx.Tx, snapshot durableRespo
 func (s *Foundation) currentPreviewAuthority(ctx context.Context, operator Principal) (*previewAuthority, bool) {
 	grant, _ := ctx.Value(previewAuthorityKey{}).(*previewAuthority)
 	return grant, s.previewAuthority != nil && grant != nil && grant.portal == s.previewAuthority &&
-		grant.operator == operator && ctx.Err() == nil && time.Now().Before(operator.expires) &&
+		grant.operator == operator && s.previewAuthority.ready(ctx) && ctx.Err() == nil && time.Now().Before(operator.expires) &&
 		time.Now().Before(grant.session.original.deadline)
 }
 
@@ -236,6 +236,11 @@ func (s *Foundation) previewClient(ctx context.Context, p Principal) (string, st
 	}
 	if err != nil {
 		return "", "", "", fmt.Errorf("read preview membership: %w", err)
+	}
+	if s.previewAuthority != nil {
+		if _, ok := s.currentPreviewAuthority(ctx, p.previewOwner()); !ok {
+			return "", "", "", ErrDenied
+		}
 	}
 	return previewWorkspace, "client", incarnation, nil
 }
@@ -391,6 +396,9 @@ func (b *browser) switchPreviewSession(ctx context.Context, w http.ResponseWrite
 		return err
 	}
 	if updated.RowsAffected() != 1 {
+		return ErrDenied
+	}
+	if !b.foundation.ready(ctx) || !time.Now().Before(operator.expires) {
 		return ErrDenied
 	}
 	if err := tx.Commit(ctx); err != nil {

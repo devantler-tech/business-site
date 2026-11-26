@@ -154,8 +154,11 @@ func (b *browser) unifiedPreviewResponseAllowed(ctx context.Context, snapshot du
 	err := query.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2
  AND client_id=$3 AND role='client' AND NOT revoked AND incarnation::text=$4)`,
 		p.issuer, p.subject, previewWorkspace, p.membershipIncarnation).Scan(&allowed)
-	return err == nil && allowed && ctx.Err() == nil && b.foundation.flags.State() == openfeature.ReadyState &&
-		time.Now().Before(snapshot.original.deadline) && time.Now().Before(p.expires)
+	if err != nil || !allowed || b.foundation.flags.State() != openfeature.ReadyState {
+		return false
+	}
+	_, ok = b.foundation.currentPreviewAuthority(ctx, p.previewOwner())
+	return ok && b.foundation.flags.State() == openfeature.ReadyState
 }
 
 // renderContact buffers the entire private Go frame before committing headers.

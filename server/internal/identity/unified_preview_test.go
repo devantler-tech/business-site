@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/open-feature/go-sdk/openfeature"
 	"github.com/open-feature/go-sdk/openfeature/isolated"
 	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
@@ -99,6 +100,7 @@ func TestOperatorUnifiedPreviewKeepsPurchaseAndIdentityInSeparateStores(t *testi
 	if status, _, _ := b.request(http.MethodPost, path+"/orders", purchase, b.site.URL); status != http.StatusForbidden {
 		t.Fatalf("preview could reach a real order route: %d", status)
 	}
+	checkUnifiedPreviewRelease(t, b, demoAPI, flags, demo, path+"/preview-orders", purchase)
 	if first, second := concurrentPortalPosts(b, path+"/preview-orders", purchase, purchase); first != http.StatusSeeOther || second != http.StatusSeeOther {
 		t.Fatalf("fictional purchase and retry returned %d and %d", first, second)
 	}
@@ -148,9 +150,55 @@ func TestOperatorUnifiedPreviewKeepsPurchaseAndIdentityInSeparateStores(t *testi
 	if status, _, _ := b.request(http.MethodPost, "/preview", start, b.site.URL); status != http.StatusSeeOther {
 		t.Fatalf("could not re-enter fictional workspace: %d", status)
 	}
+	demo.Close()
+	status, page, _ = b.request(http.MethodGet, path+"?lang=en", nil, "")
+	if status < http.StatusBadRequest || !strings.Contains(page, "Return to operator workspace") || !csrfInput.MatchString(page) {
+		t.Errorf("a preview database lost after startup hid the return form: %d", status)
+	}
 	revokeFixtureAccess(ctx, t, b, sharedOperator)
-	if status, _, _ := b.request(http.MethodGet, path, nil, ""); status == http.StatusOK {
-		t.Fatal("a revoked operator could still read the fictional workspace")
+	if status, _, _ := b.request(http.MethodGet, path, nil, ""); status != http.StatusForbidden {
+		t.Fatalf("a revoked operator reached fictional storage: %d", status)
+	}
+}
+
+func checkUnifiedPreviewRelease(t *testing.T, b *browserFixture, demoAPI *openfeature.EvaluationAPI, flags map[string]memprovider.InMemoryFlag, demo *pgxpool.Pool, path string, purchase url.Values) {
+	t.Helper()
+	provider := &finalRequestProvider{
+		FeatureProvider: memprovider.NewInMemoryProvider(flags), key: "portal-proposal-acceptance",
+		blockAt: 2, blocked: make(chan struct{}), release: make(chan struct{}),
+	}
+	if err := demoAPI.SetProviderAndWait(t.Context(), provider); err != nil {
+		t.Fatal(err)
+	}
+	release := onceRelease(provider.release)
+	defer release()
+	result := make(chan int, 1)
+	go func() {
+		status, _, _ := b.request(http.MethodPost, path, purchase, b.site.URL)
+		result <- status
+	}()
+	select {
+	case <-provider.blocked:
+	case <-time.After(5 * time.Second):
+		t.Fatal("fictional purchase did not reach the final acceptance gate")
+	}
+	setFlag(t, b.flags, false)
+	release()
+	select {
+	case status := <-result:
+		if status != http.StatusForbidden {
+			t.Errorf("purchase survived closure of the main portal identity gate: %d", status)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("fictional purchase did not finish after the final gate was released")
+	}
+	var receipts int
+	if err := demo.QueryRow(t.Context(), "SELECT count(*) FROM portal_preview_receipts").Scan(&receipts); err != nil || receipts != 0 {
+		t.Errorf("the closed identity gate retained a fictional receipt: %d, %v", receipts, err)
+	}
+	setFlag(t, b.flags, true)
+	if err := demoAPI.SetProviderAndWait(t.Context(), memprovider.NewInMemoryProvider(flags)); err != nil {
+		t.Fatal(err)
 	}
 }
 
