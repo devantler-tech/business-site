@@ -70,9 +70,9 @@ check_tag() {
   [[ "$kind" == commit && "$oid" == "$source" ]] || fail 'tag source differs from caller'
 }
 [[ -z "$tag" ]] || check_tag "$work/tag-before.json"
-# A bounded unfiltered window avoids GitHub's inconsistent head_sha filter.
-# No match or an ambiguous/malformed inventory fails, never vacuously succeeds.
-read_json 'actions/runs?per_page=100' "$work/runs.json"
+# Scope the bounded inventory to main pushes of the original workflow. Match
+# source locally and include failed runs so the latest attempt governs admission.
+read_json 'actions/workflows/ci.yaml/runs?branch=main&event=push&per_page=100' "$work/runs.json"
 jq -e '(.workflow_runs|type)=="array" and (.workflow_runs|length)>0 and (.workflow_runs|length)<=100 and
     ([.workflow_runs[].id]|unique|length)==(.workflow_runs|length) and
     ([.workflow_runs[].id]==([.workflow_runs[].id]|sort|reverse))' "$work/runs.json" >/dev/null || fail 'bounded CI inventory'
