@@ -1,8 +1,10 @@
 package runtimeapp
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"maps"
 	"net/url"
 	"os"
@@ -73,9 +75,10 @@ func TestPortalSettingsFormat(t *testing.T) {
 	for _, tc := range []struct{ name, input string }{
 		{"staging lease stays environment-only", "PORTAL_IDENTITY_LEASE_UNTIL=2026-11-15T00:00:00Z\n"},
 		{"owner-only secret file stays environment-only", "PORTAL_CLIENT_SECRET_FILE=/private/secret\n"},
-		{"unknown key", "PORTAL_MIGRATION_DATABASE_FILE=/private/migration\n"},
+		{"unrelated namespace", "OTHER_SETTING=fictional\n"},
 		{"lowercase key", "portal_oidc_issuer=https://login.example.invalid\n"},
 		{"repeated key", "PORTAL_OIDC_CLIENT_ID=business-portal\nPORTAL_OIDC_CLIENT_ID=other\n"},
+		{"repeated future key", "PORTAL_FUTURE_FLAG=first\nPORTAL_FUTURE_FLAG=second\n"},
 		{"empty value", "PORTAL_IDENTITY_PROFILE=\n"},
 		{"missing separator", "PORTAL_IDENTITY_PROFILE\n"},
 		{"spaced separator", "PORTAL_IDENTITY_PROFILE = production\n"},
@@ -91,6 +94,37 @@ func TestPortalSettingsFormat(t *testing.T) {
 				t.Fatal("unsafe settings were accepted")
 			}
 		})
+	}
+}
+
+func TestPortalSettingsProjectionIgnoresFutureSettings(t *testing.T) {
+	unsetPortalEnvironment(t)
+	const key = "PORTAL_FUTURE_FLAG"
+	const value = "synthetic-value"
+	t.Setenv(key, "")
+	if err := os.Unsetenv(key); err != nil {
+		t.Fatal("fixture environment reset failed")
+	}
+	var events bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&events, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	contents := settingsText(fictionalDependencies()) + key + "=" + value + "\n"
+	if err := ApplyPortalSettingsProjection(projectedIdentityFixture(t, []byte(contents), 0440)); err != nil {
+		t.Fatal("future setting blocked startup with supported settings", err)
+	}
+	if _, applied := os.LookupEnv(key); applied {
+		t.Fatal("future setting reached the process environment")
+	}
+	cfg, err := ReadConfig(os.Getenv)
+	if err != nil || cfg == (Config{}) {
+		t.Fatal("supported configuration was lost", err)
+	}
+	event := events.String()
+	if !strings.Contains(event, "level=WARN") || !strings.Contains(event, "count=1") ||
+		strings.Contains(event, key) || strings.Contains(event, value) {
+		t.Fatal("the unsupported setting was not counted privately")
 	}
 }
 

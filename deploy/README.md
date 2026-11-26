@@ -144,18 +144,21 @@ them, sign-out and a refused sign-in also end the ZITADEL session; the ZITADEL c
 list `https://portal.devantler.tech/signed-out` and `https://devantler.tech/` as post-logout
 addresses. `PORTAL_OPERATOR_SUBJECTS` also comes only with the five dependency keys. It lists, comma-separated, the customer Dex subjects of the operators, who sign in with GitHub through the `platform` connector at `https://portal.devantler.tech/operator/sign-in`; startup refuses any other subject. The five dependency keys come all together or not at all. With them but no
 activation keys, startup checks the database login and grants and discovers
-Dex, but sign-in stays off. Unknown or repeated keys, empty values, surrounding
-whitespace and CR line endings are refused. The staging lease and the owner-only
-secret file stay environment-only, and no portal variable may also be inherited
-from the environment. Errors never include values or paths. Restart to rotate.
+Dex, but sign-in stays off. The runtime skips well-formed portal settings outside
+its supported set and logs how many it skipped. Repeated keys, empty values,
+surrounding whitespace and CR line endings are refused. The staging lease and
+the owner-only secret file stay environment-only, and no supported portal
+variable may also be inherited from the environment. Logs and errors omit
+setting names, values and paths. Restart to rotate.
 
 The two machine keys are both-or-neither and require the complete portal. They contain
 public policy only; no machine secret is projected into this application. The audience
 must differ from the browser client, and every listed issuer must match the portal broker.
 Agents are read-only by default, with exact write grants from a closed catalogue; money
 and deletion grants are always refused. See [machine callers](../server/CUSTOMER-IDENTITY.md#machine-callers)
-for the complete format, token limits and action names. Deploy this runtime before adding
-these keys to a settings projection; an older runtime refuses unknown keys.
+for the complete format, token limits and action names. Deploy a runtime with
+forward-compatible projection support before adding keys older versions do not
+recognize. A skipped setting takes effect once a runtime that supports it starts.
 
 The regular production portal can offer operators a fictional client workspace
 in their existing session. Leave `PORTAL_CLIENT_PREVIEW_DATABASE_URL` and
