@@ -31,9 +31,25 @@ CREATE TABLE public.portal_appointment_revisions (
   CHECK(held_until>recorded_at AND held_until<=starts_at)
 );
 
-CREATE FUNCTION public.portal_guard_appointment_duration() RETURNS trigger
+-- The stable client owns at most one introduction. It commits a particular
+-- revision, so the interval remains occupied after the provisional hold expires.
+CREATE TABLE public.portal_appointment_introductions (
+  client_id text PRIMARY KEY,
+  reservation_id public.portal_consent_key NOT NULL UNIQUE,
+  revision integer NOT NULL,
+  confirmed_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  FOREIGN KEY(reservation_id,client_id) REFERENCES public.portal_appointment_reservations(id,client_id),
+  FOREIGN KEY(reservation_id,revision) REFERENCES public.portal_appointment_revisions(reservation_id,revision)
+);
+
+CREATE FUNCTION public.portal_guard_appointment_revision() RETURNS trigger
 LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
 BEGIN
+  IF EXISTS (
+    SELECT 1 FROM public.portal_appointment_introductions i WHERE i.reservation_id=NEW.reservation_id
+  ) THEN
+    RAISE EXCEPTION 'confirmed appointment revision refused' USING ERRCODE='23514';
+  END IF;
   IF EXISTS (
     SELECT 1 FROM public.portal_appointment_reservations r
     JOIN public.portal_proposals p ON p.request_id=r.quote_request_id AND p.client_id=r.client_id
@@ -46,6 +62,28 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-REVOKE ALL ON FUNCTION public.portal_guard_appointment_duration() FROM PUBLIC;
-CREATE TRIGGER portal_appointment_duration BEFORE INSERT ON public.portal_appointment_revisions
-  FOR EACH ROW EXECUTE FUNCTION public.portal_guard_appointment_duration();
+REVOKE ALL ON FUNCTION public.portal_guard_appointment_revision() FROM PUBLIC;
+CREATE TRIGGER portal_appointment_revision BEFORE INSERT ON public.portal_appointment_revisions
+  FOR EACH ROW EXECUTE FUNCTION public.portal_guard_appointment_revision();
+
+CREATE FUNCTION public.portal_guard_appointment_introduction() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+BEGIN
+  NEW.confirmed_at := clock_timestamp();
+  IF NOT EXISTS (
+    SELECT 1 FROM public.portal_appointment_revisions v
+    JOIN public.portal_appointment_reservations r ON r.id=v.reservation_id AND r.client_id=v.client_id
+    WHERE v.reservation_id=NEW.reservation_id AND v.client_id=NEW.client_id AND v.revision=NEW.revision
+      AND r.quote_request_id IS NULL AND v.ends_at-v.starts_at=interval '30 minutes'
+      AND v.held_until>NEW.confirmed_at AND NOT EXISTS (
+        SELECT 1 FROM public.portal_appointment_revisions later
+        WHERE later.reservation_id=v.reservation_id AND later.revision>v.revision)
+  ) THEN
+    RAISE EXCEPTION 'appointment introduction refused' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.portal_guard_appointment_introduction() FROM PUBLIC;
+CREATE TRIGGER portal_appointment_introduction BEFORE INSERT ON public.portal_appointment_introductions
+  FOR EACH ROW EXECUTE FUNCTION public.portal_guard_appointment_introduction();

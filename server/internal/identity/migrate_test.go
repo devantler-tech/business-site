@@ -70,8 +70,8 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 // runtime grants or a production rollback. Remove new dependent tables before v13.
 func rewindAppointmentReservationsFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_appointment_revisions,portal_appointment_reservations;
- DROP FUNCTION portal_guard_appointment_duration();
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_appointment_introductions,portal_appointment_revisions,portal_appointment_reservations;
+ DROP FUNCTION portal_guard_appointment_introduction(),portal_guard_appointment_revision();
  DELETE FROM portal_schema_version WHERE version=34`); err != nil {
 		t.Fatal("historical fixture could not reconstruct the pre-reservation schema", err)
 	}

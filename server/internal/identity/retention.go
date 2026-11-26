@@ -82,6 +82,7 @@ var purgeRecords = []string{
 	`DELETE FROM portal_proposal_reviews WHERE client_id=$1`,
 	`DELETE FROM portal_proposal_acceptances WHERE client_id=$1`,
 	`DELETE FROM portal_proposal_visibility WHERE client_id=$1`,
+	`DELETE FROM portal_appointment_introductions WHERE client_id=$1`,
 	`DELETE FROM portal_appointment_reservations WHERE client_id=$1`,
 	`DELETE FROM portal_proposals WHERE client_id=$1`,
 	`DELETE FROM portal_request_closures WHERE client_id=$1`,
