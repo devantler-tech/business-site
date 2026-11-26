@@ -47,6 +47,18 @@ type Config struct {
 	orderTerms [2]string
 }
 
+// WithUpstreamLogoutDefaults fills a complete portal's missing logout pair.
+// A complete platform projection supplies both values during the transition.
+func (c Config) WithUpstreamLogoutDefaults(endpoint, client string) (Config, error) {
+	if err := identity.ValidateUpstreamLogout(endpoint, client); err != nil {
+		return Config{}, ErrConfig
+	}
+	if c.issuer != "" && c.endSession == "" {
+		c.endSession, c.endSessionClient = endpoint, client
+	}
+	return c, nil
+}
+
 // billingConfig is the optional Numina invoice path (ADR 0030). Its own
 // false-default gate still decides whether anything is invoiced.
 type billingConfig struct {
