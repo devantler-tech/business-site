@@ -2,7 +2,7 @@
 {{template "portal-head" .}}
 {{template "portal-header" .}}
 <main id="main"><div class="intro"><h1>{{.Title}}</h1>
-<p>{{.Intro}}</p></div>
+{{if .Intro}}<p>{{.Intro}}</p>{{end}}</div>
 <section aria-label="{{.Title}}">
 {{if eq .Kind `appointments`}}
 {{if .Appointments}}
@@ -11,12 +11,27 @@
   <div><strong>{{.Service}}</strong>
     <span class="appointment-times">{{.Date}} · <time datetime="{{.Start}}">{{.StartTime}}</time>–<time datetime="{{.End}}">{{.EndTime}}</time></span>
   </div>
-  <span>{{.Status}}</span>
+  <div><span>{{.Status}}</span>
+    {{with .Cancellation}}<details class="appointment-cancellation">
+      <summary>{{if eq $.Lang `da`}}Aflys samtalen{{else}}Cancel introduction{{end}}</summary>
+      <p>{{if eq $.Lang `da`}}Aflys senest{{else}}Cancel by{{end}} <time datetime="{{.Deadline}}">{{.DeadlineText}}</time>.</p>
+      <form method="post" action="{{root}}/appointments/cancel">
+        <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+        <input type="hidden" name="lang" value="{{$.Lang}}">
+        <input type="hidden" name="reservation" value="{{.Reservation}}">
+        <input type="hidden" name="revision" value="{{.Revision}}">
+        <button class="operator-secondary" type="submit">{{if eq $.Lang `da`}}Bekræft aflysning{{else}}Confirm cancellation{{end}}</button>
+      </form>
+    </details>{{end}}
+  </div>
 </li>{{end}}
 </ol>
 {{if .AppointmentsLimited}}<p>{{if eq .Lang `da`}}Viser 20 aftaler.{{else}}Showing 20 appointments.{{end}}</p>{{end}}
 {{else}}<p>{{if eq .Lang `da`}}Du har endnu ingen aftaler.{{else}}You have no appointments yet.{{end}}</p>{{end}}
 <p><a href="{{root}}/?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til kundeportalen{{else}}Back to the client portal{{end}}</a></p>
+{{else if eq .Kind `appointment-cancellation-error`}}
+<p role="alert">{{if eq .Lang `da`}}Aftalen kan ikke aflyses her. Gå tilbage til dine aftaler for at se den aktuelle status.{{else}}This appointment cannot be cancelled here. Return to your appointments to check its current status.{{end}}</p>
+<p><a href="{{root}}/appointments?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til dine aftaler{{else}}Back to your appointments{{end}}</a></p>
 {{else if eq .Kind `no-access`}}<p role="alert">{{if eq .Lang `da`}}Portalen kræver en invitation, og den konto, du loggede ind med, er ikke inviteret. Kontakt Devantler Tech, hvis du havde ventet adgang.{{else}}The portal is invitation-only, and the account you signed in with has not been invited. Contact Devantler Tech if you expected access.{{end}}</p>
 {{else if or (eq .Kind `sign-out-handoff`) (eq .Kind `broker-handoff`)}}<p>{{if eq .Kind `sign-out-handoff`}}{{if eq .Lang `da`}}Du bliver logget ud.{{else}}Signing you out.{{end}}{{else if eq .Lang `da`}}Du bliver sendt videre til dit login.{{else}}Continuing to your sign-in.{{end}}</p><a id="broker-continue" href="{{.BrokerURL}}">{{if ne .Kind `sign-out-handoff`}}{{.Action}}{{else if eq .Lang `da`}}Fortsæt{{else}}Continue{{end}}</a>
 {{else if or (eq .Kind `home`) (eq .Kind `operator`)}}<h2>{{if eq .Kind `operator`}}{{.Operator}}{{else}}{{.SignedIn}}{{end}}</h2>

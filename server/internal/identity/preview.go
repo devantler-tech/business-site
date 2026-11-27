@@ -101,7 +101,7 @@ func (b *browser) lockUnifiedPreview(ctx context.Context) (context.Context, func
 		release()
 		return ctx, func() {}, err
 	}
-	if !previewSessionCurrent(ctx, tx, snapshot) {
+	if !lockBrowserSession(ctx, tx, snapshot) {
 		release()
 		return ctx, func() {}, ErrDenied
 	}
@@ -109,7 +109,7 @@ func (b *browser) lockUnifiedPreview(ctx context.Context) (context.Context, func
 	return context.WithValue(ctx, previewAuthorityKey{}, grant), release, nil
 }
 
-func previewSessionCurrent(ctx context.Context, tx pgx.Tx, snapshot durableResponseSnapshot) bool {
+func lockBrowserSession(ctx context.Context, tx pgx.Tx, snapshot durableResponseSnapshot) bool {
 	var storedDeadline time.Time
 	err := tx.QueryRow(ctx, `SELECT expiry FROM portal_sessions
  WHERE token=$1 AND data=$2 AND expiry>clock_timestamp() FOR SHARE`, snapshot.key, snapshot.data).Scan(&storedDeadline)

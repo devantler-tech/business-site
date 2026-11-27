@@ -219,6 +219,8 @@ func (b *browser) withCSRF(handler http.Handler) http.Handler {
 func (s *Foundation) browserRouteAvailable(r *http.Request) bool {
 	path, ctx := r.URL.Path, r.Context()
 	switch {
+	case path == introductionCancellationPath:
+		return s.appointmentCancellationReady(ctx)
 	case path == "/portal/requests" || strings.HasPrefix(path, "/portal/requests/"):
 		return s.requestsReady(ctx)
 	case path == "/portal/contact/verify":
@@ -317,6 +319,7 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /portal/callback", b.callback)
 	mux.HandleFunc("GET /portal/{$}", b.home)
 	mux.HandleFunc("GET /portal/appointments", b.appointmentHistory)
+	mux.HandleFunc("POST "+introductionCancellationPath, b.cancelAppointmentIntroduction)
 	mux.HandleFunc("GET /portal/operator", b.operator)
 	mux.HandleFunc("GET /portal/operator/audit", b.operatorAuditPage)
 	mux.HandleFunc("GET /portal/operator/calendar-conflicts", b.operatorCalendarConflicts)
@@ -762,6 +765,9 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	if path == "/portal/contact/verify" {
 		path = "/portal/contact"
 	}
+	if kind == "appointment-cancellation-error" {
+		path = "/portal/appointments"
+	}
 	if kind == "proposal-invalid" || kind == "proposal-conflict" || kind == "sharing-invalid" || kind == "sharing-conflict" {
 		path = "/portal/operator/requests"
 	}
@@ -800,6 +806,12 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 		d.Client = "Demo workspace"
 		if d.Lang == "da" {
 			d.Client = "Arbejdsområde til test"
+		}
+	}
+	if kind == "appointment-cancellation-error" {
+		d.Title, d.Intro = "Your appointments", ""
+		if d.Lang == "da" {
+			d.Title = "Dine aftaler"
 		}
 	}
 	return d

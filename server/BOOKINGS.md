@@ -138,6 +138,11 @@ as the appointment order's durable fulfillment. The history displays Copenhagen
 time and lists upcoming appointments before past or cancelled ones. The portal
 rechecks the original session before releasing the page. The independently default-off
 `portal-appointment-history` switch has no environment activation mapping.
+The separate `portal-appointment-cancellation` switch enables the client form
+for an active free introduction until its recorded cancellation deadline.
+The form confirms the exact reservation revision and returns to appointment
+history. The portal keeps the original meeting and records the cancellation
+once. Paid consultation changes still need operator handling.
 
 ## Calendar conflicts in the operator workspace
 
