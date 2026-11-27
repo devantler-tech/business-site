@@ -9,7 +9,7 @@ import (
 
 	"github.com/devantler-tech/business-site/server/internal/booking"
 	"github.com/emersion/go-ical"
-	calendarclient "github.com/emersion/go-webdav/caldav"
+	webdav "github.com/emersion/go-webdav/caldav"
 )
 
 // CreateOwnedEvent creates an absent portal resource once. The caller owns
@@ -71,11 +71,11 @@ func (c *Client) putNewOwnedEvent(ctx context.Context, client *http.Client, reso
 		response.Body = http.NoBody
 		return response, nil
 	})
-	dav, err := calendarclient.NewClient(transport, origin.String())
+	dav, err := webdav.NewClient(transport, origin.String())
 	if err != nil {
 		return false
 	}
-	_, _ = dav.PutCalendarObject(ctx, resource, event, &calendarclient.PutCalendarObjectOptions{IfNoneMatch: "*"})
+	_, _ = dav.PutCalendarObject(ctx, resource, event, &webdav.PutCalendarObjectOptions{IfNoneMatch: "*"})
 	return attempted && (status == 0 || status/100 == 2 || status == http.StatusPreconditionFailed || status/100 == 5)
 }
 
