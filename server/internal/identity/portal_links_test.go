@@ -286,6 +286,9 @@ func renderedLinkPagesFor(name string, templates *template.Template, b *browser)
 							{At: request.Submitted.Add(-time.Minute), Kind: "agent", Subject: "fictional-agent", Action: "workspaces.list", Outcome: "refused"},
 						}
 					}
+					if view.kind == "operator-audit" {
+						return templates.ExecuteTemplate(w, name, auditSearchPage{pageData: d})
+					}
 					return templates.ExecuteTemplate(w, name, d)
 				})
 				if err != nil {

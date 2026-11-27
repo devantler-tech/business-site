@@ -37,6 +37,41 @@ type auditSearchEvent struct {
 	ID string
 }
 
+type auditChoice struct {
+	Value, Label string
+	Selected     bool
+}
+
+func (p auditSearchPage) ActorChoices() []auditChoice {
+	if p.Lang == "da" {
+		return p.actorChoices("Operatør", "Anden aktør")
+	}
+	return p.actorChoices("Operator", "Other actor")
+}
+
+func (p auditSearchPage) actorChoices(operator, other string) []auditChoice {
+	return []auditChoice{
+		{"operator", operator, p.Search.Actor == "operator"},
+		{"agent", "Agent", p.Search.Actor == "agent"},
+		{"other", other, p.Search.Actor == "other"},
+	}
+}
+
+func (p auditSearchPage) OutcomeChoices() []auditChoice {
+	if p.Lang == "da" {
+		return p.outcomeChoices("Tilladt", "Afvist", "Fejl")
+	}
+	return p.outcomeChoices("Allowed", "Refused", "Failed")
+}
+
+func (p auditSearchPage) outcomeChoices(allowed, refused, failed string) []auditChoice {
+	return []auditChoice{
+		{"allowed", allowed, p.Search.Outcome == "allowed"},
+		{"refused", refused, p.Search.Outcome == "refused"},
+		{"failed", failed, p.Search.Outcome == "failed"},
+	}
+}
+
 func readAuditSearch(rawQuery string) (auditSearch, error) {
 	query, err := url.ParseQuery(rawQuery)
 	if err != nil {

@@ -224,6 +224,8 @@ func TestOperatorResponseRequiresDurableAuthority(t *testing.T) {
 					} else {
 						query := "FROM portal_operator_audit ORDER BY"
 						switch path {
+						case "/audit":
+							query = "SELECT id::text,at,actor_kind"
 						case "/api/invitations":
 							query = "FROM portal_invitations WHERE"
 						case "/api/workspaces":

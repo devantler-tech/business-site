@@ -666,6 +666,7 @@ main:has(> .client-home) {
 .operator-pending,
 .operator-events li {
   padding-block: 0.75rem;
+  overflow-wrap: anywhere;
 }
 
 .operator-workspace,
@@ -759,7 +760,7 @@ main:has(> .client-home) {
   grid-column: 1 / -1;
 }
 
-.operator-audit-search label,
+.operator-audit-search > div > label,
 .operator-audit-query small {
   display: block;
   margin-block-end: 0.25rem;
@@ -781,10 +782,6 @@ main:has(> .client-home) {
   background: var(--bg);
   color: var(--ink);
   font: inherit;
-}
-
-.operator-events li {
-  overflow-wrap: anywhere;
 }
 
 .operator-audit-target {

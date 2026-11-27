@@ -308,18 +308,14 @@
     <label for="audit-actor">{{if eq .Lang "da"}}Aktørtype{{else}}Actor type{{end}}</label>
     <select id="audit-actor" name="actor">
       <option value="">{{if eq .Lang "da"}}Alle aktører{{else}}All actors{{end}}</option>
-      <option value="operator" {{if eq .Search.Actor "operator"}}selected{{end}}>{{if eq .Lang "da"}}Operatør{{else}}Operator{{end}}</option>
-      <option value="agent" {{if eq .Search.Actor "agent"}}selected{{end}}>Agent</option>
-      <option value="other" {{if eq .Search.Actor "other"}}selected{{end}}>{{if eq .Lang "da"}}Anden aktør{{else}}Other actor{{end}}</option>
+      {{range .ActorChoices}}{{template "audit-choice" .}}{{end}}
     </select>
   </div>
   <div>
     <label for="audit-outcome">{{if eq .Lang "da"}}Resultat{{else}}Outcome{{end}}</label>
     <select id="audit-outcome" name="outcome">
       <option value="">{{if eq .Lang "da"}}Alle resultater{{else}}All outcomes{{end}}</option>
-      <option value="allowed" {{if eq .Search.Outcome "allowed"}}selected{{end}}>{{if eq .Lang "da"}}Tilladt{{else}}Allowed{{end}}</option>
-      <option value="refused" {{if eq .Search.Outcome "refused"}}selected{{end}}>{{if eq .Lang "da"}}Afvist{{else}}Refused{{end}}</option>
-      <option value="failed" {{if eq .Search.Outcome "failed"}}selected{{end}}>{{if eq .Lang "da"}}Fejl{{else}}Failed{{end}}</option>
+      {{range .OutcomeChoices}}{{template "audit-choice" .}}{{end}}
     </select>
   </div>
   <div>
@@ -356,3 +352,5 @@
   {{end}}
 </section>
 {{end}}
+
+{{define "audit-choice"}}{{if .Selected}}<option value="{{.Value}}" selected>{{.Label}}</option>{{else}}<option value="{{.Value}}">{{.Label}}</option>{{end}}{{end}}
