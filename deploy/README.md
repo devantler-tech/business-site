@@ -156,7 +156,17 @@ effect when a complete portal starts with both projected logout keys absent. Sig
 and a refused sign-in then also end the ZITADEL session. The ZITADEL client must list
 `https://portal.devantler.tech/signed-out` and `https://devantler.tech/` as post-logout addresses.
 
-`PORTAL_OPERATOR_SUBJECTS` also comes only with the five dependency keys. It lists, comma-separated, the customer Dex subjects of the operators, who sign in with GitHub through the `platform` connector at `https://portal.devantler.tech/operator/sign-in`; startup refuses any other subject. The five dependency keys come all together or not at all. With them but no
+`PORTAL_OPERATOR_SUBJECTS` requires all five dependency keys. It lists the exact
+customer Dex subjects of the operators, separated by commas. Configure the
+ZITADEL subject for an operator whose GitHub account is linked in ZITADEL.
+Customers and operators both use [the portal sign-in page](https://portal.devantler.tech/sign-in).
+The server selects the role and workspace from the verified identity and current
+membership. Once a ZITADEL operator subject is configured, the
+`/operator/sign-in` bookmark opens the same page. Deployments configured with
+only legacy platform operator subjects retain the earlier platform sign-in.
+See [the customer identity guide](../server/CUSTOMER-IDENTITY.md).
+
+The five dependency keys come all together or not at all. With them but no
 activation keys, startup checks the database login and grants and discovers
 Dex, but sign-in stays off. The runtime skips well-formed portal settings outside
 its supported set and logs how many it skipped. Repeated keys, empty values,
