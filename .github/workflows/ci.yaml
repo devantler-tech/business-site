@@ -412,7 +412,7 @@ jobs:
 
   test-tenant-admission:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
     env:
@@ -427,19 +427,29 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: devantler-tech/platform
-          ref: 7376af26b89cea8d41d9d4d11562823a0fd4d866 # Platform #6706
+          ref: 25dc8d22079e07b337d108df20b1d1c7f90aad00 # Platform #6712
           path: .tenant-policy-source
           persist-credentials: false
-          sparse-checkout-cone-mode: false
-          sparse-checkout: |
-            /scripts/tests/tenant-webapp-admission/
-            /k8s/bases/infrastructure/resource-graph-definitions/tenant/resource-graph-definition.yaml
-            /k8s/bases/infrastructure/cluster-policies/best-practices/restrict-tenant-network-policies.yaml
-            /k8s/bases/infrastructure/cluster-policies/best-practices/restrict-tenant-route-hostnames.yaml
-            /k8s/bases/infrastructure/cluster-policies/best-practices/restrict-tenant-secret-stores.yaml
-            /k8s/bases/infrastructure/cluster-policies/best-practices/restrict-tenant-webapps.yaml
-            /k8s/bases/infrastructure/cluster-policies/best-practices/restrict-webapp-child-ownership.yaml
-            /k8s/bases/infrastructure/cluster-policies/best-practices/validate-pod-security.yaml
+      - name: Setup Go for the Platform WebApp compiler
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: .tenant-policy-source/scripts/tests/webapp-compiler/go.mod
+          cache-dependency-path: .tenant-policy-source/scripts/tests/webapp-compiler/go.sum
+      - name: Compile the generated production WebApp children
+        id: generated-workloads
+        shell: bash
+        env:
+          KRO_API_BASE: HEAD
+        run: |
+          work="$(mktemp -d "$RUNNER_TEMP/tenant-admission.XXXXXXXX")"
+          kubectl kustomize deploy > "$work/production.yaml"
+          yq -o=json -I=0 '.' "$work/production.yaml" | jq -cse '
+            [.[] | select(.kind == "WebApp")]
+            | if length == 1 then .[0] else error("expected exactly one production WebApp") end
+          ' > "$work/application.json"
+          bash .tenant-policy-source/scripts/tests/test-webapp-compiler.sh \
+            --render-admission-children "$work/application.json" "$work/children.json"
+          printf 'directory=%s\n' "$work" >> "$GITHUB_OUTPUT"
       - name: Setup Go for the Platform admission checker
         uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
@@ -455,11 +465,13 @@ jobs:
       - name: Exercise production package admission with Kyverno
         id: tenant-admission
         shell: bash
+        env:
+          ADMISSION_DIRECTORY: ${{ steps.generated-workloads.outputs.directory }}
         run: |
           infrastructure="$GITHUB_WORKSPACE/.tenant-policy-source/k8s/bases/infrastructure"
           policies="$infrastructure/cluster-policies/best-practices"
           tenant_graph="$infrastructure/resource-graph-definitions/tenant/resource-graph-definition.yaml"
-          kubectl kustomize deploy | node scripts/tenant-admission-fixtures.mjs "$tenant_graph" |
+          node scripts/tenant-admission-fixtures.mjs "$tenant_graph" "$ADMISSION_DIRECTORY/children.json" < "$ADMISSION_DIRECTORY/production.yaml" |
             go -C .tenant-policy-source/scripts/tests/tenant-webapp-admission run -mod=readonly . \
               "$policies/restrict-tenant-webapps.yaml" "$policies/validate-pod-security.yaml" \
               "$policies/restrict-tenant-route-hostnames.yaml" "$policies/restrict-webapp-child-ownership.yaml" \
