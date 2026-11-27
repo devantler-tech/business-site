@@ -15,6 +15,7 @@ import (
 
 type calendarCreationFixture struct {
 	create, read func(context.Context, caldav.OwnedEvent) (caldav.OwnedEventObservation, error)
+	remove       func(context.Context, caldav.OwnedEvent, string) error
 }
 
 func (f calendarCreationFixture) CreateOwnedEvent(ctx context.Context, event caldav.OwnedEvent) (caldav.OwnedEventObservation, error) {
@@ -26,6 +27,13 @@ func (f calendarCreationFixture) ReadOwnedEvent(ctx context.Context, event calda
 		return caldav.OwnedEventObservation{}, booking.ErrUnavailable
 	}
 	return f.read(ctx, event)
+}
+
+func (f calendarCreationFixture) DeleteOwnedEvent(ctx context.Context, event caldav.OwnedEvent, tag string) error {
+	if f.remove == nil {
+		return booking.ErrUnavailable
+	}
+	return f.remove(ctx, event, tag)
 }
 
 func TestCalendarCreationSerializesProviderWritesForAReservation(t *testing.T) {
@@ -61,7 +69,7 @@ func TestCalendarCreationSerializesProviderWritesForAReservation(t *testing.T) {
 	results := make(chan error, 2)
 	start := func(database *pgxpool.Pool) {
 		workers.Go(func() {
-			results <- reconcileAppointmentCalendarCreation(ctx, database, reservation, calendarCreationFixture{create: create})
+			results <- reconcileAppointmentCalendar(ctx, database, reservation, calendarCreationFixture{create: create})
 		})
 	}
 	start(oneConnection)
@@ -112,7 +120,7 @@ func TestCalendarCreationRecoversAfterProviderAccepts(t *testing.T) {
 			return caldav.OwnedEventObservation{Exists: true, ETag: tag}, nil
 		},
 	}
-	if err := reconcileAppointmentCalendarCreation(interrupted, pool, reservation, provider); err == nil || accepted.Key == "" {
+	if err := reconcileAppointmentCalendar(interrupted, pool, reservation, provider); err == nil || accepted.Key == "" {
 		t.Fatalf("the interrupted run did not leave a recoverable calendar write: %v", err)
 	}
 	fresh, err := pgxpool.NewWithConfig(t.Context(), pool.Config())
@@ -121,7 +129,7 @@ func TestCalendarCreationRecoversAfterProviderAccepts(t *testing.T) {
 	}
 	defer fresh.Close()
 	for range 2 {
-		if err := reconcileAppointmentCalendarCreation(t.Context(), fresh, reservation, provider); err != nil {
+		if err := reconcileAppointmentCalendar(t.Context(), fresh, reservation, provider); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -152,7 +160,7 @@ func TestCalendarCreationDoesNotRepeatAnUnconfirmedWrite(t *testing.T) {
 			return caldav.OwnedEventObservation{}, nil
 		},
 	}
-	if err := reconcileAppointmentCalendarCreation(t.Context(), pool, reservation, provider); err != booking.ErrUnavailable {
+	if err := reconcileAppointmentCalendar(t.Context(), pool, reservation, provider); err != booking.ErrUnavailable {
 		t.Fatalf("the provider did not confirm creation: %v", err)
 	}
 	fresh, err := pgxpool.NewWithConfig(t.Context(), pool.Config())
@@ -160,7 +168,7 @@ func TestCalendarCreationDoesNotRepeatAnUnconfirmedWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer fresh.Close()
-	if err := reconcileAppointmentCalendarCreation(t.Context(), fresh, reservation, provider); err != booking.ErrUnavailable {
+	if err := reconcileAppointmentCalendar(t.Context(), fresh, reservation, provider); err != booking.ErrUnavailable {
 		t.Fatalf("an unconfirmed write should stay unresolved: %v", err)
 	}
 	var unresolved bool
@@ -171,7 +179,7 @@ func TestCalendarCreationDoesNotRepeatAnUnconfirmedWrite(t *testing.T) {
 		t.Fatalf("provider absence must leave one unresolved attempt: writes=%d reads=%d error=%v", writes, reads, err)
 	}
 	visible = true
-	if err := reconcileAppointmentCalendarCreation(t.Context(), fresh, reservation, provider); err != nil {
+	if err := reconcileAppointmentCalendar(t.Context(), fresh, reservation, provider); err != nil {
 		t.Fatal("recover the late provider version", err)
 	}
 	var retained string
@@ -195,7 +203,7 @@ func TestCalendarCreationDiscardsObservationAfterCancellation(t *testing.T) {
 		return caldav.OwnedEventObservation{Exists: true, ETag: `"stale-version"`}, err
 	}
 	for range 2 {
-		if err := reconcileAppointmentCalendarCreation(t.Context(), pool, reservation, calendarCreationFixture{create: create}); err != nil {
+		if err := reconcileAppointmentCalendar(t.Context(), pool, reservation, calendarCreationFixture{create: create}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -218,7 +226,7 @@ func TestCalendarCreationHoldsVerifiedProviderConflict(t *testing.T) {
 		return caldav.OwnedEventObservation{}, caldav.ErrOwnedEventConflict
 	}
 	for range 2 {
-		if err := reconcileAppointmentCalendarCreation(t.Context(), pool, reservation, calendarCreationFixture{create: create}); err != nil {
+		if err := reconcileAppointmentCalendar(t.Context(), pool, reservation, calendarCreationFixture{create: create}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -261,7 +269,7 @@ func TestPaidCalendarCreationFollowsCommittedFunding(t *testing.T) {
 				return caldav.OwnedEventObservation{Exists: true, ETag: tag}, nil
 			}
 			for range 2 {
-				if err := reconcileAppointmentCalendarCreation(t.Context(), b.pool, reservation, calendarCreationFixture{create: create}); err != nil {
+				if err := reconcileAppointmentCalendar(t.Context(), b.pool, reservation, calendarCreationFixture{create: create}); err != nil {
 					t.Fatal(err)
 				}
 			}

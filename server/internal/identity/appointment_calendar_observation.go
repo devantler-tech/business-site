@@ -18,15 +18,17 @@ type calendarCreationCandidate struct {
 	client, request, acceptance, order string
 }
 
-type calendarCreationProvider interface {
+type appointmentCalendarProvider interface {
+	calendarRemovalProvider
 	CreateOwnedEvent(context.Context, caldav.OwnedEvent) (caldav.OwnedEventObservation, error)
 	ReadOwnedEvent(context.Context, caldav.OwnedEvent) (caldav.OwnedEventObservation, error)
 }
 
-// reconcileAppointmentCalendarCreation checks the confirmed reservation before
-// and after provider I/O. An unresolved write leaves a durable attempt.
-func reconcileAppointmentCalendarCreation(ctx context.Context, pool *pgxpool.Pool, reservation string,
-	provider calendarCreationProvider,
+// reconcileAppointmentCalendar checks the confirmed reservation before and
+// after provider I/O. A cancelled introduction can use a saved creation
+// observation to remove its event. Unresolved creation keeps its attempt.
+func reconcileAppointmentCalendar(ctx context.Context, pool *pgxpool.Pool, reservation string,
+	provider appointmentCalendarProvider,
 ) error {
 	if provider == nil {
 		return booking.ErrUnavailable
@@ -34,7 +36,7 @@ func reconcileAppointmentCalendarCreation(ctx context.Context, pool *pgxpool.Poo
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	// Take the per-reservation lock before any request, calendar or charge
-	// lock. Recheck the observation after a competing worker releases it.
+	// lock. It serializes creation and removal through provider I/O.
 	connection, release, err := holdSessionLock(ctx, pool, calendarReconciliationLock, reservation)
 	if err != nil {
 		return creditWriteError(err)
@@ -67,7 +69,7 @@ SELECT EXISTS(SELECT 1 FROM attempt) FROM timely`, reservation, event.Slot.Start
 		return nil
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil
+		return reconcileIntroductionCalendarRemoval(ctx, connection, reservation, provider)
 	}
 	if err != nil {
 		return creditWriteError(err)
