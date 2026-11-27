@@ -202,8 +202,11 @@ func TestCalendarCreationDiscardsObservationAfterCancellation(t *testing.T) {
 		})
 		return caldav.OwnedEventObservation{Exists: true, ETag: `"stale-version"`}, err
 	}
+	read := func(context.Context, caldav.OwnedEvent) (caldav.OwnedEventObservation, error) {
+		return caldav.OwnedEventObservation{}, nil
+	}
 	for range 2 {
-		if err := reconcileAppointmentCalendar(t.Context(), pool, reservation, calendarCreationFixture{create: create}); err != nil {
+		if err := reconcileAppointmentCalendar(t.Context(), pool, reservation, calendarCreationFixture{create: create, read: read}); err != nil {
 			t.Fatal(err)
 		}
 	}

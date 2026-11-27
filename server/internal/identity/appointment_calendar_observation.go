@@ -21,7 +21,6 @@ type calendarCreationCandidate struct {
 type appointmentCalendarProvider interface {
 	calendarRemovalProvider
 	CreateOwnedEvent(context.Context, caldav.OwnedEvent) (caldav.OwnedEventObservation, error)
-	ReadOwnedEvent(context.Context, caldav.OwnedEvent) (caldav.OwnedEventObservation, error)
 }
 
 // reconcileAppointmentCalendar checks the confirmed reservation before and
