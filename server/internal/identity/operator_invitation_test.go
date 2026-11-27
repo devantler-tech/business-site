@@ -35,7 +35,7 @@ func TestOperatorWritesStopBeforeUnrecordedProviderEffects(t *testing.T) {
 	}
 }
 
-func inviteDirectory(t *testing.T, b *browserFixture, existing, fail bool, wait func()) *atomic.Int32 {
+func inviteDirectory(t *testing.T, b *browserFixture, existing, fail bool, wait func(), removed ...bool) *atomic.Int32 {
 	t.Helper()
 	creates := new(atomic.Int32)
 	matches := []map[string]any{}
@@ -52,7 +52,7 @@ func inviteDirectory(t *testing.T, b *browserFixture, existing, fail bool, wait 
 			w.WriteHeader(503)
 			return
 		}
-		if wait != nil {
+		if wait != nil && r.Method != http.MethodGet {
 			wait()
 		}
 		switch r.URL.Path {
@@ -63,6 +63,12 @@ func inviteDirectory(t *testing.T, b *browserFixture, existing, fail bool, wait 
 		case "/management/v1/users/human":
 			creates.Add(1)
 			_, _ = fmt.Fprint(w, `{"userId":"customer-42","details":{"resourceOwner":"customers"}}`)
+		case "/v2/users/customer-42":
+			if len(removed) > 0 && removed[0] {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			_, _ = fmt.Fprint(w, `{"user":{"userId":"customer-42","details":{"resourceOwner":"customers"},"human":{}}}`)
 		default:
 			t.Error("unexpected provider route")
 			w.WriteHeader(404)
@@ -116,6 +122,15 @@ func TestOperatorInviteProviderErrorsRecordNoInvitation(t *testing.T) {
 	count := b.invitationCount()
 	if status != 503 || count != 0 {
 		t.Fatalf("provider error persisted an invitation: status=%d rows=%d", status, count)
+	}
+}
+
+func TestOperatorInviteRejectsAccountRemovedAfterLookup(t *testing.T) {
+	b := newOperatorBrowserFixture(t)
+	inviteDirectory(t, b, true, false, nil, true)
+	status, _, _ := b.request("POST", operatorAPIRoot+"/invitations", invitationForm(b), b.site.URL)
+	if status != http.StatusServiceUnavailable || b.invitationCount() != 0 {
+		t.Fatalf("invitation outlived the account it named: status=%d", status)
 	}
 }
 

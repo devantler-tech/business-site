@@ -322,7 +322,7 @@ func (s *Foundation) Invite(ctx context.Context, i Invitation) error {
 
 // invite retains the control-plane rules and permits the operator API to bind
 // its final commit to the original caller after any provider or SDK wait.
-func (s *Foundation) invite(ctx context.Context, i Invitation, allowed func(pgx.Tx) bool) error {
+func (s *Foundation) invite(ctx context.Context, i Invitation, checkpoint func(pgx.Tx) error) error {
 	if i.ClientID == previewWorkspace || i.Subject == previewSubject {
 		return ErrDenied
 	}
@@ -363,8 +363,10 @@ func (s *Foundation) invite(ctx context.Context, i Invitation, allowed func(pgx.
 	if result.RowsAffected() != 1 {
 		return ErrDenied
 	}
-	if allowed != nil && !allowed(tx) {
-		return ErrDenied
+	if checkpoint != nil {
+		if err := checkpoint(tx); err != nil {
+			return err
+		}
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit invitation: %w", err)
