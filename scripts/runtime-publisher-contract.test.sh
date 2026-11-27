@@ -9,6 +9,11 @@ fail() {
 }
 release="$(yq -o=json '.' "$root/.github/workflows/release-runtime.yaml")" || fail 'source-owned release caller is missing'
 publish="$(yq -o=json '.' "$root/.github/workflows/publish-runtime.yaml")" || fail 'source-owned publisher is missing'
+policy="$root/.github/runtime-publication"
+[[ -f "$policy" && ! -L "$policy" ]] || fail 'regular source publication policy is required'
+if ! cmp -s "$policy" <(printf 'disabled\n') && ! cmp -s "$policy" <(printf 'enabled\n'); then
+  fail 'source publication policy must be one canonical line'
+fi
 # Accept only mandatory, read-only admission and original-image verification on the frozen source.
 admission_valid() {
   jq -e '
@@ -19,8 +24,7 @@ admission_valid() {
     ([range(0;$s|length)|select($s[.].run=="bash scripts/admit-runtime-release.sh")]|length)==1 and
     ([range(0;$s|length)|select($s[.].run=="bash scripts/verify-runtime-origin.sh")]|length)==1 and
     all($s[]|select(.run=="bash scripts/admit-runtime-release.sh");
-      (.env|keys)==["GH_TOKEN","RELEASE_MODE","RUNTIME_PUBLICATION_ENABLED"] and .env.GH_TOKEN=="\u0024{{ github.token }}" and
-      .env.RUNTIME_PUBLICATION_ENABLED=="\u0024{{ vars.RUNTIME_PUBLICATION_ENABLED }}") and
+      (.env|keys)==["GH_TOKEN","RELEASE_MODE"] and .env.GH_TOKEN=="\u0024{{ github.token }}") and
     all($s[]; .if==null and (.["continue-on-error"]==null or .["continue-on-error"]==false)) and
     all($s[]|select(.uses//""|startswith("actions/setup-go@")); .with.cache==false) and
     all($s[]|select(.uses!=null); .uses|test("@[0-9a-f]{40}$")) and
@@ -41,7 +45,7 @@ release_valid() {
     (.on|keys)==["workflow_dispatch"] and
     .on.workflow_dispatch.inputs.mode.default=="dry-run" and .on.workflow_dispatch.inputs.mode.options==["dry-run","release"] and
     .on.workflow_dispatch.inputs.expected_source.type=="string" and .on.workflow_dispatch.inputs.expected_source.required==false and
-    .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027workflow_dispatch\u0027 && github.ref == \u0027refs/heads/main\u0027 && (inputs.mode == \u0027dry-run\u0027 || (inputs.mode == \u0027release\u0027 && vars.RUNTIME_PUBLICATION_ENABLED == \u0027true\u0027)) }}" and
+    .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027workflow_dispatch\u0027 && github.ref == \u0027refs/heads/main\u0027 && (inputs.mode == \u0027dry-run\u0027 || inputs.mode == \u0027release\u0027) }}" and
     all(.jobs.admit.steps[]|select(.run=="bash scripts/admit-runtime-release.sh"); .env.RELEASE_MODE=="\u0024{{ inputs.mode }}") and
     .jobs.release.needs=="admit" and .jobs.release.if==null and
     (.jobs.release.uses|test("^devantler-tech/\\.github/\\.github/workflows/create-release\\.yaml@[0-9a-f]{40}$")) and
@@ -55,7 +59,7 @@ release_valid() {
 publish_valid() {
   jq -e '
     .on=={release:{types:["published"]}} and
-    .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027release\u0027 && vars.RUNTIME_PUBLICATION_ENABLED == \u0027true\u0027 && github.event.sender.id == 185060876 && github.event.release.author.id == 185060876 && !github.event.release.draft && !github.event.release.prerelease && !startsWith(github.event.release.tag_name, \u0027identity-\u0027) }}" and
+    .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027release\u0027 && github.event.sender.id == 185060876 && github.event.release.author.id == 185060876 && !github.event.release.draft && !github.event.release.prerelease && !startsWith(github.event.release.tag_name, \u0027identity-\u0027) }}" and
     all(.jobs.admit.steps[]|select(.run=="bash scripts/admit-runtime-release.sh"); .env.RELEASE_MODE=="release") and
     .jobs.publish.needs=="admit" and .jobs.publish.if==null and .jobs.publish.uses==null and .jobs.publish.secrets==null and
     .jobs.publish["runs-on"]=="ubuntu-latest" and
@@ -94,7 +98,7 @@ for data in "$release" "$publish"; do
 done
 release_valid <<<"$release" || fail 'unsafe release trigger, default or credential boundary'
 for mutation in '.jobs.admit.if="always()"' '.on.workflow_dispatch.inputs.mode.default="release"' '.on.push={branches:["main"]}' \
-  '.jobs.admit.if|=sub("vars.RUNTIME_PUBLICATION_ENABLED";"vars.UNRELATED_VARIABLE")' \
+  '.jobs.admit.if|=sub("refs/heads/main";"refs/heads/other")' \
   'del(.on.workflow_dispatch.inputs.expected_source)' \
   '.jobs.release.with["dry-run"]=false' '.jobs.release.secrets="inherit"' '.jobs.release.needs=null' \
   '.jobs.release.permissions.contents="write"' '.jobs.release.permissions.issues="write"' \
@@ -105,7 +109,7 @@ for mutation in '.jobs.admit.if="always()"' '.on.workflow_dispatch.inputs.mode.d
 done
 publish_valid <<<"$publish" || fail 'unsafe publisher or missing independent readback'
 for mutation in '.on.push={tags:["v*"]}' '.jobs.admit.if="always()"' '.jobs.publish.steps[1].with.mode="deployment"' \
-  '.jobs.admit.if|=sub("vars.RUNTIME_PUBLICATION_ENABLED";"vars.UNRELATED_VARIABLE")' \
+  '.jobs.admit.if|=sub("github.event.release.draft";"github.event.release.prerelease")' \
   '.jobs.admit.if|=sub("github.event.sender.id";"github.actor_id")' \
   '.jobs.admit.if|=sub("github.event.release.author.id";"github.actor_id")' \
   '.jobs.publish.steps[1].with["prebuilt-ci-run-id"]="1"' '.jobs.publish.steps[1].with["deploy-path"]="./"' \
