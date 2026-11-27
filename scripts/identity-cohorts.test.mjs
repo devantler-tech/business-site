@@ -14,8 +14,8 @@ const workflow = load(readFileSync(".github/workflows/ci.yaml", "utf8"));
 const commands = [
   "node --test scripts/identity-cohorts.test.mjs",
   "go test -race -p=1 ./... -list '^(Test|Example|Fuzz)' -count=1 -timeout=90s -json > test-inventory.jsonl",
-  "go test -race -coverprofile=coverage-core.out -p=1 ./... -count=1 -timeout=90s -json -skip '^Test(Work(Approval|Review)|Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)' | tee test-core.jsonl",
-  "go test -race -coverprofile=coverage-work.out -p=1 ./... -count=1 -timeout=90s -json -run '^TestWork(Approval|Review)' | tee test-work.jsonl",
+  "go test -race -coverprofile=coverage-core.out -p=1 ./... -count=1 -timeout=90s -json -skip '^Test(Work(Approval|Review|Eligibility|Funding|Lease|QueueRevision)|Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)' | tee test-core.jsonl",
+  "go test -race -coverprofile=coverage-work.out -p=1 ./... -count=1 -timeout=90s -json -run '^TestWork(Approval|Review|Eligibility|Funding|Lease|QueueRevision)' | tee test-work.jsonl",
   "go test -race -coverprofile=coverage-private.out -p=1 ./... -count=1 -timeout=90s -json -run '^Test(Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)' | tee test-private.jsonl",
   "node ../scripts/identity-cohorts.mjs",
 ];
@@ -120,7 +120,7 @@ for (const [name, from, to] of [
   ["parallel packages", "-p=1", "-p=2"],
   ["cached tests", "-count=1", "-count=2"],
   ["larger deadline", "-timeout=90s", "-timeout=120s"],
-  ["wrong family selector", "^TestWork(Approval|Review)", "^TestWorkApproval"],
+  ["wrong family selector", "^TestWork(Approval|Review|Eligibility|Funding|Lease|QueueRevision)", "^TestWorkApproval"],
 ])
   test(`workflow refuses ${name}`, () => {
     const changed = structuredClone(workflow);
@@ -144,7 +144,15 @@ const privateNames = [
   "TestInvoiceRead",
   "TestCreditRead",
 ];
-const names = ["TestBroker", "TestWorkApproval", "TestWorkReview", "ExampleBroker", "FuzzBroker", ...privateNames];
+const workNames = [
+  "TestWorkApproval",
+  "TestWorkReview",
+  "TestWorkEligibilityOriginalOrderAndBoundedCursor",
+  "TestWorkFundingUsesDatabaseTimeForWithdrawalDeadline",
+  "TestWorkLeaseStorageReassignsAnExpiredWindow",
+  "TestWorkQueueRevisionTracksCommittedChanges",
+];
+const names = ["TestBroker", "TestWorkspaceMembership", "ExampleBroker", "FuzzBroker", ...workNames, ...privateNames];
 const ordinary = names.filter((n) => !n.includes("/"));
 const event = (Action, extra = {}) => ({ Action, Package: pkg, ...extra });
 const inventory = [event("start"), ...ordinary.map((n) => event("output", { Output: `${n}\n` })), event("pass")];
@@ -156,8 +164,8 @@ function execution(selected) {
     event("pass"),
   ];
 }
-const core = execution(["TestBroker", "ExampleBroker", "FuzzBroker"]);
-const work = execution(ordinary.filter((n) => /^TestWork(Approval|Review)/.test(n)));
+const core = execution(["TestBroker", "TestWorkspaceMembership", "ExampleBroker", "FuzzBroker"]);
+const work = execution(workNames);
 const privateFlows = execution(privateNames);
 const coverage = "mode: atomic\nexample.test/identity/broker.go:1.1,2.2 1 1\n";
 /** Serialize independent inventory, execution and coverage fixtures for the real verifier. */
@@ -168,7 +176,7 @@ function check(i = inventory, c = core, w = work, profiles = [coverage, coverage
   );
 }
 test("actual compiled inventory includes examples and fuzz seeds exactly once across complementary cohorts", () => {
-  assert.deepEqual(check(), { packages: 1, tests: 13, core: 3, work: 2, private: 8 });
+  assert.deepEqual(check(), { packages: 1, tests: 18, core: 4, work: 6, private: 8 });
 });
 test("all subtests stay within their selected parent and packages without test files remain explicit", () => {
   const empty = ["start", "skip"].map((Action) => ({ Action, Package: "example.test/no-tests" }));
@@ -181,7 +189,7 @@ test("all subtests stay within their selected parent and packages without test f
       undefined,
       [...privateFlows, ...empty],
     ),
-    { packages: 2, tests: 13, core: 3, work: 2, private: 8 },
+    { packages: 2, tests: 18, core: 4, work: 6, private: 8 },
   );
 });
 for (const [fault, change] of [

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
-const workFamily = /^TestWork(Approval|Review)/;
+const workFamily = /^TestWork(Approval|Review|Eligibility|Funding|Lease|QueueRevision)/;
 const privateFamily = /^Test(Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)/;
 const testName = /^(Test|Example|Fuzz)\S*$/;
 
