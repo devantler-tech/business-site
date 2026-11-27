@@ -9,13 +9,17 @@
         <h1>{{.Title}}</h1>
         {{if .Intro}}<p>{{.Intro}}</p>{{end}}
       </div>
-      {{if .PreviewAvailable}}
-      <form method="post" action="{{root}}/preview?lang={{.Lang}}">
-        <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-        <button type="submit">{{if eq .Lang "da"}}Se som kunde{{else}}Open client preview{{end}}</button>
-      </form>
-      {{else if or (eq .Kind "operator") (eq .Kind "operator-customers")}}
-      <a class="button" href="{{root}}/operator/invitations/new?lang={{.Lang}}">{{template "operator-invite-label" .}}</a>
+      {{$canInvite := or (eq .Kind "operator") (eq .Kind "operator-customers")}}
+      {{if or $canInvite .PreviewAvailable}}
+      <div class="operator-actions">
+        {{if $canInvite}}<a class="button" href="{{root}}/operator/invitations/new?lang={{.Lang}}">{{template "operator-invite-label" .}}</a>{{end}}
+        {{if .PreviewAvailable}}
+        <form method="post" action="{{root}}/preview?lang={{.Lang}}">
+          <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+          <button type="submit" class="operator-secondary">{{if eq .Lang "da"}}Se som kunde{{else}}Open client preview{{end}}</button>
+        </form>
+        {{end}}
+      </div>
       {{end}}
     </div>
     {{if eq .Kind "operator-customers"}}{{template "operator-directory" .}}

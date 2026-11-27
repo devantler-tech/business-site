@@ -17,6 +17,32 @@ import (
 	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
 
+func TestOperatorCanStartAnInvitationWithoutClientPreview(t *testing.T) {
+	b := newOperatorBrowserFixture(t)
+	b.atRoot()
+	checkOperatorWorkspaceActions(t, b, false)
+}
+
+func checkOperatorWorkspaceActions(t *testing.T, b *browserFixture, previewAvailable bool) {
+	t.Helper()
+	for lang, inviteLabel := range map[string]string{"en": "Invite a customer", "da": "Inviter en kunde"} {
+		invitePath := "/operator/invitations/new?lang=" + lang
+		invitation := `href="` + invitePath + `">` + inviteLabel + `</a>`
+		previewForm := `method="post" action="/preview?lang=` + lang + `"`
+		for _, path := range []string{"/operator", "/operator/customers"} {
+			status, page, _ := b.request(http.MethodGet, path+"?lang="+lang, nil, "")
+			expectPreview := previewAvailable && path == "/operator"
+			if status != http.StatusOK || !strings.Contains(page, invitation) || strings.Contains(page, previewForm) != expectPreview {
+				t.Fatalf("%s (%s): invitation or preview unavailable, status=%d", path, lang, status)
+			}
+		}
+		status, page, _ := b.request(http.MethodGet, invitePath, nil, "")
+		if status != http.StatusOK || !strings.Contains(page, `action="/operator/api/invitations?lang=`+lang+`"`) {
+			t.Fatalf("operator could not reach the invitation form (%s), status=%d", lang, status)
+		}
+	}
+}
+
 func TestOperatorUnifiedPreviewKeepsPurchaseAndIdentityInSeparateStores(t *testing.T) {
 	b := newBrowserFixture(t)
 	demo := unifiedPreviewFixture(t, b.pool)
@@ -62,9 +88,7 @@ func TestOperatorUnifiedPreviewKeepsPurchaseAndIdentityInSeparateStores(t *testi
 		t.Fatal(err)
 	}
 	signIn(sharedOperator)
-	if status, page, _ := b.request(http.MethodGet, "/operator?lang=en", nil, ""); status != http.StatusOK || !strings.Contains(page, "Open client preview") {
-		t.Fatalf("ordinary operator workspace does not offer the preview: %d", status)
-	}
+	checkOperatorWorkspaceActions(t, b, true)
 	start := url.Values{"csrf_token": {b.csrf("/operator")}, "lang": {"en"}}
 	if status, _, header := b.request(http.MethodPost, "/preview", start, b.site.URL); status != http.StatusSeeOther || header.Get("Location") != "/?lang=en" {
 		t.Fatalf("the existing operator session failed to switch on the same host: %d", status)
