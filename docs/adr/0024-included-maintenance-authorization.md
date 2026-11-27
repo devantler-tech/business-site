@@ -4,14 +4,16 @@ Status: accepted, 2026-10-25, for #259 under #20.
 
 ## Context
 
-Hosted client agreements include optimization, accessibility improvements, bug
-fixes and routine upkeep in the agreed monthly price. New features and larger
-iterations need a new agreement. The paid-scope approval in
+Under #814, the owner quotes initial development. Fixed hosting independently
+covers bug fixes, security updates, routine upkeep and any other maintenance
+agreed for the hosted project. Customers can also subscribe to Slow, Medium or
+Fast Pace for ongoing features of any size. Pace determines relative development
+capacity. It carries no fixed delivery schedule or separate per-feature pricing
+or approval based on size. The paid-scope approval in
 [`server/WORK-APPROVALS.md`](../../server/WORK-APPROVALS.md) binds one accepted
 proposal version, one fully credited external invoice and a 168-hour decision.
-A proposal's monthly price and terms are recorded facts, not a service
-entitlement, so neither existing record can say that a particular project is
-covered today.
+Current hosting coverage requires service-period evidence in addition to the
+accepted proposal and its monthly terms.
 
 ## Decision
 
@@ -40,6 +42,24 @@ Keep three separate records under the Go/PostgreSQL authority:
    boundary, which also owns request order, service classes and never preempting
    active work. Neither record above starts an agent, publishes work, or changes
    portfolio review, merge, spend or repository-access controls.
+
+### Agreement evidence
+
+A hosting period binds to the maintained project, its workspace, and the exact
+accepted terms that cover that period. For signed-in portal acceptance, reuse the
+[software proposal and acceptance binding](../../server/internal/identity/service-contracts.sql).
+The authority reads the workspace, project request, proposal version, accepted
+content hash and accepting membership from the stored evidence. The operator
+records the agreed bounds and scope. Legacy acceptances without recorded
+provenance remain historical evidence. A period without enough evidence stays
+unavailable until the client accepts the relevant terms.
+
+A higher hosting price requires the customer's explicit acceptance of the new
+total, difference, effective date and applicable terms before the higher charge
+or the work that raises hosting costs. A previously accepted proposal can support
+a renewal only when its terms cover that renewal. Each period's current revision
+points to the corresponding evidence. A Pace enrolment or change has its own
+agreement and cannot amend hosting.
 
 ### Entitlement states
 
@@ -107,7 +127,9 @@ the agreement says so.
 - **Included:** optimization, accessibility improvements, bug fixes and routine
   upkeep of the maintained project, within the entitlement's agreed scope. No new
   feature purchase, invoice or credited funds are required.
-- **Not included:** new features and larger iterations keep the paid-scope path.
+- **Pace features:** eligible ongoing features use the active Pace agreement and
+  the shared work queue. A separate customer decision still applies when work
+  would raise the hosting price or deviate from the customer's explicit wishes.
 - **Ambiguous:** the operator classifies the task explicitly.
 
 A client's label, a browser field, an agent assertion, an invoice total or a
@@ -179,7 +201,10 @@ pages use the retained Go frame and native forms ([ADR 0017](0017-retain-go-priv
 ## Verification
 
 Use disposable restricted-role PostgreSQL and fictional data. Cover a covered
-fix authorized without a new invoice; exact start/end boundaries at microsecond
+fix authorized without a new invoice, a hosting-only workspace, refusal of
+foreign or mismatched acceptance evidence, and a proposed higher hosting rate
+with and without acceptance of the revised terms. Exercise exact start/end
+boundaries at microsecond
 precision; a gap between two periods; an early renewal preserving the current
 head and its valid tasks; shortened and later-start corrections that never
 re-expose superseded coverage; a superseded future revision ignored by the
