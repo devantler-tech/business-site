@@ -153,6 +153,9 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 	if current == nil || (current.Proposal.OneTimeMinor == 0 && current.Proposal.MonthlyMinor == 0) {
 		return projectOrder{}, errProposalConflict
 	}
+	if current.Proposal.ContentFormat == 2 && current.Proposal.Service.Kind == proposalServiceAppointment {
+		return projectOrder{}, ErrDenied
+	}
 	terms, termsHash := s.termsFor(mc.Lang)
 	if terms == "" || s.mail.Load() == nil {
 		return projectOrder{}, errOrderConfirmation
@@ -200,8 +203,12 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 		early = &placed
 	}
 	orderID := secret()
-	if _, err = tx.Exec(ctx, `INSERT INTO portal_orders(id,request_id,client_id,acceptance_id,client_issuer,client_subject,collection,one_time_minor,monthly_minor,monthly_from,placed_at,early_start_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-		orderID, id, client, current.ID, p.issuer, p.subject, collection, oneTime, monthly, firstOfNextMonth(placed), placed, early); err != nil {
+	var serviceFormat any
+	if current.Proposal.ContentFormat == 2 {
+		serviceFormat = 2
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO portal_orders(id,request_id,client_id,acceptance_id,client_issuer,client_subject,collection,one_time_minor,monthly_minor,monthly_from,placed_at,early_start_at,service_content_format) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+		orderID, id, client, current.ID, p.issuer, p.subject, collection, oneTime, monthly, firstOfNextMonth(placed), placed, early, serviceFormat); err != nil {
 		return projectOrder{}, errTriageStorage
 	}
 	for _, a := range addons {
@@ -215,9 +222,21 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 		}
 	}
 	// The order's confirmation on a durable medium (section 13), queued with it.
+	confirmationFormat := 1
+	if current.Proposal.ContentFormat == 2 {
+		source, err := readOrderConfirmationSource(ctx, tx, client, orderID, current.ID)
+		if err != nil {
+			return projectOrder{}, err
+		}
+		if source.ContentFormat != 2 || source.Service.Kind != proposalServiceSoftware ||
+			source.ProposalVersion != current.Proposal.Version || source.ProposalSHA256 != proposalHash {
+			return projectOrder{}, errProposalConflict
+		}
+		confirmationFormat = source.ContentFormat
+	}
 	when := projectOrder{Placed: placed, OneTimeMinor: oneTime, MonthlyMinor: monthly, Addons: addons}
 	if err = s.queueOrderMail(ctx, tx, client, "order-confirmation", mc, orderMail{OrderID: orderID, Scope: current.Proposal.Scope, Deliverables: current.Proposal.Deliverables,
-		Acceptance: current.ID, ProposalVersion: current.Proposal.Version, ProposalHash: proposalHash, TermsText: terms, TermsHash: termsHash,
+		ProducerFormat: confirmationFormat, Acceptance: current.ID, ProposalVersion: current.Proposal.Version, ProposalHash: proposalHash, TermsText: terms, TermsHash: termsHash,
 		OneTimeTerms: current.Proposal.OneTimeTerms, MonthlyTerms: current.Proposal.MonthlyTerms, Collection: collection,
 		OneTimeDKK: oneTime / 100, BaseOneTimeDKK: when.BaseOneTimeDKK(), Launch: place, MonthlyDKK: monthly / 100, BaseMonthlyDKK: when.BaseMonthlyDKK(), Addons: addons, MonthlyStart: firstOfNextMonth(placed).Format("2006-01"),
 		WithdrawUntil: when.WithdrawUntil(), WorkStartsFrom: when.WorkStartsFrom(), Placed: placed.UTC().Format("2006-01-02 15:04"), EarlyStart: earlyStart}); err != nil {

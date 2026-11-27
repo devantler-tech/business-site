@@ -26,29 +26,50 @@ type originalConfirmation struct {
 	SenderAcceptedAt     *time.Time
 }
 
+type confirmationQuery interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
 // readOriginalConfirmation reads only inside a caller's already authorized,
 // request-locked transaction. It grants no authority and makes no service-start
-// decision. Only the known complete-agreement producer format can supply proof;
+// decision. Only a recognized complete-agreement producer can supply proof;
 // a legacy link-only confirmation remains missing even after its sender accepts it.
 // Database failure returns no usable evidence and a sanitized error.
-func readOriginalConfirmation(ctx context.Context, heldQuery interface {
-	QueryRow(context.Context, string, ...any) pgx.Row
-}, requestID, clientID, acceptanceID, orderID string) (originalConfirmation, error) {
+func readOriginalConfirmation(ctx context.Context, heldQuery confirmationQuery, requestID, clientID, acceptanceID, orderID string) (originalConfirmation, error) {
 	var result originalConfirmation
-	err := heldQuery.QueryRow(ctx, `SELECT m.id,m.body_sha256,m.terms_sha256,m.queued_at,d.delivered_at
+	var format, version int
+	var proposalHash string
+	err := heldQuery.QueryRow(ctx, `SELECT m.id,m.body_sha256,m.terms_sha256,m.queued_at,d.delivered_at,
+ m.producer_format,m.proposal_version,m.proposal_sha256
  FROM portal_orders o
  JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id AND a.request_id=o.request_id AND a.client_id=o.client_id
+ JOIN portal_proposals p ON p.request_id=a.request_id AND p.client_id=a.client_id AND p.version=a.proposal_version
  JOIN portal_mail_outbox m ON m.order_id=o.id AND m.kind='order-confirmation'
- AND m.producer_format=1 AND m.acceptance_id=a.id AND m.proposal_version=a.proposal_version AND m.proposal_sha256=a.content_hash
+ AND m.acceptance_id=a.id AND m.proposal_version=a.proposal_version AND m.proposal_sha256=a.content_hash
  LEFT JOIN portal_mail_deliveries d ON d.outbox_id=m.id
  WHERE o.request_id=$1 AND o.client_id=$2 AND o.acceptance_id=$3 AND o.id=$4
+ AND ((m.producer_format=1 AND p.content_format=1 AND o.service_content_format IS NULL)
+   OR (m.producer_format=2 AND p.content_format=2 AND p.service_kind='software' AND o.service_content_format=2))
  AND m.body_sha256=encode(sha256(convert_to(m.body,'UTF8')),'hex')`, requestID, clientID, acceptanceID, orderID).
-		Scan(&result.OutboxID, &result.BodySHA256, &result.TermsSHA256, &result.QueuedAt, &result.SenderAcceptedAt)
+		Scan(&result.OutboxID, &result.BodySHA256, &result.TermsSHA256, &result.QueuedAt, &result.SenderAcceptedAt, &format, &version, &proposalHash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return originalConfirmation{State: confirmationMissing}, nil
 	}
 	if err != nil {
 		return originalConfirmation{}, errTriageStorage
+	}
+	if format == 2 {
+		source, err := readOrderConfirmationSource(ctx, heldQuery, clientID, orderID, acceptanceID)
+		if errors.Is(err, errProposalConflict) {
+			return originalConfirmation{State: confirmationMissing}, nil
+		}
+		if err != nil {
+			return originalConfirmation{}, err
+		}
+		if source.ContentFormat != format || source.Service.Kind != proposalServiceSoftware ||
+			source.ProposalVersion != version || source.ProposalSHA256 != proposalHash {
+			return originalConfirmation{State: confirmationMissing}, nil
+		}
 	}
 	result.State = confirmationPrepared
 	result.QueuedAt = result.QueuedAt.UTC()

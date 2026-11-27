@@ -178,11 +178,14 @@ GRANT SELECT,INSERT ON portal_order_ends,portal_card_cancellations,portal_charge
 GRANT SELECT,INSERT ON portal_operator_audit TO portal_runtime;
 GRANT SELECT,INSERT ON portal_workspaces TO portal_runtime;
 GRANT SELECT,INSERT,UPDATE(display_name,closed_at) ON portal_workspace_settings TO portal_runtime;
+GRANT SELECT,INSERT ON portal_service_fulfillments,portal_service_consumers TO portal_runtime;
 GRANT SELECT ON portal_schema_version TO portal_runtime;
 REVOKE ALL ON portal_preview_receipts FROM portal_runtime;
 DELETE FROM portal_preview_receipts;
 DELETE FROM portal_operator_audit;
 DELETE FROM portal_workspaces;
+DELETE FROM portal_service_consumers;
+DELETE FROM portal_service_fulfillments;
 DELETE FROM portal_work_current;
 DELETE FROM portal_work_revocations;
 DELETE FROM portal_work_approvals;

@@ -2,6 +2,26 @@
   "version": "0.2",
   "language": "en",
   "words": [
+    "angive",
+    "blokeret",
+    "btrim",
+    "både",
+    "danske",
+    "disse",
+    "engelsk",
+    "ERRCODE",
+    "minutter",
+    "softwarearbejde",
+    "softwareudvikling",
+    "syntetisk",
+    "syntetiske",
+    "tomme",
+    "varighed",
+    "varigheden",
+    "vilkårene",
+    "ydelse",
+    "ydelsen",
+    "ydelsestype",
     "afvis",
     "anmeld",
     "anmeldelser",
@@ -972,7 +992,11 @@
   "overrides": [
     {
       "filename": "server/internal/webapp/app_test.go",
-      "ignoreRegExpList": ["/%70ortal/sign-in", "/portal%2fsign-in", "/%2fportal"]
+      "ignoreRegExpList": [
+        "/%70ortal/sign-in",
+        "/portal%2fsign-in",
+        "/%2fportal"
+      ]
     },
     {
       "filename": "server/internal/booking/caldav/*.go",

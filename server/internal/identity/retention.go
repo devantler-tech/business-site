@@ -72,6 +72,8 @@ var purgeRecords = []string{
 	`DELETE FROM portal_addon_removals WHERE order_id IN (SELECT id FROM portal_orders WHERE client_id=$1)`,
 	`DELETE FROM portal_addon_ends WHERE order_id IN (SELECT id FROM portal_orders WHERE client_id=$1)`,
 	`DELETE FROM portal_order_addons WHERE order_id IN (SELECT id FROM portal_orders WHERE client_id=$1)`,
+	`DELETE FROM portal_service_consumers WHERE fulfillment_id IN (SELECT id FROM portal_service_fulfillments WHERE client_id=$1)`,
+	`DELETE FROM portal_service_fulfillments WHERE client_id=$1`,
 	`DELETE FROM portal_orders WHERE client_id=$1`,
 	`DELETE FROM portal_numina_contacts WHERE client_id=$1`,
 	`DELETE FROM portal_credit_revisions WHERE client_id=$1`,
@@ -109,14 +111,16 @@ const membershipLineages = `WITH RECURSIVE lineage(root,incarnation) AS (
 // cutoff $2, not counting the deletion of a membership already revoked, which
 // a purge makes and which ends nothing; no other client their events name still
 // has records, so no other client loses the evidence that makes it due and no
-// membership of another client loses its history; and no remaining work
-// approval cites any of their events.
+// membership of another client loses its history; and no remaining approval,
+// proposal share or proposal acceptance cites any of their events.
 var retentionHistory = membershipLineages + `
  SELECT l.root::text FROM lineage l JOIN portal_membership_transitions t ON t.incarnation=l.incarnation
  GROUP BY l.root
  HAVING bool_or(t.client_id=$1) AND max(t.recorded_at) FILTER (WHERE NOT (t.kind='delete' AND t.revoked)) < $2
  AND NOT bool_or(t.client_id<>$1 AND (` + clientHasRecords("t.client_id") + `))
- AND NOT bool_or(EXISTS (SELECT 1 FROM portal_work_approvals w WHERE t.incarnation IN (w.client_incarnation,w.operator_incarnation)))`
+ AND NOT bool_or(EXISTS (SELECT 1 FROM portal_work_approvals w WHERE t.incarnation IN (w.client_incarnation,w.operator_incarnation)))
+ AND NOT bool_or(EXISTS (SELECT 1 FROM portal_proposal_visibility v WHERE v.operator_incarnation=t.incarnation))
+ AND NOT bool_or(EXISTS (SELECT 1 FROM portal_proposal_acceptances a WHERE a.client_incarnation=t.incarnation))`
 
 // deleteHistory deletes the whole chains that start with the events $1.
 const deleteHistory = `WITH RECURSIVE chain(incarnation) AS (

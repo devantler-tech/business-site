@@ -36,8 +36,14 @@ inside the request transaction:
   independently authorized; a different authorized operator may review a
   decision without changing its original actor.
 
-The closed typed encoding (format 2) normalizes timestamps to UTC before
-hashing. It contains private evidence and must not be logged or published.
+The evidence normalizes timestamps to UTC before hashing. Historical
+unclassified proposals retain format 2. A typed software approval uses format 3
+to bind the software classification and the exact accepted quote hash. It
+checks that the acceptor still has the original membership incarnation. The
+same transaction records the permanent software fulfillment and its order
+binding. Retries and later approvals keep this binding. Execution still needs its
+own current approval and delivery checks. The private evidence must stay out
+of logs and public output.
 Changes to the agreement, the order, the funding charge (its state, amounts,
 payment reference or a reversal) or the bound memberships invalidate the existing approval even when totals or current
 membership values later return to their earlier values.
@@ -48,10 +54,12 @@ Validity ends at the deadline: it requires database time strictly before expiry,
 including after the final SDK wait. Principal expiry, cancellation or closed
 release decisions prevent commit or release of a valid result.
 
-Membership restoration never revives a prior approval. Once the same acceptor
-and an eligible operator have current access again, a new explicit operator
-review may bind the new incarnations to the existing exact client consent.
-This is not a rule requiring the client to repeat unchanged consent.
+Membership restoration never revives a prior approval. For a historical
+unclassified proposal, a new operator review can use the existing exact client
+consent once the same acceptor and an eligible operator regain current access.
+A typed software approval requires the acceptor's original membership
+incarnation throughout. Restoring access under a new incarnation leaves that
+acceptance ineligible for both its previous approval and a fresh approval.
 
 ## Immutable history and current selection
 

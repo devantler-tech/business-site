@@ -115,7 +115,7 @@ func TestOriginalConfirmationLegacyUnknownAndDamagedRemainMissing(t *testing.T) 
 		`UPDATE portal_mail_outbox SET producer_format=NULL,acceptance_id=NULL,proposal_version=NULL,proposal_sha256=NULL,terms_sha256=NULL,body_sha256=NULL`,
 		// Model an old reader seeing a later schema, without modifying the
 		// production constraint or accepting an unknown format in this release.
-		`ALTER TABLE portal_mail_outbox DROP CONSTRAINT portal_mail_outbox_producer_format_check, DROP CONSTRAINT portal_mail_complete_producer; UPDATE portal_mail_outbox SET producer_format=2`,
+		`ALTER TABLE portal_mail_outbox DROP CONSTRAINT portal_mail_outbox_producer_format_check, DROP CONSTRAINT portal_mail_complete_producer, DISABLE TRIGGER portal_service_confirmation; UPDATE portal_mail_outbox SET producer_format=3`,
 		`ALTER TABLE portal_mail_outbox DROP CONSTRAINT portal_mail_body_digest; UPDATE portal_mail_outbox SET body='Damaged frozen body'`,
 	} {
 		tx, err := migrator.Begin(t.Context())

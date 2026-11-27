@@ -21,7 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const migrationFixtureVersionCount = 32
+const migrationFixtureVersionCount = 33
 
 // migrationCommandFixture creates only a uniquely named disposable database on
 // the already validated loopback fixture, then exercises verified PostgreSQL TLS.
@@ -611,7 +611,7 @@ func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
 					t.Fatal("owned missing-credit-table fixture failed", err)
 				}
 			case "missing membership history":
-				if _, err := pool.Exec(t.Context(), `DROP TABLE portal_work_current,portal_work_revocations,portal_work_approvals,portal_membership_transitions`); err != nil {
+				if _, err := pool.Exec(t.Context(), `DROP TABLE portal_work_current,portal_work_revocations,portal_work_approvals,portal_membership_transitions CASCADE`); err != nil {
 					t.Fatal("owned missing-membership-history fixture failed", err)
 				}
 			case "missing work approvals":
@@ -732,6 +732,10 @@ func TestActualMigrationGrantsRuntimeRole(t *testing.T) {
  AND NOT has_table_privilege('portal_runtime','portal_charge_reversals','UPDATE')
  AND has_table_privilege('portal_runtime','portal_operator_audit','INSERT')
  AND NOT has_table_privilege('portal_runtime','portal_operator_audit','DELETE')
+ AND has_table_privilege('portal_runtime','portal_service_fulfillments','INSERT')
+ AND NOT has_table_privilege('portal_runtime','portal_service_fulfillments','UPDATE,DELETE')
+ AND has_table_privilege('portal_runtime','portal_service_consumers','INSERT')
+ AND NOT has_table_privilege('portal_runtime','portal_service_consumers','UPDATE,DELETE')
  AND NOT has_any_column_privilege('portal_runtime','portal_preview_receipts','SELECT,INSERT')
  AND (SELECT count(*) FROM portal_schema_version)=$1`, migrationFixtureVersionCount).Scan(&exact); err != nil || !exact {
 		t.Fatal("repeat migration retained privileges beyond the documented set")

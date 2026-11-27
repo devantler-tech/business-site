@@ -2,6 +2,7 @@ package identity
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -428,6 +429,99 @@ func TestWorkApprovalIneligibleFundingDenied(t *testing.T) {
 				t.Fatal("ineligible funding admitted review", err)
 			}
 		})
+	}
+}
+
+func TestSettledFundingDoesNotGrantEarlyStart(t *testing.T) {
+	b, op := approvalFixture(t)
+	changeFixtureFunding(t, "no-early-start")
+	ctx := t.Context()
+	tx, client, _, err := b.svc.beginWorkRequest(ctx, op, proposalRequestID, b.svc.approvalsReady)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rollbackProposalWrite(ctx, tx)
+	_, acceptance, err := currentInvoiceAcceptance(ctx, tx, proposalRequestID, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	order, err := readFundingOrder(ctx, tx, proposalRequestID, client, acceptance)
+	if err != nil {
+		t.Fatal(err)
+	}
+	funding, err := readSettledOrderFunding(ctx, tx, order)
+	if err != nil || funding.Reference != fixtureFundingReference || funding.GrossMinor != order.OneTimeMinor {
+		t.Fatalf("funded order lost its payment facts: %+v, %v", funding, err)
+	}
+	if _, _, err := readWorkFunding(ctx, tx, proposalRequestID, client, acceptance); !errors.Is(err, errProposalConflict) {
+		t.Fatalf("settlement granted software work before the withdrawal period ended: %v", err)
+	}
+}
+
+func TestWorkApprovalBindsOneTypedSoftwareFulfillment(t *testing.T) {
+	b := acceptedServiceQuoteFixture(t, proposalServiceSoftware)
+	placeEarlyStartOrder(t, b)
+	fake, billing := newFakeNumina(t)
+	paidInvoiceOrder(t, b, fake, billing)
+	setApprovalGate(t, b, "portal-work-approvals", true)
+	op := authenticateExistingMember(t, b, "proposal-operator")
+	ctx := t.Context()
+	input := preparedApproval(t, b, op)
+	deny := func(context.Context, pgx.Tx, string) error { return ErrDenied }
+	if _, err := b.svc.persistWorkApprovalChecked(ctx, op, proposalRequestID, input, deny); !errors.Is(err, ErrDenied) {
+		t.Fatalf("final session refusal returned %v", err)
+	}
+	var roots, consumers int
+	if err := b.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM portal_service_fulfillments),
+ (SELECT count(*) FROM portal_service_consumers)`).Scan(&roots, &consumers); err != nil || roots != 0 || consumers != 0 {
+		t.Fatalf("refused decision left %d roots and %d consumers: %v", roots, consumers, err)
+	}
+
+	other := input
+	other.Key = secret()
+	first, second := pendingApproval(ctx, b, op, input), pendingApproval(ctx, b, op, other)
+	firstErr, secondErr := <-first, <-second
+	switch {
+	case firstErr == nil && errors.Is(secondErr, errProposalConflict):
+	case secondErr == nil && errors.Is(firstErr, errProposalConflict):
+		input = other
+	default:
+		t.Fatalf("competing approvals returned %v and %v", firstErr, secondErr)
+	}
+	approval, err := b.svc.persistWorkApproval(ctx, op, proposalRequestID, input)
+	if err != nil || approval.Expected != 0 {
+		t.Fatalf("winning decision could not be retried: %v", err)
+	}
+	var evidence struct {
+		Format      int
+		Hash        string
+		ServiceKind string
+	}
+	if err := json.Unmarshal(approval.Evidence, &evidence); err != nil || evidence.Format != 3 || evidence.Hash != approval.Hash || evidence.ServiceKind != "software" {
+		t.Fatalf("typed approval evidence lost its quote binding: %v", err)
+	}
+	if current, valid, err := b.svc.currentWorkApproval(ctx, op, proposalRequestID); err != nil || !valid || current.ID != approval.ID {
+		t.Fatalf("the selected typed approval is unavailable: %v", err)
+	}
+	readRoot := func() string {
+		t.Helper()
+		var root, aggregate string
+		err := b.pool.QueryRow(ctx, `SELECT f.id,c.aggregate_id FROM portal_service_fulfillments f
+ JOIN portal_service_consumers c ON c.fulfillment_id=f.id AND c.service_kind=f.service_kind
+ WHERE f.request_id=$1 AND f.order_id=$2 AND f.acceptance_id=$3 AND f.service_kind='software'`,
+			proposalRequestID, approval.Order, approval.Acceptance).Scan(&root, &aggregate)
+		if err != nil || aggregate != approval.Order {
+			t.Fatalf("approval did not bind the accepted order to its software fulfillment: %v", err)
+		}
+		return root
+	}
+	original := readRoot()
+	if next := savedApproval(t, b, op); next.ID == approval.ID || readRoot() != original {
+		t.Fatal("a later approval did not preserve the original fulfillment")
+	}
+	if err := b.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM portal_service_fulfillments),
+ (SELECT count(*) FROM portal_service_consumers)`).Scan(&roots, &consumers); err != nil || roots != 1 || consumers != 1 {
+		t.Fatalf("competing decisions left %d roots and %d consumers: %v", roots, consumers, err)
 	}
 }
 

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestPreviewCheckoutSimulatesThePurchaseWithoutCommercialWrites(t *testing.T) {
@@ -84,6 +86,24 @@ func TestPreviewCheckoutSimulatesThePurchaseWithoutCommercialWrites(t *testing.T
 	preview := operator
 	preview.subject, preview.membershipIncarnation = previewSubject, incarnation
 	preview.preview = previewOperator{subject: operator.subject, incarnation: operator.membershipIncarnation}
+	t.Run("proposal transaction holds preview owner membership", func(t *testing.T) {
+		tx, _, _, err := b.svc.beginClientServiceRequest(ctx, preview, proposalRequestID, b.svc.acceptanceReady)
+		if err != nil {
+			t.Fatal("open preview proposal transaction", err)
+		}
+		defer rollbackProposalWrite(ctx, tx)
+		other := beginFixtureTransaction(ctx, t, b.pool)
+		if _, err := other.Exec(ctx, `SET LOCAL lock_timeout='50ms'`); err != nil {
+			t.Fatal("bound the competing membership lock", err)
+		}
+		var subject string
+		err = other.QueryRow(ctx, `SELECT subject FROM portal_memberships
+ WHERE issuer=$1 AND subject=$2 FOR UPDATE`, operator.issuer, operator.subject).Scan(&subject)
+		var databaseError *pgconn.PgError
+		if !errors.As(err, &databaseError) || databaseError.Code != "55P03" {
+			t.Fatal("preview proposal transaction did not hold the owner's membership lock", err)
+		}
+	})
 	sessionKey := base64.RawURLEncoding.EncodeToString(digest(b.cookie().Value))
 	var data []byte
 	var deadline time.Time
@@ -139,6 +159,42 @@ func TestPreviewCheckoutSimulatesThePurchaseWithoutCommercialWrites(t *testing.T
 	if status, _, _ := b.request(http.MethodPost, path, purchase, b.site.URL); status != http.StatusForbidden {
 		t.Errorf("a revoked operator's preview could still complete checkout: status %d", status)
 	}
+
+	t.Run("service contract upgrade preserves the receipt", func(t *testing.T) {
+		migrator := migrationDB(t)
+		rewindServiceContractsFixture(t, migrator)
+		const publishedPreviewChecksum = "eaa884a519b7c1ba69223b49d1b186b41c6dc7324138d833a8a8ded252a1d2b0"
+		var checksum string
+		if err := migrator.QueryRow(ctx, `SELECT checksum FROM portal_schema_version WHERE version=31`).Scan(&checksum); err != nil {
+			t.Fatal("read the published preview migration ledger", err)
+		}
+		if checksum != publishedPreviewChecksum {
+			t.Fatal("migration 31 no longer matches the published preview receipts migration")
+		}
+		for _, name := range []string{"portal_mail_outbox_producer_format_check", "portal_mail_complete_producer"} {
+			var definition string
+			if err := migrator.QueryRow(ctx, `SELECT c.check_clause
+ FROM information_schema.check_constraints c
+ JOIN information_schema.table_constraints t USING (constraint_catalog,constraint_schema,constraint_name)
+ WHERE t.table_schema='public' AND t.table_name='portal_mail_outbox' AND t.constraint_name=$1`, name).Scan(&definition); err != nil {
+				t.Fatal("read the published producer constraint", err)
+			}
+			if !strings.Contains(definition, "producer_format = 1") {
+				t.Errorf("published preview schema permits a later producer format in %s: %s", name, definition)
+			}
+		}
+		if err := Migrate(ctx, migrator); err != nil {
+			t.Fatal("upgrade the published preview schema", err)
+		}
+		var upgraded, retained bool
+		if err := migrator.QueryRow(ctx, `SELECT
+ EXISTS (SELECT 1 FROM portal_schema_version WHERE version=33),
+ EXISTS (SELECT 1 FROM portal_preview_receipts WHERE acceptance_id=$1 AND request_id=$2
+  AND client_id='preview-demo' AND one_time_minor=299500 AND monthly_minor=9900)`,
+			acceptance[1], proposalRequestID).Scan(&upgraded, &retained); err != nil || !upgraded || !retained {
+			t.Fatalf("service contract migration applied=%t, preview receipt retained=%t: %v", upgraded, retained, err)
+		}
+	})
 }
 
 func TestPreviewCheckoutIsAbsentFromTheOrdinaryPortal(t *testing.T) {

@@ -367,21 +367,11 @@ func contactHostDatabase(t *testing.T) (*pgxpool.Pool, *pgxpool.Pool) {
 		t.Fatal("connect trial migrator")
 	}
 	t.Cleanup(migrator.Close)
-	if err := Migrate(ctx, migrator); err != nil {
-		t.Fatal("migrate unique trial fixture")
+	if _, err := migrator.Exec(ctx, "REVOKE CREATE ON SCHEMA public FROM PUBLIC"); err != nil {
+		t.Fatal("restrict trial schema creation")
 	}
-	if _, err := migrator.Exec(ctx, "GRANT SELECT ON portal_membership_transitions TO portal_runtime"); err != nil {
-		t.Fatal("grant read-only membership evidence")
-	}
-	if _, err := migrator.Exec(ctx, `GRANT SELECT,INSERT ON portal_workspaces TO portal_runtime;
- GRANT SELECT,INSERT,UPDATE(display_name,closed_at) ON portal_workspace_settings TO portal_runtime`); err != nil {
-		t.Fatal("grant confined workspace inventory")
-	}
-	if _, err := migrator.Exec(ctx, "GRANT SELECT,INSERT ON portal_work_approvals,portal_work_revocations,portal_work_current TO portal_runtime; GRANT UPDATE(approval_id,generation) ON portal_work_current TO portal_runtime; GRANT SELECT,INSERT ON portal_orders,portal_numina_contacts TO portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_order_charges TO portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_card_checkouts TO portal_runtime; GRANT SELECT,INSERT ON portal_stripe_events TO portal_runtime; GRANT SELECT,INSERT ON portal_order_ends,portal_card_cancellations,portal_charge_reversals,portal_order_withdrawals,portal_withdrawal_cancellations,portal_order_completions,portal_withdrawal_settlements,portal_mail_outbox,portal_mail_deliveries,portal_launch_places,portal_order_addons,portal_request_closures,portal_addon_ends,portal_addon_removals,portal_operator_audit TO portal_runtime"); err != nil {
-		t.Fatal("grant confined work-approval evidence")
-	}
-	if _, err := migrator.Exec(ctx, "REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO portal_runtime; GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions TO portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_proposal_reviews TO portal_runtime"); err != nil {
-		t.Fatal("grant restricted trial runtime")
+	if err := MigrateWithRuntimeRole(ctx, migrator, "portal_runtime"); err != nil {
+		t.Fatal("migrate unique trial fixture with the production runtime grants")
 	}
 	base.ConnConfig.User = "portal_runtime"
 	pool, err := pgxpool.NewWithConfig(ctx, base)

@@ -40,6 +40,12 @@ func (s *Foundation) acceptanceReady(ctx context.Context) bool {
 // proposalContentHash binds the typed, normalized stored content, not browser
 // assertions or ambiguous delimiter concatenation. It is not a legal signature.
 func proposalContentHash(d projectProposal) (string, error) {
+	if d.ContentFormat == 2 {
+		return serviceProposalContentHash(d)
+	}
+	if d.ContentFormat < 0 || d.ContentFormat > 1 || d.Service != (proposalServiceTerms{}) {
+		return "", errProposalConflict
+	}
 	content := struct {
 		Scope, Deliverables, Currency, OneTimeTerms, MonthlyTerms string
 		OneTimeMinor, MonthlyMinor                                int64
@@ -113,15 +119,19 @@ func currentProposalReview(ctx context.Context, tx pgx.Tx, id, client string) (p
 	if latest == 0 || latest != selected || action != "share" {
 		return proposalReview{}, errProposalConflict
 	}
-	d := &review.Proposal
-	if err := tx.QueryRow(ctx, `SELECT version,scope,deliverables,currency,one_time_minor,monthly_minor,one_time_terms,monthly_terms,prepared_at FROM portal_proposals WHERE request_id=$1 AND client_id=$2 AND version=$3`, id, client, selected).Scan(&d.Version, &d.Scope, &d.Deliverables, &d.Currency, &d.OneTimeMinor, &d.MonthlyMinor, &d.OneTimeTerms, &d.MonthlyTerms, &d.Prepared); err != nil {
+	d, err := scanProposal(tx.QueryRow(ctx, `SELECT `+proposalColumns+` FROM portal_proposals p WHERE p.request_id=$1 AND p.client_id=$2 AND p.version=$3`, id, client, selected))
+	if err != nil {
 		return proposalReview{}, errTriageStorage
 	}
-	hash, err := proposalContentHash(*d)
+	d.Key, d.Expected = "", 0
+	hash, err := proposalContentHash(d)
 	if err != nil {
 		return proposalReview{}, err
 	}
-	review.Hash = hash
+	if d.ContentFormat == 2 && hash != d.ContentSHA256 {
+		return proposalReview{}, errProposalConflict
+	}
+	review.Proposal, review.Hash = d, hash
 	return review, nil
 }
 
@@ -181,10 +191,14 @@ func (s *Foundation) prepareProposalReview(ctx context.Context, p Principal, id 
 // acceptProposal records one exact decision. Original actor-bound retries return
 // history after current access checks, never authorize a replacement proposal.
 func (s *Foundation) acceptProposal(ctx context.Context, p Principal, id, key string) (proposalAcceptance, error) {
+	return s.acceptProposalChecked(ctx, p, id, key, nil)
+}
+
+func (s *Foundation) acceptProposalChecked(ctx context.Context, p Principal, id, key string, check workResponseCheck) (proposalAcceptance, error) {
 	if !opaqueRequestID.MatchString(key) {
 		return proposalAcceptance{}, errProposalConflict
 	}
-	tx, client, err := s.beginClientProposalWrite(ctx, p, id)
+	tx, client, viewer, err := s.beginClientServiceRequest(ctx, p, id, s.acceptanceReady)
 	if err != nil {
 		return proposalAcceptance{}, err
 	}
@@ -193,10 +207,13 @@ func (s *Foundation) acceptProposal(ctx context.Context, p Principal, id, key st
 	var issuer, subject string
 	err = tx.QueryRow(ctx, `SELECT id,proposal_version,recorded_at,client_issuer,client_subject FROM portal_proposal_acceptances WHERE request_id=$1 AND client_id=$2 AND context_key=$3`, id, client, key).Scan(&receipt.ID, &receipt.Proposal.Version, &receipt.Recorded, &issuer, &subject)
 	if err == nil {
+		if err := requireWorkViewer(ctx, tx, viewer); err != nil {
+			return proposalAcceptance{}, err
+		}
 		if issuer != p.issuer || subject != p.subject {
 			return proposalAcceptance{}, errProposalConflict
 		}
-		if err = s.commitClientProposal(ctx, p, tx, time.Time{}); err != nil {
+		if err = s.finishProposalResponse(ctx, p, tx, s.acceptanceReady, time.Time{}, viewer.Client, check); err != nil {
 			return proposalAcceptance{}, err
 		}
 		return receipt, nil
@@ -219,14 +236,21 @@ func (s *Foundation) acceptProposal(ctx context.Context, p Principal, id, key st
 	if !time.Now().Before(saved.Expires) || saved.Hash != review.Hash || saved.Event != review.Event || saved.Proposal.Version != review.Proposal.Version {
 		return proposalAcceptance{}, errProposalConflict
 	}
-	err = tx.QueryRow(ctx, `INSERT INTO portal_proposal_acceptances(id,request_id,client_id,client_issuer,client_subject,context_key,proposal_version,visibility_event,content_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(request_id,client_id,proposal_version) DO NOTHING RETURNING id,recorded_at`, secret(), id, client, p.issuer, p.subject, key, review.Proposal.Version, review.Event, review.Hash).Scan(&receipt.ID, &receipt.Recorded)
+	if err := lockProposalAcceptanceMembers(ctx, tx, id, client, review, viewer); err != nil {
+		return proposalAcceptance{}, err
+	}
+	var originalIncarnation any
+	if review.Proposal.ContentFormat == 2 {
+		originalIncarnation = viewer.Incarnation
+	}
+	err = tx.QueryRow(ctx, `INSERT INTO portal_proposal_acceptances(id,request_id,client_id,client_issuer,client_subject,context_key,proposal_version,visibility_event,content_hash,client_incarnation) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(request_id,client_id,proposal_version) DO NOTHING RETURNING id,recorded_at`, secret(), id, client, p.issuer, p.subject, key, review.Proposal.Version, review.Event, review.Hash, originalIncarnation).Scan(&receipt.ID, &receipt.Recorded)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return proposalAcceptance{}, errProposalConflict
 	}
 	if err != nil {
 		return proposalAcceptance{}, errTriageStorage
 	}
-	if err = s.commitClientProposal(ctx, p, tx, saved.Expires); err != nil {
+	if err = s.finishProposalResponse(ctx, p, tx, s.acceptanceReady, saved.Expires, viewer.Client, check); err != nil {
 		return proposalAcceptance{}, err
 	}
 	receipt.Proposal, receipt.Current = review.Proposal, true
@@ -258,7 +282,7 @@ func proposalAcceptanceHistory(ctx context.Context, tx pgx.Tx, id, client string
 	if stateErr != nil && !errors.Is(stateErr, errProposalConflict) {
 		return nil, false, stateErr
 	}
-	rows, err := tx.Query(ctx, `SELECT a.id,a.proposal_version,a.visibility_event,a.recorded_at,p.scope,p.deliverables,p.currency,p.one_time_minor,p.monthly_minor,p.one_time_terms,p.monthly_terms FROM portal_proposal_acceptances a JOIN portal_proposals p ON p.request_id=a.request_id AND p.client_id=a.client_id AND p.version=a.proposal_version WHERE a.request_id=$1 AND a.client_id=$2 ORDER BY a.proposal_version DESC LIMIT 50`, id, client)
+	rows, err := tx.Query(ctx, `SELECT a.id,a.proposal_version,a.visibility_event,a.recorded_at,p.scope,p.deliverables,p.currency,p.one_time_minor,p.monthly_minor,p.one_time_terms,p.monthly_terms,`+proposalServiceColumns+` FROM portal_proposal_acceptances a JOIN portal_proposals p ON p.request_id=a.request_id AND p.client_id=a.client_id AND p.version=a.proposal_version WHERE a.request_id=$1 AND a.client_id=$2 ORDER BY a.proposal_version DESC LIMIT 50`, id, client)
 	if err != nil {
 		return nil, false, errTriageStorage
 	}
@@ -267,7 +291,8 @@ func proposalAcceptanceHistory(ctx context.Context, tx pgx.Tx, id, client string
 	for rows.Next() {
 		var d proposalAcceptance
 		q := &d.Proposal
-		if err = rows.Scan(&d.ID, &q.Version, &d.Event, &d.Recorded, &q.Scope, &q.Deliverables, &q.Currency, &q.OneTimeMinor, &q.MonthlyMinor, &q.OneTimeTerms, &q.MonthlyTerms); err != nil {
+		if err = rows.Scan(&d.ID, &q.Version, &d.Event, &d.Recorded, &q.Scope, &q.Deliverables, &q.Currency, &q.OneTimeMinor, &q.MonthlyMinor, &q.OneTimeTerms, &q.MonthlyTerms,
+			&q.ContentFormat, &q.Service.Kind, &q.Service.DurationMinutes, &q.Service.AppointmentTermsEN, &q.Service.AppointmentTermsDA, &q.Service.AppointmentTermsSHA256, &q.ContentSHA256); err != nil {
 			rows.Close()
 			return nil, false, errTriageStorage
 		}
@@ -335,7 +360,13 @@ func (b *browser) reviewProposal(w http.ResponseWriter, r *http.Request) {
 
 // confirmProposal records an explicit server-bound decision, not a payment or order.
 func (b *browser) confirmProposal(w http.ResponseWriter, r *http.Request) {
-	if !b.foundation.acceptanceReady(r.Context()) {
+	ctx, cancel, p, check, ok := b.captureProposalResponse(r, "client")
+	defer cancel()
+	if !ok {
+		b.triageError(w, r, ErrDenied)
+		return
+	}
+	if !b.foundation.acceptanceReady(ctx) {
 		http.NotFound(w, r)
 		return
 	}
@@ -344,7 +375,7 @@ func (b *browser) confirmProposal(w http.ResponseWriter, r *http.Request) {
 		b.acceptanceError(w, r, 400)
 		return
 	}
-	_, err := b.foundation.acceptProposal(r.Context(), b.principal(r.Context()), r.PathValue("id"), key)
+	_, err := b.foundation.acceptProposalChecked(ctx, p, r.PathValue("id"), key, check)
 	b.acceptanceResult(w, r, err)
 }
 

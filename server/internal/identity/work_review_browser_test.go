@@ -80,21 +80,7 @@ func TestWorkReviewOriginalSessionAtFinalWait(t *testing.T) {
 					t.Fatal(err)
 				}
 				release := onceRelease(provider.release)
-				done := make(chan contactResponse, 1)
-				finished := make(chan struct{})
-				go func() {
-					defer close(finished)
-					status, body, _ := b.request(method, path, form, b.site.URL)
-					done <- contactResponse{status, body}
-				}()
-				t.Cleanup(func() {
-					release()
-					select {
-					case <-finished:
-					case <-time.After(5 * time.Second):
-						t.Error("work operation worker did not finish")
-					}
-				})
+				done, _ := startBrowserRequest(t, b, method, path, form, b.site.URL, release)
 				select {
 				case <-provider.blocked:
 				case <-time.After(5 * time.Second):

@@ -253,6 +253,11 @@ deletion removes portal access and revokes pending invitations in one transactio
 The retained ID prevents reusing the workspace while its historical records remain.
 The retention purge removes eligible closed workspaces and their settings together.
 
+v33 records typed proposal terms and the original membership incarnations at
+sharing and acceptance. Existing proposals remain in their original format.
+The service fulfillment and consumer tables grant the runtime SELECT and INSERT.
+Appointment sharing and prepayment remain held pending the booking workflow.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

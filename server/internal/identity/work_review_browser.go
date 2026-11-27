@@ -76,7 +76,11 @@ func (b *browser) workPage(r *http.Request, work workReviewData, review bool) wo
 // a review or decision acquires transaction locks and its pool connection.
 func (b *browser) captureWorkResponse(r *http.Request) (context.Context, context.CancelFunc, durableResponseSnapshot, bool) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	snapshot, ok := b.captureDurableResponse(ctx, b.contactAuthority(r.Context(), ""))
+	client := ""
+	if b.foundation.previewAuthority != nil {
+		client = previewWorkspace
+	}
+	snapshot, ok := b.captureDurableResponse(ctx, b.contactAuthority(r.Context(), client))
 	return ctx, cancel, snapshot, ok
 }
 

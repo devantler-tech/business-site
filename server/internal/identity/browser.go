@@ -136,16 +136,7 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 		}
 	}
 	secured := sm.LoadAndSave(routes)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if atRoot {
-			r, w = b.internal(r), rootRedirects{w}
-		}
-		w.Header().Set("Cache-Control", "no-store")
-		// no-referrer forces native form POST Origin to "null". strict-origin
-		// preserves same-origin CSRF checks without sharing callback paths/tokens.
-		w.Header().Set("Referrer-Policy", "strict-origin")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Content-Security-Policy", csp)
+	gated := func(w http.ResponseWriter, r *http.Request, next http.Handler) {
 		if !s.ready(r.Context()) {
 			http.NotFound(w, r)
 			return
@@ -172,7 +163,9 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 				limit = 20000
 			}
 			if strings.HasPrefix(r.URL.Path, "/portal/operator/requests/") && strings.HasSuffix(r.URL.Path, "/proposals") {
-				limit = 60000
+				// The six quote fields allow 7,600 runes that can use up to
+				// 12 URL-encoded bytes each, plus the form's other fields.
+				limit = 96 * 1024
 			}
 			r.Body = http.MaxBytesReader(w, r.Body, limit)
 			if origin := r.Header.Get("Origin"); origin != "" && origin != b.origin {
@@ -191,7 +184,28 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 			mux.ServeHTTP(w, r)
 			return
 		}
-		secured.ServeHTTP(w, r)
+		next.ServeHTTP(w, r)
+	}
+	// Decision requests load their session before the shared feature checks.
+	// Pass them through the same preview router without loading it a second time.
+	decisions := sm.LoadAndSave(b.captureProposalDecisionSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gated(w, r, routes)
+	})))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atRoot {
+			r, w = b.internal(r), rootRedirects{w}
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		// no-referrer forces native form POST Origin to "null". strict-origin
+		// preserves same-origin CSRF checks without sharing callback paths/tokens.
+		w.Header().Set("Referrer-Policy", "strict-origin")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Content-Security-Policy", csp)
+		if proposalDecisionRequest(r) {
+			decisions.ServeHTTP(w, r)
+			return
+		}
+		gated(w, r, secured)
 	}), nil
 }
 

@@ -52,7 +52,7 @@ type orderMail struct {
 	Launch                                                               *launchPlace
 	Portal, Terms                                                        string
 	Acceptance, ProposalHash, TermsText, TermsHash                       string
-	ProposalVersion                                                      int
+	ProposalVersion, ProducerFormat                                      int
 }
 
 var mailTemplates = template.Must(template.New("mail").Parse(`
@@ -64,7 +64,8 @@ Accept: {{.Acceptance}}
 Tilbudsversion: {{.ProposalVersion}}
 Tilbuddets SHA256: {{.ProposalHash}}
 Betingelsernes SHA256: {{.TermsHash}}
-
+{{if eq .ProducerFormat 2}}Ydelse: Softwareudvikling
+{{end}}
 Omfang:
 {{.Scope}}
 
@@ -94,7 +95,8 @@ Acceptance: {{.Acceptance}}
 Proposal version: {{.ProposalVersion}}
 Proposal SHA256: {{.ProposalHash}}
 Agreement terms SHA256: {{.TermsHash}}
-
+{{if eq .ProducerFormat 2}}Service: Software development
+{{end}}
 Scope:
 {{.Scope}}
 
@@ -163,11 +165,11 @@ func (s *Foundation) queueOrderMail(ctx context.Context, tx pgx.Tx, client, kind
 	var format, acceptance, version, proposalHash, termsHash, bodyHash any
 	if kind == "order-confirmation" {
 		termsDigest := sha256.Sum256([]byte(data.TermsText))
-		if data.TermsHash != hex.EncodeToString(termsDigest[:]) {
+		if (data.ProducerFormat != 1 && data.ProducerFormat != 2) || data.TermsHash != hex.EncodeToString(termsDigest[:]) {
 			return errOrderConfirmation
 		}
 		digest := sha256.Sum256([]byte(body.String()))
-		format, acceptance, version = 1, data.Acceptance, data.ProposalVersion
+		format, acceptance, version = data.ProducerFormat, data.Acceptance, data.ProposalVersion
 		proposalHash, termsHash, bodyHash = data.ProposalHash, data.TermsHash, hex.EncodeToString(digest[:])
 	}
 	// A withdrawal can outlive the editable contact profile. Prefer the current

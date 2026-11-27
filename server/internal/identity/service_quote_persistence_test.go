@@ -1,0 +1,201 @@
+package identity
+
+import (
+	"net/http"
+	"net/url"
+	"strings"
+	"testing"
+)
+
+func serviceProposalForm(t *testing.T, b *browserFixture, kind proposalServiceKind) url.Values {
+	t.Helper()
+	form := proposalForm(t, b)
+	service := serviceQuoteForm(string(kind))
+	for _, name := range []string{"service_kind", "appointment_minutes", "appointment_terms_en", "appointment_terms_da"} {
+		if service.Has(name) {
+			form.Set(name, service.Get(name))
+		}
+	}
+	return form
+}
+
+func TestServiceQuoteSaveAcceptsMaximumLengthUnicode(t *testing.T) {
+	b := proposalFixture(t)
+	form := serviceProposalForm(t, b, proposalServiceAppointment)
+	form.Set("scope", strings.Repeat("𠀀", 1200))
+	form.Set("deliverables", strings.Repeat("𠀀", 1200))
+	form.Set("one_time_terms", strings.Repeat("𠀀", 600))
+	form.Set("monthly_terms", strings.Repeat("𠀀", 600))
+	form.Set("appointment_terms_en", strings.Repeat("𠀀", 2000))
+	form.Set("appointment_terms_da", strings.Repeat("𠀀", 2000))
+	if _, ok := parseServiceQuoteForm(form); !ok {
+		t.Fatal("maximum-length Unicode quote failed field validation")
+	}
+	path := "/portal/operator/requests/" + proposalRequestID + "/proposals"
+	if status, _, _ := b.request(http.MethodPost, path, form, b.site.URL); status != http.StatusSeeOther {
+		t.Fatalf("maximum-length Unicode quote save returned %d, want %d", status, http.StatusSeeOther)
+	}
+}
+
+// acceptedServiceQuoteFixture creates a fresh typed quote through native human
+// Save, Share and Accept, preserving the fictional prices used by order forms.
+// It does not retrofit billingFixture's already accepted legacy agreement.
+func acceptedServiceQuoteFixture(t *testing.T, kind proposalServiceKind) *browserFixture {
+	t.Helper()
+	if kind != proposalServiceSoftware {
+		t.Fatal("typed appointment acceptance is held until the complete real commitment store is integrated")
+	}
+	b := proposalFixture(t)
+	sharingFlags(t, b, true, true, true, true, true)
+	saveFixtureProposal(t, b, serviceProposalForm(t, b, kind))
+	saveVisibility(t, b, visibilityForm(t, b, "0", "1", "1", "share"))
+	acceptanceFlags(t, b, true, true, true, true, true, true)
+	triageSignIn(t, b, "consent-client", "private-client-key", "client")
+	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/proposal-acceptance", acceptanceForm(t, b), b.site.URL); status != 303 {
+		t.Fatalf("typed quote acceptance=%d", status)
+	}
+	billingFlags(t, b, true)
+	confirmationFixture(t, b)
+	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_contacts(client_id,name,email,company,revision) VALUES('private-client-key','Fictional Client','client@example.invalid','Fictional Bakery ApS',1)`); err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func TestServiceQuotePersistenceRetainsContract(t *testing.T) {
+	for _, kind := range []proposalServiceKind{proposalServiceSoftware, proposalServiceAppointment} {
+		t.Run(string(kind), func(t *testing.T) {
+			b := proposalFixture(t)
+			form := serviceProposalForm(t, b, kind)
+			want, ok := parseServiceQuoteForm(form)
+			if !ok {
+				t.Fatal("valid fixture quote was refused")
+			}
+			saveFixtureProposal(t, b, form)
+			p := authenticateExistingMember(t, b, "proposal-operator")
+			rows, err := b.svc.readProposals(t.Context(), p, proposalRequestID)
+			if err != nil || len(rows) != 1 {
+				t.Fatal("saved typed quote is unavailable", err)
+			}
+			got := rows[0]
+			if got.ContentFormat != 2 || got.Service != want.Service {
+				t.Fatal("native save discarded or downgraded the typed service contract")
+			}
+			wantHash, err := proposalContentHash(want)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// JSON projection makes the missing-feature baseline an assertion,
+			// not an SQL error merely because the old schema lacks the column.
+			var storedHash *string
+			if err := b.pool.QueryRow(t.Context(), `SELECT to_jsonb(p)->>'content_sha256' FROM portal_proposals p WHERE request_id=$1 AND version=1`, proposalRequestID).Scan(&storedHash); err != nil || storedHash == nil || *storedHash != wantHash {
+				t.Fatal("immutable parent has no exact writer-computed content hash", err)
+			}
+		})
+	}
+}
+
+func TestServiceQuoteSaveShareAcceptBindsOriginalContract(t *testing.T) {
+	b := acceptedServiceQuoteFixture(t, proposalServiceSoftware)
+	var quoteHash, sharedHash, acceptedHash string
+	var operatorRecorded, clientRecorded bool
+	err := b.pool.QueryRow(t.Context(), `
+		SELECT p.content_sha256, v.content_hash, a.content_hash,
+			v.operator_incarnation IS NOT NULL, a.client_incarnation IS NOT NULL
+		FROM portal_proposals p
+		JOIN portal_proposal_acceptances a
+			ON a.request_id=p.request_id AND a.client_id=p.client_id AND a.proposal_version=p.version
+		JOIN portal_proposal_visibility v
+			ON v.request_id=a.request_id AND v.client_id=a.client_id
+			AND v.proposal_version=a.proposal_version AND v.event=a.visibility_event
+		WHERE p.request_id=$1 AND p.content_format=2 AND p.service_kind='software' AND v.action='share'
+	`, proposalRequestID).Scan(&quoteHash, &sharedHash, &acceptedHash, &operatorRecorded, &clientRecorded)
+	if err != nil {
+		t.Fatal("typed quote acceptance chain is unavailable", err)
+	}
+	if quoteHash == "" || quoteHash != sharedHash || quoteHash != acceptedHash {
+		t.Fatalf("quote hash differs across save, share and accept: %q, %q, %q", quoteHash, sharedHash, acceptedHash)
+	}
+	if !operatorRecorded || !clientRecorded {
+		t.Fatal("typed quote acceptance lacks original membership authority")
+	}
+}
+
+func TestServiceQuoteQueuesOriginalSoftwareConfirmation(t *testing.T) {
+	for _, tc := range []struct {
+		lang, serviceLabel string
+	}{
+		{"en", "Service: Software development"},
+		{"da", "Ydelse: Softwareudvikling"},
+	} {
+		t.Run(tc.lang, func(t *testing.T) {
+			b := acceptedServiceQuoteFixture(t, proposalServiceSoftware)
+			path := "/portal/requests/" + proposalRequestID + "/orders"
+			if status, _, _ := b.request("POST", path, orderForm(t, b, tc.lang), b.site.URL); status != 303 {
+				t.Fatalf("typed software order refused: %d", status)
+			}
+			var format int
+			var body, client, acceptance, order string
+			var evidenceMatches bool
+			err := b.pool.QueryRow(t.Context(), `
+				SELECT m.producer_format, m.body, o.client_id, a.id, o.id,
+					m.acceptance_id=a.id AND m.proposal_version=a.proposal_version
+					AND m.proposal_sha256=a.content_hash
+					AND m.body_sha256=encode(sha256(convert_to(m.body,'UTF8')),'hex')
+				FROM portal_orders o
+				JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id
+				JOIN portal_mail_outbox m ON m.order_id=o.id AND m.kind='order-confirmation'
+				WHERE o.request_id=$1
+			`, proposalRequestID).Scan(&format, &body, &client, &acceptance, &order, &evidenceMatches)
+			if err != nil || format != 2 || !evidenceMatches || !strings.Contains(body, tc.serviceLabel) {
+				t.Fatal("typed confirmation does not carry its original service terms and evidence", err)
+			}
+			before, err := readOriginalConfirmation(t.Context(), b.pool, proposalRequestID, client, acceptance, order)
+			if err != nil || before.State != confirmationPrepared || before.OutboxID == "" || before.SenderAcceptedAt != nil {
+				t.Fatal("typed confirmation was not recognized as prepared", err)
+			}
+			if err := b.svc.SendQueuedMail(t.Context()); err != nil {
+				t.Fatal("synthetic sender rejected the typed confirmation", err)
+			}
+			after, err := readOriginalConfirmation(t.Context(), b.pool, proposalRequestID, client, acceptance, order)
+			if err != nil || after.State != confirmationSenderAccepted || after.OutboxID != before.OutboxID ||
+				after.BodySHA256 != before.BodySHA256 || after.SenderAcceptedAt == nil {
+				t.Fatal("typed confirmation did not retain its evidence after sender acceptance", err)
+			}
+			other, err := readOriginalConfirmation(t.Context(), b.pool, proposalRequestID, "different-client", acceptance, order)
+			if err != nil || other != (originalConfirmation{State: confirmationMissing}) {
+				t.Fatal("typed confirmation crossed the customer boundary", err)
+			}
+		})
+	}
+}
+
+func TestServiceQuoteRetryCannotChangeContract(t *testing.T) {
+	for _, change := range []string{"kind", "duration", "English terms", "Danish terms"} {
+		t.Run(change, func(t *testing.T) {
+			b := proposalFixture(t)
+			form := serviceProposalForm(t, b, proposalServiceAppointment)
+			saveFixtureProposal(t, b, form)
+			switch change {
+			case "kind":
+				form.Set("service_kind", "software")
+				for _, name := range []string{"appointment_minutes", "appointment_terms_en", "appointment_terms_da"} {
+					form.Del(name)
+				}
+			case "duration":
+				form.Set("appointment_minutes", "45")
+			case "English terms":
+				form.Set("appointment_terms_en", "A separately agreed synthetic appointment.")
+			case "Danish terms":
+				form.Set("appointment_terms_da", "En særskilt aftalt syntetisk samtale.")
+			}
+			if status, _, _ := b.request("POST", "/portal/operator/requests/"+proposalRequestID+"/proposals", form, b.site.URL); status != 409 {
+				t.Fatalf("changed contract reused immutable retry: status=%d", status)
+			}
+			var count int
+			if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_proposals WHERE request_id=$1`, proposalRequestID).Scan(&count); err != nil || count != 1 {
+				t.Fatal("changed retry altered the version ledger", err)
+			}
+		})
+	}
+}

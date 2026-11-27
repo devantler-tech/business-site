@@ -261,6 +261,12 @@ func checkMaintenanceInventoryPage(name string, index int, markup string, task b
 		view := maintenanceContactViews[index%len(maintenanceContactViews)]
 		return checkMaintenanceState(markup, maintenancePage(lang, view), task)
 	}
+	if name == "triage.html" {
+		markup, err = checkTriageProposalServiceFields(markup, lang, maintenanceDraftKey(name, index))
+		if err != nil {
+			return err
+		}
+	}
 	got, err := maintenanceMainDigest(markup, maintenanceDraftKey(name, index))
 	if err != nil {
 		return err
@@ -584,6 +590,19 @@ var maintenanceTaskContactReferences = []string{
 	"2f0010fbcb3bd59b16d2814cc2eacf0b367ed7db1b78043feedd05458f0fa58f",
 	"6edc76e88121dd3b5f71bd615dd1c82b0cd37c4d79bc6bbe67076287cd4b651d",
 	"2d3aeddf0f3b61ec643a7c4e69fd7aa441c7b4b4b7f1e7bae767bbcf651fc777",
+}
+
+func matchesMaintenanceFragment(node *html.Node, reference string) (bool, error) {
+	want, err := maintenanceMainDigest("<main>"+reference+"</main>", false)
+	if err != nil {
+		return false, err
+	}
+	var actual strings.Builder
+	if err := html.Render(&actual, node); err != nil {
+		return false, err
+	}
+	got, err := maintenanceMainDigest("<main>"+actual.String()+"</main>", false)
+	return err == nil && got == want, nil
 }
 
 // maintenanceMainDigest fingerprints the complete parsed main tree, including

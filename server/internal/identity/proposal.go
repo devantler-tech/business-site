@@ -16,6 +16,9 @@ import (
 var errProposalConflict = errors.New("proposal version or retry conflict")
 
 type projectProposal struct {
+	ContentSHA256                                                  string
+	ContentFormat                                                  int
+	Service                                                        proposalServiceTerms
 	Version, Expected                                              int
 	Key, Scope, Deliverables, Currency, OneTimeTerms, MonthlyTerms string
 	OneTimeMinor, MonthlyMinor                                     int64
@@ -62,7 +65,7 @@ func parseProposal(r *http.Request) (projectProposal, bool) {
 			return projectProposal{}, false
 		}
 		switch name {
-		case "submission_key", "expected_version", "scope", "deliverables", "currency", "one_time_dkk", "monthly_dkk", "one_time_terms", "monthly_terms", "csrf_token", "lang":
+		case "submission_key", "expected_version", "scope", "deliverables", "currency", "one_time_dkk", "monthly_dkk", "one_time_terms", "monthly_terms", "csrf_token", "lang", "service_kind", "appointment_minutes", "appointment_terms_en", "appointment_terms_da":
 		default:
 			return projectProposal{}, false
 		}
@@ -71,6 +74,11 @@ func parseProposal(r *http.Request) (projectProposal, bool) {
 	one, ook := proposalNumber(r.PostForm.Get("one_time_dkk"), 10000000)
 	monthly, mok := proposalNumber(r.PostForm.Get("monthly_dkk"), 10000000)
 	d := projectProposal{Key: r.PostForm.Get("submission_key"), Expected: version, Currency: r.PostForm.Get("currency"), OneTimeMinor: int64(one) * 100, MonthlyMinor: int64(monthly) * 100}
+	format, service, serviceOK := parseProposalService(r.PostForm)
+	if !serviceOK {
+		return projectProposal{}, false
+	}
+	d.ContentFormat, d.Service = format, service
 	for _, field := range []struct {
 		name   string
 		limit  int
@@ -87,12 +95,19 @@ func parseProposal(r *http.Request) (projectProposal, bool) {
 	return d, vok && ook && mok && d.Currency == "DKK" && opaqueRequestID.MatchString(d.Key)
 }
 
-const proposalColumns = `p.version,p.expected_version,p.submission_key,p.scope,p.deliverables,p.currency,p.one_time_minor,p.monthly_minor,p.one_time_terms,p.monthly_terms,p.prepared_at`
+const proposalServiceColumns = `p.content_format,COALESCE(p.service_kind,''),COALESCE(p.duration_minutes,0),COALESCE(p.appointment_terms_en,''),COALESCE(p.appointment_terms_da,''),COALESCE(p.appointment_terms_sha256,''),COALESCE(p.content_sha256,'')`
+
+const proposalColumns = `p.version,p.expected_version,p.submission_key,p.scope,p.deliverables,p.currency,p.one_time_minor,p.monthly_minor,p.one_time_terms,p.monthly_terms,p.prepared_at,` + proposalServiceColumns
 
 func scanProposal(row pgx.Row) (projectProposal, error) {
 	var d projectProposal
-	err := row.Scan(&d.Version, &d.Expected, &d.Key, &d.Scope, &d.Deliverables, &d.Currency, &d.OneTimeMinor, &d.MonthlyMinor, &d.OneTimeTerms, &d.MonthlyTerms, &d.Prepared)
+	err := row.Scan(proposalScanTargets(&d)...)
 	return d, err
+}
+
+func proposalScanTargets(d *projectProposal) []any {
+	return []any{&d.Version, &d.Expected, &d.Key, &d.Scope, &d.Deliverables, &d.Currency, &d.OneTimeMinor, &d.MonthlyMinor, &d.OneTimeTerms, &d.MonthlyTerms, &d.Prepared,
+		&d.ContentFormat, &d.Service.Kind, &d.Service.DurationMinutes, &d.Service.AppointmentTermsEN, &d.Service.AppointmentTermsDA, &d.Service.AppointmentTermsSHA256, &d.ContentSHA256}
 }
 
 // readProposals independently scopes history to the existing request/client and
@@ -135,6 +150,10 @@ func (s *Foundation) beginOperatorWrite(ctx context.Context, p Principal, id str
 // persistProposal serializes per-request revisions without requesting UPDATE on
 // immutable intake. Membership stays locked through commit, ordering revocation.
 func (s *Foundation) persistProposal(ctx context.Context, p Principal, id string, d projectProposal) error {
+	d, err := prepareProposalContract(d)
+	if err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	tx, client, err := s.beginOperatorWrite(ctx, p, id)
@@ -152,7 +171,7 @@ func (s *Foundation) persistProposal(ctx context.Context, p Principal, id string
 	}
 	saved, err := scanProposal(tx.QueryRow(ctx, `SELECT `+proposalColumns+` FROM portal_proposals p WHERE p.request_id=$1 AND p.client_id=$2 AND p.submission_key=$3`, id, client, d.Key))
 	if err == nil {
-		if saved.Expected != d.Expected || saved.Scope != d.Scope || saved.Deliverables != d.Deliverables || saved.Currency != d.Currency || saved.OneTimeMinor != d.OneTimeMinor || saved.MonthlyMinor != d.MonthlyMinor || saved.OneTimeTerms != d.OneTimeTerms || saved.MonthlyTerms != d.MonthlyTerms {
+		if saved.Expected != d.Expected || saved.Scope != d.Scope || saved.Deliverables != d.Deliverables || saved.Currency != d.Currency || saved.OneTimeMinor != d.OneTimeMinor || saved.MonthlyMinor != d.MonthlyMinor || saved.OneTimeTerms != d.OneTimeTerms || saved.MonthlyTerms != d.MonthlyTerms || saved.ContentFormat != d.ContentFormat || saved.Service != d.Service || saved.ContentSHA256 != d.ContentSHA256 {
 			return errProposalConflict
 		}
 	} else {
@@ -166,7 +185,9 @@ func (s *Foundation) persistProposal(ctx context.Context, p Principal, id string
 		if version != d.Expected || version >= 50 {
 			return errProposalConflict
 		}
-		if _, err = tx.Exec(ctx, `INSERT INTO portal_proposals(request_id,client_id,version,expected_version,submission_key,operator_issuer,operator_subject,scope,deliverables,currency,one_time_minor,monthly_minor,one_time_terms,monthly_terms) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, id, client, version+1, d.Expected, d.Key, p.issuer, p.subject, d.Scope, d.Deliverables, d.Currency, d.OneTimeMinor, d.MonthlyMinor, d.OneTimeTerms, d.MonthlyTerms); err != nil {
+		values := []any{id, client, version + 1, d.Expected, d.Key, p.issuer, p.subject, d.Scope, d.Deliverables, d.Currency, d.OneTimeMinor, d.MonthlyMinor, d.OneTimeTerms, d.MonthlyTerms}
+		values = append(values, proposalServiceValues(d)...)
+		if _, err = tx.Exec(ctx, `INSERT INTO portal_proposals(request_id,client_id,version,expected_version,submission_key,operator_issuer,operator_subject,scope,deliverables,currency,one_time_minor,monthly_minor,one_time_terms,monthly_terms,content_format,service_kind,duration_minutes,appointment_terms_en,appointment_terms_da,appointment_terms_sha256,content_sha256) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`, values...); err != nil {
 			return errTriageStorage
 		}
 	}

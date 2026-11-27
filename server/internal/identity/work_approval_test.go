@@ -42,6 +42,30 @@ func TestWorkApprovalRequiresSettledFundingNeverReversed(t *testing.T) {
 	}
 }
 
+func TestWorkApprovalRefusesNewMembershipForTypedAcceptor(t *testing.T) {
+	b := acceptedServiceQuoteFixture(t, proposalServiceSoftware)
+	placeEarlyStartOrder(t, b)
+	fake, cfg := newFakeNumina(t)
+	paidInvoiceOrder(t, b, fake, cfg)
+	if err := b.flags.SetProviderAndWait(t.Context(), memprovider.NewInMemoryProvider(workApprovalFlags())); err != nil {
+		t.Fatal(err)
+	}
+	operator := authenticateExistingMember(t, b, "proposal-operator")
+	savedApproval(t, b, operator)
+	for _, revoked := range []bool{true, false} {
+		tag, err := b.pool.Exec(t.Context(), `UPDATE portal_memberships SET revoked=$1 WHERE issuer=$2 AND subject='consent-client'`, revoked, b.f.issuer)
+		if err != nil || tag.RowsAffected() != 1 {
+			t.Fatalf("change the acceptor's membership incarnation: %v", err)
+		}
+	}
+	if _, valid, err := b.svc.currentWorkApproval(t.Context(), operator, proposalRequestID); err != nil || valid {
+		t.Fatalf("a new incarnation restored the selected approval: valid=%v err=%v", valid, err)
+	}
+	if _, err := b.svc.prepareWorkApproval(t.Context(), operator, proposalRequestID); !errors.Is(err, errProposalConflict) {
+		t.Fatalf("a new incarnation acquired fresh authority from old consent: %v", err)
+	}
+}
+
 // approvalFixture owns real storage, a TLS broker and independent SDK state.
 // Domain controls need no HTTP application or session store; native journeys
 // retain their separate browser fixtures and complete actor coverage.
