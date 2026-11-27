@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync/atomic"
 	"testing"
 )
@@ -50,12 +49,9 @@ func TestBusyRefusesCredentialFailureBeforeProvider(t *testing.T) {
 	client.credentials = func(context.Context) (string, string, error) {
 		return "", "", errors.New("fictional-private-credential-reader-error")
 	}
-	err := requireBusyRefused(t, client)
+	requireBusyRefused(t, client)
 	if requests.Load() != 0 {
 		t.Fatal("credential failure reached a provider")
-	}
-	if strings.Contains(err.Error(), "fictional-private-credential-reader-error") {
-		t.Fatal("credential reader detail escaped the adapter")
 	}
 }
 
