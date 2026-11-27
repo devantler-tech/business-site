@@ -63,8 +63,8 @@ func (b *browser) operatorSupportPage(w http.ResponseWriter, r *http.Request) {
 // renderSupport keeps the human operator's principal and participates in
 // operatorCall's final session check and mandatory audit before disclosure.
 func (b *browser) renderSupport(ctx context.Context, r *http.Request) ([]byte, error) {
-	authority, _ := ctx.Value(operatorAuthorityKey{}).(*operatorAuthority)
-	if authority == nil || authority.kind != "operator" || !b.foundation.supportReady(ctx) {
+	authority := humanOperatorAuthority(ctx)
+	if authority == nil || !b.foundation.supportReady(ctx) {
 		return nil, ErrDenied
 	}
 	var input struct {

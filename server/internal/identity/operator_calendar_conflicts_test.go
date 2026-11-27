@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 )
 
 const calendarConflictPath = "/portal/operator/calendar-conflicts"
@@ -67,32 +66,9 @@ func TestOperatorCalendarConflictsWithholdARevokedSession(t *testing.T) {
 	b := newOperatorBrowserFixture(t)
 	enableCalendarConflictFixture(t, b)
 	seedCalendarConflict(t, b)
-	pause := installCompletedRead(t, b, "FROM portal_appointment_calendar_observations observation")
-	resume := onceRelease(pause.release)
-	defer resume()
-	type response struct {
-		status int
-		body   string
-	}
-	finished := make(chan response, 1)
-	go func() {
-		status, body, _ := b.request("GET", calendarConflictPath, nil, "")
-		finished <- response{status, body}
-	}()
-	select {
-	case <-pause.blocked:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the calendar conflict query did not run")
-	}
-	revokeFixtureAccess(t.Context(), t, b, operatorSubject)
-	resume()
-	select {
-	case got := <-finished:
-		if got.status != http.StatusServiceUnavailable || strings.Contains(html.UnescapeString(got.body), "Northern & Digital") {
-			t.Fatalf("a revoked operator received calendar conflicts: %d", got.status)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the calendar conflict response did not finish")
+	status, body := requestAfterReadRevocation(t, b, "FROM portal_appointment_calendar_observations observation", calendarConflictPath, operatorSubject)
+	if status != http.StatusServiceUnavailable || strings.Contains(html.UnescapeString(body), "Northern & Digital") {
+		t.Fatalf("a revoked operator received calendar conflicts: status=%d", status)
 	}
 }
 

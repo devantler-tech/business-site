@@ -58,6 +58,42 @@ func installCompletedRead(t *testing.T, b *browserFixture, query string) *comple
 	return tracer
 }
 
+// requestAfterReadRevocation revokes access after the database has materialized
+// the result but before the private page can complete its authority checks.
+func requestAfterReadRevocation(t *testing.T, b *browserFixture, query, path, subject string) (int, string) {
+	t.Helper()
+	pause := installCompletedRead(t, b, query)
+	resume := onceRelease(pause.release)
+	defer resume()
+	type response struct {
+		status int
+		body   string
+	}
+	finished := make(chan response, 1)
+	go func() {
+		defer close(finished)
+		status, body, _ := b.request("GET", path, nil, "")
+		finished <- response{status: status, body: body}
+	}()
+	select {
+	case <-pause.blocked:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the page did not reach the private read checkpoint")
+	}
+	revokeFixtureAccess(t.Context(), t, b, subject)
+	resume()
+	select {
+	case got, ok := <-finished:
+		if !ok {
+			t.Fatal("the page request failed")
+		}
+		return got.status, got.body
+	case <-time.After(5 * time.Second):
+		t.Fatal("the page did not respond after revocation")
+		return 0, ""
+	}
+}
+
 // installReadProvider retains the actual flag SDK around a selected checkpoint.
 func installReadProvider(t *testing.T, b *browserFixture, key string, blockAt int32) *finalRequestProvider {
 	t.Helper()

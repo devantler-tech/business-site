@@ -134,6 +134,14 @@ type operatorAuthority struct {
 	support                      *supportMember
 }
 
+func humanOperatorAuthority(ctx context.Context) *operatorAuthority {
+	authority, _ := ctx.Value(operatorAuthorityKey{}).(*operatorAuthority)
+	if authority != nil && authority.kind == "operator" {
+		return authority
+	}
+	return nil
+}
+
 // operatorMutationAllowed re-evaluates the SDK before checking the exact original
 // authority. The supplied transaction avoids another pool acquisition while a
 // mutation holds identity locks. Call immediately before any effect or commit.

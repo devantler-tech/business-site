@@ -39,8 +39,8 @@ func (b *browser) operatorCalendarConflicts(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	status, result := b.operatorCall(r.WithContext(ctx), "calendar.conflicts.view", func(ctx context.Context, client string) ([]byte, error) {
-		authority, _ := ctx.Value(operatorAuthorityKey{}).(*operatorAuthority)
-		if authority == nil || authority.kind != "operator" {
+		authority := humanOperatorAuthority(ctx)
+		if authority == nil {
 			return nil, ErrDenied
 		}
 		current := authority.current
