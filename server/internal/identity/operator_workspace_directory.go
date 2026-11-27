@@ -44,13 +44,22 @@ func (b *browser) loadCustomerWorkspacePage(ctx context.Context, page *managemen
 		return errOperatorInput
 	}
 	switch view {
+	case "new":
+		page.View = view
+		page.Title, page.Intro = "New workspace", ""
+		if page.Lang == "da" {
+			page.Title = "Nyt arbejdsområde"
+		}
+		return nil
 	case "closed":
 		page.View = view
+		page.Intro = ""
 		return b.readClosedWorkspaces(ctx, page)
 	case "cleanup":
 		page.View = view
+		page.Intro = ""
 		return b.readStaleWorkspaces(ctx, page)
-	case "", "close", "remove":
+	case "", "close", "remove", "support":
 	default:
 		return errOperatorInput
 	}

@@ -20,6 +20,7 @@ import (
 
 	"golang.org/x/net/html"
 
+	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 	"github.com/devantler-tech/business-site/server/internal/webapp"
 )
 
@@ -52,7 +53,7 @@ func TestPortalLinkPreprocessor(t *testing.T) {
 		}
 		return
 	}
-	for name, want := range map[string]int{"portal.html": 24, "contact.html": 12, "requests.html": 38, "triage.html": 24, "work-review.html": 18, "operator.html": 26} {
+	for name, want := range map[string]int{"portal.html": 24, "contact.html": 12, "requests.html": 38, "triage.html": 24, "work-review.html": 18, "operator.html": 30} {
 		t.Run(name, func(t *testing.T) {
 			pages, err := renderedLinkPages(name)
 			if err != nil || len(pages) != want {
@@ -303,14 +304,15 @@ func renderedLinkPagesFor(name string, templates *template.Template, b *browser)
 					return nil, err
 				}
 			}
-			for _, view := range []string{"workspace", "close", "remove", "closed", "cleanup", "cleanup-confirm"} {
+			for _, view := range []string{"workspace", "close", "remove", "closed", "cleanup", "cleanup-confirm", "new", "support"} {
 				err := add(customerWorkspacePath, func(w *httptest.ResponseRecorder, r *http.Request) error {
 					d := b.operatorData(r, "operator-customers", "fictional-operator")
 					d.CSRF = "fictional-csrf"
-					member := workspaceMember{Subject: "fictional-member", Role: "client"}
+					member := workspaceMember{Subject: "fictional-member", Role: "client", Person: customeridentity.Profile{Name: "Ada Example", Email: "ada@example.test"}}
 					detail := workspaceView{ID: "fictional-workspace", Name: "Fictional workspace", Manageable: true, Members: []workspaceMember{member}}
-					data := managementPage{pageData: d, View: view, Detail: &detail, SelectedMember: &member, SupportAvailable: true,
-						Invitations: []pendingInvitation{{Subject: "fictional-invitation", Workspace: detail.ID, Expires: request.Submitted}},
+					d.Title, d.Intro = detail.Name, ""
+					data := managementPage{pageData: d, View: view, Detail: &detail, SelectedMember: &member, SupportAvailable: true, SupportMembers: true,
+						Invitations: []pendingInvitation{{Subject: "fictional-invitation", Workspace: detail.ID, Expires: request.Submitted, Person: customeridentity.Profile{Name: "Robin Example", Email: "robin@example.test"}}},
 						Stale:       []staleWorkspaceInvitations{{Workspace: detail.ID, Name: detail.Name, Count: 1}},
 					}
 					return templates.ExecuteTemplate(w, name, cleanupPage{managementPage: data, CleanupCount: 1, CleanupFingerprint: "fictional-preview"})
@@ -694,7 +696,7 @@ func registeredLinkTarget(mux *http.ServeMux, method string, target *url.URL) er
 			return errors.New("invalid target workspace")
 		case "view":
 			switch values[0] {
-			case "closed", "cleanup", "cleanup-confirm", "close", "remove":
+			case "closed", "cleanup", "cleanup-confirm", "close", "remove", "new", "support":
 				if pattern == "GET /portal/operator/customers" {
 					continue
 				}

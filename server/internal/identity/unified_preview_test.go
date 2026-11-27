@@ -38,7 +38,7 @@ func checkOperatorWorkspaceActions(t *testing.T, b *browserFixture, previewAvail
 			}
 		}
 		status, page, _ := b.request(http.MethodGet, invitePath, nil, "")
-		if status != http.StatusOK || !strings.Contains(page, `action="/operator/api/invitations?lang=`+lang+`&amp;focus=workspace"`) && !strings.Contains(page, "#new-workspace") {
+		if status != http.StatusOK || !strings.Contains(page, `action="/operator/api/invitations?lang=`+lang+`&amp;focus=workspace"`) && !strings.Contains(page, "&amp;view=new") {
 			t.Fatalf("operator could not reach the invitation form (%s), status=%d", lang, status)
 		}
 	}

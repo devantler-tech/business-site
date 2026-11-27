@@ -23,7 +23,7 @@
   </form>
   {{else}}
   <p>{{if eq .Lang "da"}}Opret et arbejdsområde, før du inviterer en kunde.{{else}}Create a workspace before inviting a customer.{{end}}</p>
-  <a class="button" href="{{root}}/operator/customers?lang={{.Lang}}#new-workspace">{{if eq .Lang "da"}}Opret arbejdsområde{{else}}Create workspace{{end}}</a>
+  <a class="button" href="{{root}}/operator/customers?lang={{.Lang}}&amp;view=new">{{if eq .Lang "da"}}Opret arbejdsområde{{else}}Create workspace{{end}}</a>
   {{end}}
 </section>
 {{end}}
@@ -35,6 +35,8 @@
   {{else if eq .View "closed"}}{{template "operator-closed-workspaces" .}}
   {{else if eq .View "cleanup"}}{{template "operator-stale-workspaces" .}}
   {{else if eq .View "cleanup-confirm"}}{{template "operator-cleanup-confirm" .}}
+  {{else if eq .View "new"}}{{template "operator-workspace-create" .}}
+  {{else if eq .View "support"}}{{template "operator-workspace-support" .}}
   {{else}}{{template "operator-workspace-list" .}}{{end}}
 {{end}}
 
@@ -42,7 +44,7 @@
 <section class="operator-panel operator-workspace-directory" aria-labelledby="operator-workspaces">
   <div class="operator-panel-heading">
     <h2 id="operator-workspaces">{{if eq .Lang "da"}}Aktive arbejdsområder{{else}}Active workspaces{{end}}</h2>
-    <a class="operator-secondary" href="#new-workspace">{{if eq .Lang "da"}}Nyt arbejdsområde{{else}}New workspace{{end}}</a>
+    <a class="operator-secondary" href="{{root}}/operator/customers?lang={{.Lang}}&amp;view=new">{{if eq .Lang "da"}}Nyt arbejdsområde{{else}}New workspace{{end}}</a>
   </div>
   <form class="operator-workspace-search" role="search" method="get" action="{{root}}/operator/customers">
     <input type="hidden" name="lang" value="{{.Lang}}">
@@ -78,22 +80,30 @@
     <a href="{{root}}/operator/customers?lang={{.Lang}}&amp;view=cleanup">{{if eq .Lang "da"}}Ryd op i invitationer{{else}}Clean up invitations{{end}}</a>
   </div>
 </section>
-<section id="new-workspace" class="operator-panel operator-workspace-form" aria-labelledby="operator-create">
-  <h2 id="operator-create">{{if eq .Lang "da"}}Nyt arbejdsområde{{else}}New workspace{{end}}</h2>
+{{end}}
+
+{{define "operator-workspace-create"}}
+<div class="operator-panel operator-workspace-form">
   <form class="operator-form" method="post" action="{{root}}/operator/api/workspaces?lang={{.Lang}}">
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
     <div><label for="workspace-name">{{if eq .Lang "da"}}Arbejdsområdets navn{{else}}Workspace name{{end}}</label>
       <input id="workspace-name" name="display_name" required maxlength="100"></div>
-    <button type="submit">{{if eq .Lang "da"}}Opret arbejdsområde{{else}}Create workspace{{end}}</button>
+    <div class="operator-actions">
+      <button type="submit">{{if eq .Lang "da"}}Opret arbejdsområde{{else}}Create workspace{{end}}</button>
+      {{template "operator-back-to-workspaces" .}}
+    </div>
   </form>
-</section>
+</div>
 {{end}}
 
 {{define "operator-workspace-detail"}}
 {{$workspace := .Detail.ID}}
 <div class="operator-detail-bar">
   {{template "operator-back-to-workspaces" .}}
-  {{if .Detail.Manageable}}<a class="button" href="{{root}}/operator/invitations/new?lang={{.Lang}}&amp;workspace={{$workspace}}">{{if eq .Lang "da"}}Inviter et medlem{{else}}Invite member{{end}}</a>{{end}}
+  <div class="operator-actions">
+    {{if and .SupportAvailable .SupportMembers}}<a class="operator-secondary" href="{{root}}/operator/customers?lang={{.Lang}}&amp;workspace={{$workspace}}&amp;view=support">{{if eq .Lang "da"}}Support{{else}}Support view{{end}}</a>{{end}}
+    {{if .Detail.Manageable}}<a class="button" href="{{root}}/operator/invitations/new?lang={{.Lang}}&amp;workspace={{$workspace}}">{{if eq .Lang "da"}}Inviter et medlem{{else}}Invite member{{end}}</a>{{end}}
+  </div>
 </div>
 <section class="operator-panel operator-workspace-directory" aria-labelledby="manage-members">
   <div class="operator-panel-heading">
@@ -151,7 +161,6 @@
   </ul>
   {{else}}<p>{{if eq .Lang "da"}}Ingen afventende invitationer.{{else}}No pending invitations.{{end}}</p>{{end}}
 </section>
-{{if .SupportAvailable}}{{template "operator-workspace-support" .}}{{end}}
 {{if .Detail.Manageable}}
 <section class="operator-panel operator-workspace-form" aria-labelledby="workspace-settings">
   <h2 id="workspace-settings">{{if eq .Lang "da"}}Indstillinger{{else}}Workspace settings{{end}}</h2>
@@ -171,7 +180,10 @@
 
 {{define "operator-workspace-support"}}
 <section class="operator-panel operator-workspace-form" aria-labelledby="workspace-support">
-  <h2 id="workspace-support">{{if eq .Lang "da"}}Supportvisning{{else}}Support view{{end}}</h2>
+  <div class="operator-panel-heading">
+    <h2 id="workspace-support">{{if eq .Lang "da"}}Supportvisning{{else}}Support view{{end}}</h2>
+    {{template "operator-back-to-workspace" .}}
+  </div>
   <form class="operator-form" method="post" action="{{root}}/operator/support?lang={{.Lang}}">
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
     <input type="hidden" name="workspace" value="{{.Detail.ID}}">

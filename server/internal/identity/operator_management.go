@@ -33,6 +33,7 @@ type managementPage struct {
 	Workspaces       []workspaceView
 	Invitations      []pendingInvitation
 	SupportAvailable bool
+	SupportMembers   bool
 	View, Query      string
 	Detail           *workspaceView
 	SelectedMember   *workspaceMember
@@ -70,12 +71,18 @@ func (b *browser) operatorCustomersPage(w http.ResponseWriter, r *http.Request) 
 				return !workspaceMatchesSearch(workspace, data.Invitations, data.Query)
 			})
 		}
-		if data.View == "workspace" || data.View == "close" || data.View == "remove" {
+		if len(data.Workspaces) == 1 && (data.View == "workspace" || data.View == "close" || data.View == "remove" || data.View == "support") {
 			b.identifyDirectoryPeople(ctx, &data, authority.principal.subject)
 			data.Detail = &data.Workspaces[0]
 			data.Title = data.Detail.Name
 			data.Intro = ""
 			data.SupportAvailable = b.foundation.supportReady(ctx)
+			data.SupportMembers = slices.ContainsFunc(data.Detail.Members, func(member workspaceMember) bool {
+				return member.Role == "client" && !member.Revoked
+			})
+			if data.View == "support" && (!data.SupportAvailable || !data.SupportMembers) {
+				return nil, errOperatorInput
+			}
 		}
 		if data.View == "remove" {
 			subject := query.Get("member")

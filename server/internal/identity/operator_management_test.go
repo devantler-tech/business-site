@@ -165,7 +165,8 @@ func TestOperatorManagementPageUsesNativeActions(t *testing.T) {
 		}
 		_, detail, _ := b.request("GET", "/portal/operator/customers?lang="+lang+"&workspace=client-a", nil, "")
 		_, closePage, _ := b.request("GET", "/portal/operator/customers?lang="+lang+"&workspace=client-a&view=close", nil, "")
-		for action, page := range map[string]string{"/invitations/revoke": detail, "/workspaces": body, "/workspaces/rename": detail, "/workspaces/delete": closePage} {
+		_, createPage, _ := b.request("GET", "/portal/operator/customers?lang="+lang+"&view=new", nil, "")
+		for action, page := range map[string]string{"/invitations/revoke": detail, "/workspaces": createPage, "/workspaces/rename": detail, "/workspaces/delete": closePage} {
 			if !strings.Contains(page, `method="post" action="`+operatorAPIRoot+action+`?lang=`+lang) || !csrfInput.MatchString(page) {
 				t.Fatalf("%s native action missing in %s", action, lang)
 			}
