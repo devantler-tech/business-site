@@ -76,6 +76,9 @@ func (s *Foundation) confirmPaidAppointment(ctx context.Context, p Principal, re
 		}); err != nil {
 			return appointmentHold{}, err
 		}
+		if err := holds.queueCalendarCreation(ctx, tx, selection.Reservation, selection.Revision); err != nil {
+			return appointmentHold{}, err
+		}
 	}
 	if err := s.commitPaidAppointment(ctx, p, tx, order.Collection, hold); err != nil {
 		return appointmentHold{}, err

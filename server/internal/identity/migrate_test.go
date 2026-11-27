@@ -71,7 +71,9 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 // runtime grants or a production rollback. Remove new dependent tables before v13.
 func rewindAppointmentReservationsFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	if _, err := pool.Exec(t.Context(), `DROP TRIGGER portal_paid_appointment_consumer ON portal_service_consumers;
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_appointment_calendar_intents;
+ DROP FUNCTION portal_guard_appointment_calendar_intent();
+ DROP TRIGGER portal_paid_appointment_consumer ON portal_service_consumers;
  DROP FUNCTION portal_guard_paid_appointment_consumer();
  ALTER TABLE portal_orders DROP COLUMN appointment_reservation_id,DROP COLUMN appointment_revision;
  ALTER TABLE portal_mail_outbox
@@ -84,7 +86,7 @@ func rewindAppointmentReservationsFixture(t *testing.T, pool *pgxpool.Pool) {
       AND producer_format IN (1,2) AND kind='order-confirmation'));
  DROP TABLE portal_appointment_introduction_cancellations,portal_appointment_introductions,portal_appointment_revisions,portal_appointment_reservations;
  DROP FUNCTION portal_guard_appointment_introduction_cancellation(),portal_guard_appointment_introduction(),portal_guard_appointment_revision();
- DELETE FROM portal_schema_version WHERE version=34`); err != nil {
+ DELETE FROM portal_schema_version WHERE version IN (34,35)`); err != nil {
 		t.Fatal("historical fixture could not reconstruct the pre-reservation schema", err)
 	}
 	for _, guard := range []string{"visibility", "order", "confirmation"} {

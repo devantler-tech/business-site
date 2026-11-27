@@ -87,8 +87,11 @@ A verified mismatch in the resource or its version signals a conflict that requi
 operator resolution. A provider failure, invalid validator or unchanged prior revision
 after a write leaves the outcome unconfirmed. These results carry no provider content.
 Synthetic tests exercise the paths while private provider setup remains separate.
-The intent must retain a calendar binding captured from the normalized HTTPS
-host, selected collection and configured credential account before the first attempt.
+When a destination binding is supplied, the first booking confirmation records
+one calendar creation intent in the same database transaction. The record keeps
+an independent event key, the confirmed slot revision and a binding captured
+from the normalized HTTPS host, selected collection and configured credential
+account. Recording an intent makes no provider request.
 Retries carry that same binding across restarts and later revisions. Moving the
 calendar or changing accounts requires operator resolution. Rotating the same
 account's password preserves the binding, and each request still uses the

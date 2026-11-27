@@ -59,6 +59,7 @@ func TestAppointmentIntroductionCommitsOneFreshHoldPerClient(t *testing.T) {
 	if err != nil || !saved.IntroductionConfirmed || saved.Revision != 1 || !saved.Slot.Start.Equal(slot.Start) {
 		t.Fatal("the current free introduction was not committed", err)
 	}
+	requireNoCalendarCreation(t, pool, id)
 	if err := hold(id, client, 1, next); !errors.Is(err, errProposalConflict) {
 		t.Fatalf("a provisional reschedule changed the committed introduction: %v", err)
 	}
