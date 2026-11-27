@@ -301,6 +301,12 @@ future work service must authorize selection, renewal, release and downstream
 effects before it discloses a committed fence. Restore verification must prove
 that a fence observed before recovery cannot authorize work afterward.
 
+v41 records an account-removal deadline when an operator permanently removes
+an individual customer or closes their workspace. The record must cite the
+client deletion event from the same transaction, with its database timestamp.
+The deadline is 30 days after that event. Temporary suspension remains a
+membership update and is reversible.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

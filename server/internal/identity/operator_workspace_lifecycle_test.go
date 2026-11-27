@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func operatorWithWorkspaceCustomer(t *testing.T) *browserFixture {
@@ -43,16 +45,57 @@ func TestOperatorRenamesWorkspaceAndRemovesItsMember(t *testing.T) {
 	if status, _, _ := b.request("POST", operatorAPIRoot+"/members/remove", remove, b.site.URL); status != http.StatusOK {
 		t.Fatalf("remove member: status %d", status)
 	}
-	var removed, recorded bool
+	var removed, deadline bool
 	if err := b.pool.QueryRow(t.Context(), `SELECT
  NOT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2),
- EXISTS (SELECT 1 FROM portal_membership_transitions WHERE issuer=$1 AND subject=$2 AND client_id='fixture-workspace' AND kind='delete')`,
-		b.f.issuer, customerSubject).Scan(&removed, &recorded); err != nil || !removed || !recorded {
-		t.Fatalf("removal did not preserve its history while ending membership: %v", err)
+ EXISTS (SELECT 1 FROM portal_customer_account_closures c
+ JOIN portal_membership_transitions h ON h.incarnation=c.membership_event
+ WHERE h.issuer=$1 AND h.subject=$2 AND h.client_id='fixture-workspace' AND h.kind='delete'
+ AND c.closed_at=h.recorded_at AND c.remove_by=c.closed_at+interval '720 hours')`,
+		b.f.issuer, customerSubject).Scan(&removed, &deadline); err != nil || !removed || !deadline {
+		t.Fatalf("member removal did not commit its exact account-removal deadline: %v", err)
 	}
 	b.signOut()
 	b.as(customerSubject)
 	b.refused(b.start())
+}
+
+func TestOperatorMemberRemovalRequiresItsAccountDeadline(t *testing.T) {
+	b := operatorWithWorkspaceCustomer(t)
+	ctx := t.Context()
+	db := migrationDB(t)
+	if _, err := db.Exec(ctx, `REVOKE INSERT ON portal_customer_account_closures FROM portal_runtime`); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if _, err := db.Exec(ctx, `GRANT INSERT ON portal_customer_account_closures TO portal_runtime`); err != nil {
+			t.Error(err)
+		}
+	}()
+	form := url.Values{"workspace": {"fixture-workspace"}, "subject": {customerSubject}, "csrf_token": {b.csrf("/portal/")}}
+	status, _, _ := b.request("POST", operatorAPIRoot+"/members/remove", form, b.site.URL)
+	var active bool
+	if err := b.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM portal_memberships
+ WHERE issuer=$1 AND subject=$2 AND client_id='fixture-workspace' AND NOT revoked)`,
+		b.f.issuer, customerSubject).Scan(&active); err != nil || !active || status != http.StatusServiceUnavailable {
+		t.Fatalf("the member removal could commit without its account record: status=%d error=%v", status, err)
+	}
+}
+
+func TestCustomerAccountDeadlineRejectsAPreviousRemoval(t *testing.T) {
+	b := operatorWithWorkspaceCustomer(t)
+	ctx := t.Context()
+	if _, err := b.pool.Exec(ctx, `DELETE FROM portal_memberships WHERE issuer=$1 AND subject=$2`,
+		b.f.issuer, customerSubject); err != nil {
+		t.Fatal(err)
+	}
+	_, err := b.pool.Exec(ctx, `INSERT INTO portal_customer_account_closures(membership_event,closed_at,remove_by)
+ SELECT incarnation,recorded_at,recorded_at+interval '720 hours' FROM portal_membership_transitions
+ WHERE issuer=$1 AND subject=$2 AND kind='delete'`, b.f.issuer, customerSubject)
+	var databaseError *pgconn.PgError
+	if !errors.As(err, &databaseError) || databaseError.Code != "23514" {
+		t.Fatalf("the existing deletion could be admitted as a new removal: %v", err)
+	}
 }
 
 func TestOperatorDeletesWorkspaceAndClosesItsInvitations(t *testing.T) {

@@ -128,6 +128,11 @@ func TestOperatorMemberAccessTransitions(t *testing.T) {
 	if status, _, _ := b.request("GET", "/portal/", nil, ""); status != http.StatusOK {
 		t.Fatal("reactivated customer could not sign in", status)
 	}
+	var scheduled bool
+	err := b.pool.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM portal_customer_account_closures)`).Scan(&scheduled)
+	if err != nil || scheduled {
+		t.Fatalf("reversible access changes left an account-removal deadline: %v", err)
+	}
 }
 
 // TestOperatorProviderFailureLeavesPortalClosed catches a network/API failure

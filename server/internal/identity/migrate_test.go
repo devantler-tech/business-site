@@ -93,7 +93,7 @@ func rewindAppointmentReservationsFixture(t *testing.T, pool *pgxpool.Pool) {
       AND producer_format IN (1,2) AND kind='order-confirmation'));
  DROP TABLE portal_appointment_introduction_cancellations,portal_appointment_introductions,portal_appointment_revisions,portal_appointment_reservations;
  DROP FUNCTION portal_guard_appointment_introduction_cancellation(),portal_guard_appointment_introduction(),portal_guard_appointment_revision();
- DELETE FROM portal_schema_version WHERE version IN (34,35,36,37,38,39,40)`); err != nil {
+ DELETE FROM portal_schema_version WHERE version IN (34,35,36,37,38,39,40,41)`); err != nil {
 		t.Fatal("historical fixture could not reconstruct the pre-reservation schema", err)
 	}
 	for _, guard := range []string{"visibility", "order", "confirmation"} {
