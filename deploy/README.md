@@ -37,9 +37,11 @@ newly tested production image as an explicit argument, retaining the rendered
 arguments and runtime restrictions. Neither mode verifies a registry signature;
 that remains mandatory in the signed publisher's independent receipt check.
 
-CI renders the production overlay and checks its WebApp, migration Job and
-retention CronJob using the pinned Platform admission policies and Kyverno
-engine. Each workload has an explicit refusal control for creation and updates.
+CI renders the production overlay and checks its WebApp, migration Job,
+retention CronJob, routes, SecretStore, ExternalSecrets and network policy with
+the pinned Platform policies and Kyverno engine. The Tenant graph supplies the
+namespace labels. Each protected resource has an explicit refusal control for
+creation and updates.
 
 The package uses two replicas (the validator permits two or three), a
 half-core/256 MiB limit and the real `/healthz` probe, plus an application-owned

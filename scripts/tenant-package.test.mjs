@@ -13,11 +13,27 @@ const checker = path.join(root, "scripts/check-tenant-package.mjs");
 const render = (directory = path.join(root, "deploy")) =>
   execFileSync("kubectl", ["kustomize", directory], { encoding: "utf8", timeout: 15000 });
 const check = (input) => spawnSync(process.execPath, [checker], { input, encoding: "utf8", timeout: 5000 });
-const admissionFixtures = (input) => spawnSync(
-  process.execPath,
-  [path.join(root, "scripts/tenant-admission-fixtures.mjs")],
-  { input, encoding: "utf8", timeout: 5000 },
-);
+const tenantFixtureLabels = {
+  "app.kubernetes.io/managed-by": "kro",
+  "fixture.example/namespace-label": "from-graph",
+};
+function admissionFixtures(input, labels = tenantFixtureLabels) {
+  const directory = mkdtempSync(path.join(tmpdir(), "tenant-admission-input-"));
+  try {
+    const graph = path.join(directory, "tenant-graph.yaml");
+    writeFileSync(graph, yaml.dump({
+      kind: "ResourceGraphDefinition",
+      spec: { schema: { kind: "Tenant" }, resources: [{
+        id: "tenantNamespace",
+        template: { apiVersion: "v1", kind: "Namespace", metadata: { labels } },
+      }] },
+    }));
+    return spawnSync(process.execPath, [path.join(root, "scripts/tenant-admission-fixtures.mjs"), graph],
+      { input, encoding: "utf8", timeout: 5000 });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
 
 test("the real Kustomize package renders deterministically and admits the public runtime", () => {
   let first;
@@ -38,7 +54,8 @@ test("admission uses each rendered workload and an isolated refusal control", ()
   const documents = yaml.loadAll(source);
   const result = admissionFixtures(source);
   assert.equal(result.status, 0, result.stderr);
-  const fixtures = result.stdout.trim().split("\n").map((line) => JSON.parse(line));
+  const fixtures = result.stdout.trim().split("\n").map((line) => JSON.parse(line))
+    .filter((fixture) => /^(WebApp|Job|CronJob)-/.test(fixture.label));
   assert.equal(fixtures.length, 12);
   assert.equal(new Set(fixtures.map((f) => f.label)).size, 12);
   for (const [kind, policy, deny] of [
@@ -70,11 +87,59 @@ test("admission uses each rendered workload and an isolated refusal control", ()
   }
 });
 
+test("direct tenant resources carry their rendered objects and actual namespace policy context", () => {
+  const source = render();
+  const documents = yaml.loadAll(source);
+  const result = admissionFixtures(source);
+  assert.equal(result.status, 0, result.stderr);
+  const fixtures = result.stdout.trim().split("\n").map((line) => JSON.parse(line));
+  assert.equal(fixtures.length, 48);
+  assert.equal(new Set(fixtures.map((fixture) => fixture.label)).size, 48);
+  const namespace = { apiVersion: "v1", kind: "Namespace", metadata: {
+    name: "business-site", labels: tenantFixtureLabels,
+  } };
+  for (const [kind, policy, count, field] of [
+    ["HTTPRoute", "restrict-tenant-route-hostnames", 2, (object) => object.spec.hostnames],
+    ["HTTPRoute", "restrict-webapp-child-ownership", 2, (object) => object.metadata.labels],
+    ["ExternalSecret", "restrict-tenant-secret-stores", 3, (object) => object.spec.secretStoreRef.kind],
+    ["SecretStore", "restrict-tenant-secret-stores", 1, (object) =>
+      object.spec.provider.vault.auth.kubernetes.serviceAccountRef.namespace],
+    ["CiliumNetworkPolicy", "restrict-tenant-network-policies", 1, (object) => object.spec.ingress],
+  ]) {
+    const targets = documents.filter((doc) => doc?.kind === kind);
+    assert.equal(targets.length, count);
+    for (const object of targets) {
+      for (const operation of ["CREATE", "UPDATE"]) {
+        const matches = fixtures.filter((f) => f.policy === policy && f.operation === operation &&
+          f.object.kind === kind && f.object.metadata.name === object.metadata.name);
+        const admitted = matches.find((f) => f.expected === "pass");
+        const refused = matches.find((f) => f.expected === "fail");
+        assert.equal(matches.length, 2);
+        assert.deepEqual(admitted.object, object, policy);
+        assert.notDeepEqual(field(refused.object), field(object), policy);
+        for (const request of matches) {
+          assert.deepEqual(request.namespaces, [namespace]);
+          assert.equal(request.actor, "system:serviceaccount:business-site:business-site");
+          if (operation === "UPDATE") assert.equal(request.oldObject.metadata.name, object.metadata.name);
+        }
+      }
+    }
+  }
+});
+
+test("direct admission refuses a graph without the tenant namespace selector", () => {
+  const result = admissionFixtures(render(), { "app.kubernetes.io/managed-by": "fixture" });
+  assert.equal(result.status, 1, result.stderr);
+  assert.equal(result.stdout, "", "invalid namespace context must not emit admission requests");
+  assert.match(result.stderr, /admission: invalid tenant namespace template/);
+});
+
 test("admission refuses incomplete, ambiguous, or misdirected workload input", () => {
   const source = yaml.loadAll(render());
   const invalid = [
     source.filter((doc) => doc?.kind !== "Job"),
     [...source, source.find((doc) => doc?.kind === "CronJob")],
+    source.filter((doc) => doc?.metadata?.name !== "business-site-portal"),
   ];
   for (const [kind, field, value] of [
     ["WebApp", "apiVersion", "different.example/v1"],
@@ -91,7 +156,7 @@ test("admission refuses incomplete, ambiguous, or misdirected workload input", (
     const result = admissionFixtures(docs.map((doc) => yaml.dump(doc)).join("---\n"));
     assert.equal(result.status, 1, result.stderr);
     assert.equal(result.stdout, "", "invalid input must not emit a partial admission set");
-    assert.match(result.stderr, /admission: (expected one|unexpected identity)/);
+    assert.match(result.stderr, /admission: (missing or duplicate|unexpected identity)/);
   }
 });
 
@@ -513,12 +578,21 @@ function assertAdmissionCI(workflow) {
   assert.match(source.uses, /^actions\/checkout@[0-9a-f]{40}$/);
   assert.match(source.with.ref, /^[0-9a-f]{40}$/);
   assert.equal(source.with["persist-credentials"], false);
+  const sourceFiles = source.with["sparse-checkout"].split("\n");
+  assert.ok(sourceFiles.includes("/k8s/bases/infrastructure/resource-graph-definitions/tenant/resource-graph-definition.yaml"));
   const check = job.steps.find((step) => step.id === "tenant-admission");
   assert.equal(check.if, undefined);
   assert.equal(check["continue-on-error"], undefined);
   assert.equal(check.shell, "bash");
-  assert.match(check.run, /kubectl kustomize deploy \| node scripts\/tenant-admission-fixtures\.mjs \|/);
+  assert.match(check.run, /kubectl kustomize deploy \| node scripts\/tenant-admission-fixtures\.mjs "\$tenant_graph" \|/);
   assert.match(check.run, /go -C \.tenant-policy-source\/scripts\/tests\/tenant-webapp-admission run -mod=readonly \./);
+  for (const policy of [
+    "restrict-tenant-webapps", "validate-pod-security", "restrict-tenant-route-hostnames",
+    "restrict-webapp-child-ownership", "restrict-tenant-secret-stores", "restrict-tenant-network-policies",
+  ]) {
+    assert.ok(sourceFiles.includes(`/k8s/bases/infrastructure/cluster-policies/best-practices/${policy}.yaml`));
+    assert.ok(check.run.includes(`"$policies/${policy}.yaml"`));
+  }
   for (const aggregate of [workflow.jobs.validation, workflow.jobs.status]) {
     assert.ok(aggregate.needs.includes("test-tenant-admission"));
     const observer = aggregate.steps.find((step) => step.with?.["job-results"]);
