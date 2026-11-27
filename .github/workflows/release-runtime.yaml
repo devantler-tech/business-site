@@ -4,10 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Nonpublishing credential preflight, or an explicitly enabled release
+        description: Check credentials and provenance, or release the confirmed commit
         type: choice
         options: [dry-run, release]
         default: dry-run
+      expected_source:
+        description: Exact signed main commit for release mode
+        type: string
+        required: false
 
 permissions: {}
 
@@ -44,8 +48,8 @@ jobs:
         id: admit
         env:
           GH_TOKEN: ${{ github.token }}
-          RUNTIME_PUBLICATION_ENABLED: ${{ vars.RUNTIME_PUBLICATION_ENABLED }}
           RELEASE_MODE: ${{ inputs.mode }}
+          RUNTIME_PUBLICATION_ENABLED: ${{ vars.RUNTIME_PUBLICATION_ENABLED }}
         run: bash scripts/admit-runtime-release.sh
       - name: Setup Cosign
         uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
