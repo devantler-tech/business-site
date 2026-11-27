@@ -8,14 +8,14 @@
 {{if .Appointments}}
 <ol class="request-list" role="list">
 {{range .Appointments}}<li>
-  <div><strong>{{.Date}}</strong>
-    <span class="appointment-times"><time datetime="{{.Start}}">{{.StartTime}}</time>–<time datetime="{{.End}}">{{.EndTime}}</time></span>
+  <div><strong>{{.Service}}</strong>
+    <span class="appointment-times">{{.Date}} · <time datetime="{{.Start}}">{{.StartTime}}</time>–<time datetime="{{.End}}">{{.EndTime}}</time></span>
   </div>
   <span>{{.Status}}</span>
 </li>{{end}}
 </ol>
 {{if .AppointmentsLimited}}<p>{{if eq .Lang `da`}}Viser 20 aftaler.{{else}}Showing 20 appointments.{{end}}</p>{{end}}
-{{else}}<p>{{if eq .Lang `da`}}Du har endnu ingen indledende samtaler.{{else}}You have no introductory appointments yet.{{end}}</p>{{end}}
+{{else}}<p>{{if eq .Lang `da`}}Du har endnu ingen aftaler.{{else}}You have no appointments yet.{{end}}</p>{{end}}
 <p><a href="{{root}}/?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til kundeportalen{{else}}Back to the client portal{{end}}</a></p>
 {{else if eq .Kind `no-access`}}<p role="alert">{{if eq .Lang `da`}}Portalen kræver en invitation, og den konto, du loggede ind med, er ikke inviteret. Kontakt Devantler Tech, hvis du havde ventet adgang.{{else}}The portal is invitation-only, and the account you signed in with has not been invited. Contact Devantler Tech if you expected access.{{end}}</p>
 {{else if or (eq .Kind `sign-out-handoff`) (eq .Kind `broker-handoff`)}}<p>{{if eq .Kind `sign-out-handoff`}}{{if eq .Lang `da`}}Du bliver logget ud.{{else}}Signing you out.{{end}}{{else if eq .Lang `da`}}Du bliver sendt videre til dit login.{{else}}Continuing to your sign-in.{{end}}</p><a id="broker-continue" href="{{.BrokerURL}}">{{if ne .Kind `sign-out-handoff`}}{{.Action}}{{else if eq .Lang `da`}}Fortsæt{{else}}Continue{{end}}</a>
