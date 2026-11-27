@@ -31,16 +31,21 @@ func (c *Client) writeOwnedEvent(ctx context.Context, resource, uid string, next
 	if stamp.IsZero() || ctx.Err() != nil {
 		return OwnedEventObservation{}, booking.ErrUnavailable
 	}
+	c, err := c.forOwnedCalendar(ctx, next.CalendarBinding)
+	if err != nil {
+		return OwnedEventObservation{}, err
+	}
 	client, closeConnection, err := c.sourceClient(ctx)
 	if err != nil {
 		return OwnedEventObservation{}, err
 	}
 	defer closeConnection()
 	targetFound := false
-	current, err := c.readMatchingOwnedEvent(ctx, client, resource, func(data []byte) bool {
+	matchesRevision := func(data []byte) bool {
 		targetFound = matchesOwnedEvent(data, uid, next)
 		return targetFound || (prior != nil && matchesOwnedEvent(data, uid, *prior))
-	})
+	}
+	current, err := c.readMatchingOwnedEvent(ctx, client, resource, matchesRevision)
 	if err != nil {
 		return OwnedEventObservation{}, err
 	}
@@ -48,41 +53,51 @@ func (c *Client) writeOwnedEvent(ctx context.Context, resource, uid string, next
 		return current, nil
 	}
 	if targetFound || (prior != nil && (!current.Exists || current.ETag != expectedTag)) {
-		return OwnedEventObservation{}, booking.ErrUnavailable
+		return OwnedEventObservation{}, ErrOwnedEventConflict
 	}
 	options := webdav.PutCalendarObjectOptions{IfNoneMatch: "*"}
 	if prior != nil {
 		options = webdav.PutCalendarObjectOptions{IfMatch: dav.ConditionalMatch(expectedTag)}
 	}
-	if !c.putOwnedEvent(ctx, client, resource, newOwnedCalendarEvent(uid, stamp, next), options) {
+	if err := c.putOwnedEvent(ctx, client, resource, newOwnedCalendarEvent(uid, stamp, next), options); err != nil {
+		return OwnedEventObservation{}, err
+	}
+	current, err = c.readMatchingOwnedEvent(ctx, client, resource, matchesRevision)
+	if err != nil {
+		return OwnedEventObservation{}, err
+	}
+	if !current.Exists || (!targetFound && current.ETag == expectedTag) {
 		return OwnedEventObservation{}, booking.ErrUnavailable
 	}
-	current, err = c.readOwnedEvent(ctx, client, resource, uid, next)
-	if err != nil || !current.Exists || current.ETag == expectedTag {
-		return OwnedEventObservation{}, booking.ErrUnavailable
+	if !targetFound || current.ETag == expectedTag {
+		return OwnedEventObservation{}, ErrOwnedEventConflict
 	}
 	return current, nil
 }
 
-// putOwnedEvent reports whether observing the canonical resource can resolve
-// the attempted write. It ignores success metadata and never repeats the PUT.
-func (c *Client) putOwnedEvent(ctx context.Context, client *http.Client, resource string, event *ical.Calendar, options webdav.PutCalendarObjectOptions) bool {
+// putOwnedEvent allows canonical readback after an attempted write with a
+// usable or uncertain outcome. It ignores success metadata and never repeats the PUT.
+func (c *Client) putOwnedEvent(ctx context.Context, client *http.Client, resource string, event *ical.Calendar, options webdav.PutCalendarObjectOptions) error {
 	create := options.IfNoneMatch == "*" && options.IfMatch == ""
 	update := options.IfNoneMatch == "" && strongEventTag.MatchString(string(options.IfMatch))
 	if !create && !update {
-		return false
+		return booking.ErrUnavailable
 	}
 	origin := url.URL{Scheme: "https", Host: c.origin.Host}
 	target := origin
 	target.Path = resource
 	attempted := false
 	status := 0
+	var refused error
 	transport := writeClientFunc(func(request *http.Request) (*http.Response, error) {
 		if attempted || request.Method != http.MethodPut || request.URL.String() != target.String() ||
 			request.Header.Get("If-None-Match") != string(options.IfNoneMatch) ||
-			request.Header.Get("If-Match") != string(options.IfMatch) ||
-			c.authorizeSourceRequest(request) != nil {
+			request.Header.Get("If-Match") != string(options.IfMatch) {
 			return nil, booking.ErrUnavailable
+		}
+		if err := c.authorizeSourceRequest(request); err != nil {
+			refused = err
+			return nil, err
 		}
 		attempted = true
 		response, err := client.Do(request)
@@ -98,10 +113,16 @@ func (c *Client) putOwnedEvent(ctx context.Context, client *http.Client, resourc
 	})
 	dav, err := webdav.NewClient(transport, origin.String())
 	if err != nil {
-		return false
+		return booking.ErrUnavailable
 	}
 	_, _ = dav.PutCalendarObject(ctx, resource, event, &options)
-	return attempted && (status == 0 || status/100 == 2 || status == http.StatusPreconditionFailed || status/100 == 5)
+	if refused != nil {
+		return refused
+	}
+	if attempted && (status == 0 || status/100 == 2 || status == http.StatusPreconditionFailed || status/100 == 5) {
+		return nil
+	}
+	return booking.ErrUnavailable
 }
 
 type writeClientFunc func(*http.Request) (*http.Response, error)

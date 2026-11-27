@@ -1,7 +1,6 @@
 package caldav
 
 import (
-	"errors"
 	"io"
 	"net/http"
 	"slices"
@@ -9,7 +8,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/devantler-tech/business-site/server/internal/booking"
 	"github.com/emersion/go-ical"
 )
 
@@ -24,17 +22,18 @@ func TestCreateOwnedEventReconcilesTheCanonicalResource(t *testing.T) {
 		status  int
 		methods []string
 		want    OwnedEventObservation
+		errKind string
 	}{
-		{"new event", "", fixtureOwnedEvent, http.StatusCreated, []string{"GET", "PUT", "GET"}, expected},
-		{"already created", fixtureOwnedEvent, "", 0, []string{"GET"}, expected},
-		{"foreign event at resource", different, "", 0, []string{"GET"}, OwnedEventObservation{}},
-		{"provider committed before failure", "", fixtureOwnedEvent, http.StatusServiceUnavailable, []string{"GET", "PUT", "GET"}, expected},
-		{"connection lost after commit", "", fixtureOwnedEvent, 0, []string{"GET", "PUT", "GET"}, expected},
-		{"provider failure without evidence", "", "", http.StatusServiceUnavailable, []string{"GET", "PUT", "GET"}, OwnedEventObservation{}},
-		{"duplicate create now matches", "", fixtureOwnedEvent, http.StatusPreconditionFailed, []string{"GET", "PUT", "GET"}, expected},
-		{"colliding create is different", "", different, http.StatusPreconditionFailed, []string{"GET", "PUT", "GET"}, OwnedEventObservation{}},
-		{"authorization revoked", "", "", http.StatusUnauthorized, []string{"GET", "PUT"}, OwnedEventObservation{}},
-		{"unexpected redirect", "", "", http.StatusTemporaryRedirect, []string{"GET", "PUT"}, OwnedEventObservation{}},
+		{"new event", "", fixtureOwnedEvent, http.StatusCreated, []string{"GET", "PUT", "GET"}, expected, ""},
+		{"already created", fixtureOwnedEvent, "", 0, []string{"GET"}, expected, ""},
+		{"foreign event at resource", different, "", 0, []string{"GET"}, OwnedEventObservation{}, "conflict"},
+		{"provider committed before failure", "", fixtureOwnedEvent, http.StatusServiceUnavailable, []string{"GET", "PUT", "GET"}, expected, ""},
+		{"connection lost after commit", "", fixtureOwnedEvent, 0, []string{"GET", "PUT", "GET"}, expected, ""},
+		{"provider failure without evidence", "", "", http.StatusServiceUnavailable, []string{"GET", "PUT", "GET"}, OwnedEventObservation{}, "unavailable"},
+		{"duplicate create now matches", "", fixtureOwnedEvent, http.StatusPreconditionFailed, []string{"GET", "PUT", "GET"}, expected, ""},
+		{"colliding create is different", "", different, http.StatusPreconditionFailed, []string{"GET", "PUT", "GET"}, OwnedEventObservation{}, "conflict"},
+		{"authorization revoked", "", "", http.StatusUnauthorized, []string{"GET", "PUT"}, OwnedEventObservation{}, "unavailable"},
+		{"unexpected redirect", "", "", http.StatusTemporaryRedirect, []string{"GET", "PUT"}, OwnedEventObservation{}, "unavailable"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -81,8 +80,7 @@ func TestCreateOwnedEventReconcilesTheCanonicalResource(t *testing.T) {
 			result, err := client.CreateOwnedEvent(t.Context(), fixtureEvent())
 			guard.Lock()
 			defer guard.Unlock()
-			if result != test.want || !slices.Equal(requests, test.methods) ||
-				(test.want.Exists && err != nil) || (!test.want.Exists && !errors.Is(err, booking.ErrUnavailable)) {
+			if result != test.want || !slices.Equal(requests, test.methods) || ownedEventErrorKind(err) != test.errKind {
 				t.Fatalf("unexpected creation evidence: exists=%t error=%v requests=%v", result.Exists, err, requests)
 			}
 		})

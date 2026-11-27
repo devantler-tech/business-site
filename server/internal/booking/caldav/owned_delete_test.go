@@ -1,14 +1,11 @@
 package caldav
 
 import (
-	"errors"
 	"net/http"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
-
-	"github.com/devantler-tech/business-site/server/internal/booking"
 )
 
 func TestDeleteOwnedEventRequiresThePersistedVersion(t *testing.T) {
@@ -25,23 +22,23 @@ func TestDeleteOwnedEventRequiresThePersistedVersion(t *testing.T) {
 		next    string
 		status  int
 		methods []string
-		success bool
+		errKind string
 	}{
-		{"remove matching event", fixtureOwnedEvent, version, version, "", http.StatusNoContent, []string{"GET", "DELETE", "GET"}, true},
-		{"already absent", "", "", version, "", 0, []string{"GET"}, true},
-		{"changed event", different, version, version, "", 0, []string{"GET"}, false},
-		{"changed version", fixtureOwnedEvent, newerVersion, version, "", 0, []string{"GET"}, false},
-		{"weak version", fixtureOwnedEvent, version, "W/" + version, "", 0, nil, false},
-		{"wildcard version", fixtureOwnedEvent, version, "*", "", 0, nil, false},
-		{"list of versions", fixtureOwnedEvent, version, version + ", " + newerVersion, "", 0, nil, false},
-		{"response lost after removal", fixtureOwnedEvent, version, version, "", 0, []string{"GET", "DELETE", "GET"}, true},
-		{"error after removal", fixtureOwnedEvent, version, version, "", http.StatusServiceUnavailable, []string{"GET", "DELETE", "GET"}, true},
-		{"removed concurrently", fixtureOwnedEvent, version, version, "", http.StatusPreconditionFailed, []string{"GET", "DELETE", "GET"}, true},
-		{"no longer exists when deleting", fixtureOwnedEvent, version, version, "", http.StatusNotFound, []string{"GET", "DELETE", "GET"}, true},
-		{"changed concurrently", fixtureOwnedEvent, version, version, different, http.StatusPreconditionFailed, []string{"GET", "DELETE", "GET"}, false},
-		{"success response without removal", fixtureOwnedEvent, version, version, fixtureOwnedEvent, http.StatusAccepted, []string{"GET", "DELETE", "GET"}, false},
-		{"credentials revoked", fixtureOwnedEvent, version, version, "", http.StatusUnauthorized, []string{"GET", "DELETE"}, false},
-		{"redirect refused", fixtureOwnedEvent, version, version, "", http.StatusTemporaryRedirect, []string{"GET", "DELETE"}, false},
+		{"remove matching event", fixtureOwnedEvent, version, version, "", http.StatusNoContent, []string{"GET", "DELETE", "GET"}, ""},
+		{"already absent", "", "", version, "", 0, []string{"GET"}, ""},
+		{"changed event", different, version, version, "", 0, []string{"GET"}, "conflict"},
+		{"changed version", fixtureOwnedEvent, newerVersion, version, "", 0, []string{"GET"}, "conflict"},
+		{"weak version", fixtureOwnedEvent, version, "W/" + version, "", 0, nil, "unavailable"},
+		{"wildcard version", fixtureOwnedEvent, version, "*", "", 0, nil, "unavailable"},
+		{"list of versions", fixtureOwnedEvent, version, version + ", " + newerVersion, "", 0, nil, "unavailable"},
+		{"response lost after removal", fixtureOwnedEvent, version, version, "", 0, []string{"GET", "DELETE", "GET"}, ""},
+		{"error after removal", fixtureOwnedEvent, version, version, "", http.StatusServiceUnavailable, []string{"GET", "DELETE", "GET"}, ""},
+		{"removed concurrently", fixtureOwnedEvent, version, version, "", http.StatusPreconditionFailed, []string{"GET", "DELETE", "GET"}, ""},
+		{"no longer exists when deleting", fixtureOwnedEvent, version, version, "", http.StatusNotFound, []string{"GET", "DELETE", "GET"}, ""},
+		{"changed concurrently", fixtureOwnedEvent, version, version, different, http.StatusPreconditionFailed, []string{"GET", "DELETE", "GET"}, "conflict"},
+		{"success response without removal", fixtureOwnedEvent, version, version, fixtureOwnedEvent, http.StatusAccepted, []string{"GET", "DELETE", "GET"}, "unavailable"},
+		{"credentials revoked", fixtureOwnedEvent, version, version, "", http.StatusUnauthorized, []string{"GET", "DELETE"}, "unavailable"},
+		{"redirect refused", fixtureOwnedEvent, version, version, "", http.StatusTemporaryRedirect, []string{"GET", "DELETE"}, "unavailable"},
 	}
 
 	for _, test := range tests {
@@ -81,8 +78,7 @@ func TestDeleteOwnedEventRequiresThePersistedVersion(t *testing.T) {
 			err := client.DeleteOwnedEvent(t.Context(), fixtureEvent(), test.request)
 			guard.Lock()
 			defer guard.Unlock()
-			if !slices.Equal(methods, test.methods) || (test.success && err != nil) ||
-				(!test.success && !errors.Is(err, booking.ErrUnavailable)) {
+			if !slices.Equal(methods, test.methods) || ownedEventErrorKind(err) != test.errKind {
 				t.Fatalf("unexpected removal evidence: error=%v methods=%v", err, methods)
 			}
 		})

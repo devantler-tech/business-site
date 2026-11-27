@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"regexp"
-	"slices"
 	"strconv"
 	"time"
 
@@ -22,17 +22,22 @@ const (
 )
 
 var (
-	ownedEventKey = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	lowercaseHex256 = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	// Accept the bounded ASCII subset of RFC 9110 strong entity tags.
 	strongEventTag = regexp.MustCompile(`^"[\x21\x23-\x7e]{1,128}"$`)
 )
 
-// OwnedEvent contains the persisted portal appointment identity and revision.
+// ErrOwnedEventConflict signals an observed resource or version that requires
+// resolution before another write. It carries no provider data.
+var ErrOwnedEventConflict = fmt.Errorf("calendar event conflicts with the saved booking (%w)", booking.ErrUnavailable)
+
+// OwnedEvent contains the persisted portal appointment and calendar binding.
 // Key must be an independent server-generated value, never a browser value.
 type OwnedEvent struct {
-	Key      string
-	Slot     booking.Interval
-	Revision int
+	Key             string
+	CalendarBinding string
+	Slot            booking.Interval
+	Revision        int
 }
 
 // OwnedEventObservation is limited to the matching resource and its strong
@@ -51,6 +56,10 @@ func (c *Client) ReadOwnedEvent(ctx context.Context, event OwnedEvent) (OwnedEve
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	c, err = c.forOwnedCalendar(ctx, event.CalendarBinding)
+	if err != nil {
+		return OwnedEventObservation{}, err
+	}
 	client, closeConnection, err := c.sourceClient(ctx)
 	if err != nil {
 		return OwnedEventObservation{}, booking.ErrUnavailable
@@ -60,8 +69,8 @@ func (c *Client) ReadOwnedEvent(ctx context.Context, event OwnedEvent) (OwnedEve
 }
 
 func (c *Client) ownedEventTarget(event OwnedEvent) (resource, uid string, err error) {
-	if !c.validSources() || c.ownedCalendar == "" || !slices.Contains(c.calendars, c.ownedCalendar) ||
-		!ownedEventKey.MatchString(event.Key) || event.Revision < 1 || event.Revision > 1<<31-1 ||
+	if !c.validSources() || !c.hasOwnedCalendar() || !lowercaseHex256.MatchString(event.CalendarBinding) ||
+		!lowercaseHex256.MatchString(event.Key) || event.Revision < 1 || event.Revision > 1<<31-1 ||
 		event.Slot.Start.IsZero() || !event.Slot.Start.Before(event.Slot.End) ||
 		event.Slot.End.Sub(event.Slot.Start) > 24*time.Hour ||
 		event.Slot.Start.Nanosecond() != 0 || event.Slot.End.Nanosecond() != 0 {
@@ -96,8 +105,11 @@ func (c *Client) readMatchingOwnedEvent(ctx context.Context, client *http.Client
 		return OwnedEventObservation{}, booking.ErrUnavailable
 	}
 	data, err := readCalendarBody(ctx, response, maxOwnedEventBytes)
-	if err != nil || !matches(data) {
+	if err != nil {
 		return OwnedEventObservation{}, booking.ErrUnavailable
+	}
+	if !matches(data) {
+		return OwnedEventObservation{}, ErrOwnedEventConflict
 	}
 	return OwnedEventObservation{Exists: true, ETag: tags[0]}, nil
 }

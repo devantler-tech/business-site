@@ -14,6 +14,7 @@ import (
 )
 
 const fixtureEventKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+const fixtureCalendarBinding = "729c5d14ca4591e4c5be484ad5e2a3b7f1a7ca28b642f69b9fe4e694f8059488"
 
 const fixtureOwnedEvent = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Devantler Tech//Booking//EN\r\n" +
 	"BEGIN:" + ical.CompEvent + "\r\nUID:portal-" + fixtureEventKey + "@devantler.tech\r\n" +
@@ -27,32 +28,49 @@ func fixtureOwnedSelection() Config {
 
 func fixtureEvent() OwnedEvent {
 	start := time.Date(2027, time.March, 27, 21, 0, 0, 0, time.UTC)
-	return OwnedEvent{Key: fixtureEventKey, Slot: booking.Interval{Start: start, End: start.Add(30 * time.Minute)}, Revision: 2}
+	return OwnedEvent{
+		Key: fixtureEventKey, CalendarBinding: fixtureCalendarBinding,
+		Slot: booking.Interval{Start: start, End: start.Add(30 * time.Minute)}, Revision: 2,
+	}
+}
+
+func ownedEventErrorKind(err error) string {
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, ErrOwnedEventConflict) && errors.Is(err, booking.ErrUnavailable):
+		return "conflict"
+	case err == booking.ErrUnavailable:
+		return "unavailable"
+	default:
+		return "unexpected"
+	}
 }
 
 func TestReadOwnedEventRequiresExactResourceAndVersion(t *testing.T) {
 	const version = `"fictional-version"`
 	tests := []struct {
-		name   string
-		status int
-		tags   []string
-		body   string
-		want   OwnedEventObservation
-		fail   bool
+		name    string
+		status  int
+		tags    []string
+		body    string
+		want    OwnedEventObservation
+		errKind string
 	}{
-		{"current", http.StatusOK, []string{version}, fixtureOwnedEvent, OwnedEventObservation{Exists: true, ETag: version}, false},
-		{"absent", http.StatusNotFound, nil, "", OwnedEventObservation{}, false},
-		{"return only provider-independent absence", http.StatusForbidden, nil, "fictional-private-diagnostic", OwnedEventObservation{}, true},
-		{"location is never followed", http.StatusTemporaryRedirect, nil, "", OwnedEventObservation{}, true},
-		{"missing version", http.StatusOK, nil, fixtureOwnedEvent, OwnedEventObservation{}, true},
-		{"duplicate versions", http.StatusOK, []string{version, version}, fixtureOwnedEvent, OwnedEventObservation{}, true},
-		{"weak version", http.StatusOK, []string{"W/" + version}, fixtureOwnedEvent, OwnedEventObservation{}, true},
-		{"changed interval", http.StatusOK, []string{version}, strings.Replace(fixtureOwnedEvent, "213000Z", "214500Z", 1), OwnedEventObservation{}, true},
-		{"old revision", http.StatusOK, []string{version}, strings.Replace(fixtureOwnedEvent, "SEQUENCE:2", "SEQUENCE:1", 1), OwnedEventObservation{}, true},
-		{"different appointment", http.StatusOK, []string{version}, strings.Replace(fixtureOwnedEvent, fixtureEventKey, strings.Repeat("f", 64), 1), OwnedEventObservation{}, true},
-		{"external details", http.StatusOK, []string{version}, strings.Replace(fixtureOwnedEvent, "SEQUENCE:2", "DESCRIPTION:fictional-private-detail\r\nSEQUENCE:2", 1), OwnedEventObservation{}, true},
-		{"duplicate appointment", http.StatusOK, []string{version}, fixtureOwnedEvent + fixtureOwnedEvent, OwnedEventObservation{}, true},
-		{"oversized body", http.StatusOK, []string{version}, strings.Repeat("a", 1<<15), OwnedEventObservation{}, true},
+		{"current", http.StatusOK, []string{version}, fixtureOwnedEvent, OwnedEventObservation{Exists: true, ETag: version}, ""},
+		{"absent", http.StatusNotFound, nil, "", OwnedEventObservation{}, ""},
+		{"return only provider-independent absence", http.StatusForbidden, nil, "fictional-private-diagnostic", OwnedEventObservation{}, "unavailable"},
+		{"failure with a version and body", http.StatusServiceUnavailable, []string{version}, fixtureOwnedEvent, OwnedEventObservation{}, "unavailable"},
+		{"location is never followed", http.StatusTemporaryRedirect, nil, "", OwnedEventObservation{}, "unavailable"},
+		{"missing version", http.StatusOK, nil, fixtureOwnedEvent, OwnedEventObservation{}, "unavailable"},
+		{"duplicate versions", http.StatusOK, []string{version, version}, fixtureOwnedEvent, OwnedEventObservation{}, "unavailable"},
+		{"weak version", http.StatusOK, []string{"W/" + version}, fixtureOwnedEvent, OwnedEventObservation{}, "unavailable"},
+		{"changed interval", http.StatusOK, []string{version}, strings.Replace(fixtureOwnedEvent, "213000Z", "214500Z", 1), OwnedEventObservation{}, "conflict"},
+		{"old revision", http.StatusOK, []string{version}, strings.Replace(fixtureOwnedEvent, "SEQUENCE:2", "SEQUENCE:1", 1), OwnedEventObservation{}, "conflict"},
+		{"different appointment", http.StatusOK, []string{version}, strings.Replace(fixtureOwnedEvent, fixtureEventKey, strings.Repeat("f", 64), 1), OwnedEventObservation{}, "conflict"},
+		{"external details", http.StatusOK, []string{version}, strings.Replace(fixtureOwnedEvent, "SEQUENCE:2", "DESCRIPTION:fictional-private-detail\r\nSEQUENCE:2", 1), OwnedEventObservation{}, "conflict"},
+		{"duplicate appointment", http.StatusOK, []string{version}, fixtureOwnedEvent + fixtureOwnedEvent, OwnedEventObservation{}, "conflict"},
+		{"oversized body", http.StatusOK, []string{version}, strings.Repeat("a", 1<<15), OwnedEventObservation{}, "unavailable"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -71,7 +89,7 @@ func TestReadOwnedEventRequiresExactResourceAndVersion(t *testing.T) {
 			}
 			client := transportClient(t, fixtureOwnedSelection(), standardCredentials, f.network)
 			got, err := client.ReadOwnedEvent(t.Context(), fixtureEvent())
-			if got != test.want || (test.fail && !errors.Is(err, booking.ErrUnavailable)) || (!test.fail && err != nil) || f.requests.Load() != 1 {
+			if got != test.want || ownedEventErrorKind(err) != test.errKind || f.requests.Load() != 1 {
 				t.Fatalf("unexpected ownership result: exists=%t error=%v requests=%d", got.Exists, err, f.requests.Load())
 			}
 		})

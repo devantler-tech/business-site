@@ -150,10 +150,19 @@ func TestOperatorManagementRejectsAmbiguousInput(t *testing.T) {
 func TestOperatorManagementPageUsesNativeActions(t *testing.T) {
 	b := newOperatorBrowserFixture(t)
 	b.invite("pending-customer", "client-a", "client")
-	for lang, heading := range map[string]string{"en": "Customers and workspaces", "da": "Kunder og arbejdsområder"} {
+	for lang, labels := range map[string]struct{ heading, searchLabel string }{
+		"en": {"Customers and workspaces", "Find a workspace or member"},
+		"da": {"Kunder og arbejdsområder", "Find et arbejdsområde eller et medlem"},
+	} {
 		status, body, _ := b.request("GET", "/portal/operator/customers?lang="+lang, nil, "")
-		if status != http.StatusOK || !strings.Contains(body, heading) || !strings.Contains(body, "pending-customer") {
+		if status != http.StatusOK || !strings.Contains(body, labels.heading) || !strings.Contains(body, "pending-customer") {
 			t.Fatalf("management page unavailable in %s: %d", lang, status)
+		}
+		if !strings.Contains(body, "data-workspace-directory") ||
+			!strings.Contains(body, `data-directory-search hidden`) ||
+			!strings.Contains(body, `for="operator-directory-query">`+labels.searchLabel) ||
+			!strings.Contains(body, `id="operator-directory-query" type="search"`) {
+			t.Fatalf("accessible workspace search is missing in %s", lang)
 		}
 		for _, action := range []string{"/invitations/revoke", "/workspaces", "/workspaces/rename", "/workspaces/delete"} {
 			if !strings.Contains(body, `method="post" action="`+operatorAPIRoot+action+`?lang=`+lang+`"`) {
