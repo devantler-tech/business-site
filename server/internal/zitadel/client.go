@@ -157,17 +157,34 @@ func (c *Client) findExisting(ctx context.Context, email string) (string, error)
 	return id, nil
 }
 
-func (c *Client) state(ctx context.Context, id, action string, allowed func() bool) error {
-	if allowed == nil || !identifier.MatchString(id) {
-		return ErrUnavailable
+func (c *Client) readHuman(ctx context.Context, id string) (user, error) {
+	if !identifier.MatchString(id) {
+		return user{}, ErrUnavailable
 	}
 	var existing struct {
 		User user `json:"user"`
 	}
 	if _, err := c.call(ctx, "GET", "/v2/users/"+id, nil, &existing, nil); err != nil || existing.User.ID != id || existing.User.Details.Owner != c.org || existing.User.Human == nil {
+		return user{}, ErrUnavailable
+	}
+	return existing.User, nil
+}
+
+// VerifyUser confirms the exact customer account still exists in this organization.
+func (c *Client) VerifyUser(ctx context.Context, id string) error {
+	_, err := c.readHuman(ctx, id)
+	return err
+}
+
+func (c *Client) state(ctx context.Context, id, action string, allowed func() bool) error {
+	if allowed == nil {
 		return ErrUnavailable
 	}
-	state := existing.User.State
+	existing, err := c.readHuman(ctx, id)
+	if err != nil {
+		return err
+	}
+	state := existing.State
 	if state != "USER_STATE_ACTIVE" && state != "USER_STATE_INACTIVE" {
 		return ErrUnavailable
 	}
@@ -175,7 +192,7 @@ func (c *Client) state(ctx context.Context, id, action string, allowed func() bo
 		return nil
 	}
 	var changed map[string]json.RawMessage
-	_, err := c.call(ctx, "POST", "/management/v1/users/"+id+"/_"+action, struct{}{}, &changed, allowed)
+	_, err = c.call(ctx, "POST", "/management/v1/users/"+id+"/_"+action, struct{}{}, &changed, allowed)
 	return err
 }
 
