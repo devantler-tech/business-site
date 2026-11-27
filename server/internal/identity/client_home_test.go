@@ -93,3 +93,21 @@ func TestClientHomePutsAvailableTasksBeforeAccountActions(t *testing.T) {
 		})
 	}
 }
+
+func TestClientHomeDoesNotReleaseWorkspaceNameAfterRevocation(t *testing.T) {
+	b := newBrowserFixture(t)
+	b.as(customerSubject)
+	b.finish(b.startInvited(customerSubject, "spruce-design", "client"))
+	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_workspaces(id)
+ VALUES ('spruce-design') ON CONFLICT DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_workspace_settings(workspace_id,display_name)
+ VALUES ('spruce-design','Private workshop')`); err != nil {
+		t.Fatal(err)
+	}
+	status, page := requestAfterReadRevocation(t, b, "SELECT display_name FROM portal_workspace_settings", "/portal/", customerSubject)
+	if status != http.StatusForbidden || strings.Contains(page, "Private workshop") {
+		t.Fatal("a revoked customer could still read the workspace name")
+	}
+}

@@ -751,6 +751,28 @@ func TestBrowserTwoClientsKeepTheirServerOwnedWorkspace(t *testing.T) {
 			t.Fatal("broker operator groups or browser role became authority")
 		}
 	}
+	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_workspaces(id)
+ VALUES ('client-a'),('client-b') ON CONFLICT DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_workspace_settings(workspace_id,display_name)
+ VALUES ('client-a','Spruce & Pine'),('client-b','Birch & Ash')`); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		client                *http.Client
+		otherID, own, foreign string
+		lang                  string
+	}{
+		{clientA, "client-b", "Spruce &amp; Pine", "Birch &amp; Ash", "en"},
+		{&clientB, "client-a", "Birch &amp; Ash", "Spruce &amp; Pine", "da"},
+	} {
+		b.client = tc.client
+		s, body, _ := b.request(http.MethodGet, "/portal/?lang="+tc.lang+"&client_id="+tc.otherID, nil, "")
+		if s != http.StatusOK || !strings.Contains(body, "<strong>"+tc.own+"</strong>") || strings.Contains(body, tc.foreign) {
+			t.Fatalf("%s homepage did not show only the signed-in customer's saved workspace name", tc.lang)
+		}
+	}
 }
 
 func TestBrowserErrorsPreserveChosenLanguage(t *testing.T) {
