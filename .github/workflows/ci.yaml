@@ -410,6 +410,52 @@ jobs:
       - name: Scan reachable Go vulnerabilities
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
+  test-tenant-admission:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      LC_ALL: C
+      GOTOOLCHAIN: local
+    steps:
+      - name: Checkout Business Site
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Checkout the Platform admission checker and policies
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: devantler-tech/platform
+          ref: 3d2fbff64da74fb4cc6f15c8414dcdecad99b630
+          path: .tenant-policy-source
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/tests/tenant-webapp-admission/
+            /k8s/bases/infrastructure/cluster-policies/best-practices/restrict-tenant-webapps.yaml
+            /k8s/bases/infrastructure/cluster-policies/best-practices/validate-pod-security.yaml
+      - name: Setup Go for the Platform admission checker
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: .tenant-policy-source/scripts/tests/tenant-webapp-admission/go.mod
+          cache-dependency-path: .tenant-policy-source/scripts/tests/tenant-webapp-admission/go.sum
+      - name: Setup Node.js for fixture generation
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - name: Install fixture dependencies
+        run: npm ci --ignore-scripts --no-audit
+      - name: Exercise production package admission with Kyverno
+        id: tenant-admission
+        shell: bash
+        run: |
+          policies="$GITHUB_WORKSPACE/.tenant-policy-source/k8s/bases/infrastructure/cluster-policies/best-practices"
+          kubectl kustomize deploy | node scripts/tenant-admission-fixtures.mjs |
+            go -C .tenant-policy-source/scripts/tests/tenant-webapp-admission run -mod=readonly . \
+              "$policies/restrict-tenant-webapps.yaml" "$policies/validate-pod-security.yaml"
+
   # Separate setup/build budget; identity and quality must finish successfully first.
   test-combined-runtime:
     needs: [test-portal-quality, test-portal-identity]
@@ -562,6 +608,7 @@ jobs:
       - test-repository-contracts
       - test-portal-identity
       - test-portal-quality
+      - test-tenant-admission
       - test-combined-runtime
     steps:
       - name: Check job results
@@ -577,6 +624,7 @@ jobs:
             ${{ needs.test-repository-contracts.result }}
             ${{ needs.test-portal-identity.result }}
             ${{ needs.test-portal-quality.result }}
+            ${{ needs.test-tenant-admission.result }}
             ${{ needs.test-combined-runtime.result }}
 
   status:
@@ -595,6 +643,7 @@ jobs:
       - test-repository-contracts
       - test-portal-identity
       - test-portal-quality
+      - test-tenant-admission
       - test-combined-runtime
       - validation
       - publish-container
@@ -613,6 +662,7 @@ jobs:
             ${{ needs.test-repository-contracts.result }}
             ${{ needs.test-portal-identity.result }}
             ${{ needs.test-portal-quality.result }}
+            ${{ needs.test-tenant-admission.result }}
             ${{ needs.test-combined-runtime.result }}
             ${{ needs.validation.result }}
             ${{ needs.publish-container.result }}
