@@ -10,17 +10,18 @@ import (
 	"github.com/open-feature/go-sdk/openfeature"
 )
 
-const operatorCalendarConflictLimit = 20
+const operatorCalendarReviewLimit = 20
 
-type calendarConflictEntry struct {
+type calendarReviewEntry struct {
 	appointmentHistoryItem
-	Workspace string
+	Workspace            string
+	AwaitingConfirmation bool
 }
 
 type operatorCalendarConflictPage struct {
 	pageData
-	CalendarConflicts        []calendarConflictEntry
-	CalendarConflictsLimited bool
+	CalendarReviewItems   []calendarReviewEntry
+	CalendarReviewLimited bool
 }
 
 func (s *Foundation) calendarConflictReviewReady(ctx context.Context) bool {
@@ -48,14 +49,14 @@ func (b *browser) operatorCalendarConflicts(w http.ResponseWriter, r *http.Reque
 			return b.foundation.calendarConflictReviewReady(ctx) && current(ctx, query)
 		}
 		data := b.operatorData(r.WithContext(ctx), "operator-calendar-conflicts", client)
-		conflicts, err := b.foundation.readOperatorCalendarConflicts(ctx, data.Lang)
+		items, err := b.foundation.readOperatorCalendarReview(ctx, data.Lang)
 		if err != nil {
 			return nil, err
 		}
 		page := operatorCalendarConflictPage{
-			pageData:                 data,
-			CalendarConflicts:        conflicts[:min(len(conflicts), operatorCalendarConflictLimit)],
-			CalendarConflictsLimited: len(conflicts) > operatorCalendarConflictLimit,
+			pageData:              data,
+			CalendarReviewItems:   items[:min(len(items), operatorCalendarReviewLimit)],
+			CalendarReviewLimited: len(items) > operatorCalendarReviewLimit,
 		}
 		var buffer bytes.Buffer
 		err = b.templates().ExecuteTemplate(&buffer, "operator.html", page)
@@ -64,25 +65,26 @@ func (b *browser) operatorCalendarConflicts(w http.ResponseWriter, r *http.Reque
 	b.writeOperatorActionPage(w, r, status, result)
 }
 
-func (s *Foundation) readOperatorCalendarConflicts(ctx context.Context, lang string) ([]calendarConflictEntry, error) {
+func (s *Foundation) readOperatorCalendarReview(ctx context.Context, lang string) ([]calendarReviewEntry, error) {
 	rows, err := s.pool.Query(ctx, `SELECT COALESCE(settings.display_name,''),revision.starts_at,revision.ends_at,
- reservation.quote_request_id IS NOT NULL
- FROM portal_appointment_calendar_observations observation
- JOIN portal_appointment_calendar_intents intent USING(reservation_id)
+ reservation.quote_request_id IS NOT NULL,observation.reservation_id IS NULL
+ FROM portal_appointment_calendar_intents intent
  JOIN portal_appointment_revisions revision USING(reservation_id,revision)
  JOIN portal_appointment_reservations reservation ON reservation.id=revision.reservation_id AND reservation.client_id=revision.client_id
+ LEFT JOIN portal_appointment_calendar_observations observation USING(reservation_id)
+ LEFT JOIN portal_appointment_calendar_attempts attempt USING(reservation_id)
  LEFT JOIN portal_workspace_settings settings ON settings.workspace_id=revision.client_id
- WHERE observation.outcome='conflict'
- ORDER BY observation.observed_at DESC,observation.reservation_id LIMIT $1`, operatorCalendarConflictLimit+1)
+ WHERE observation.outcome='conflict' OR (observation.reservation_id IS NULL AND attempt.reservation_id IS NOT NULL)
+ ORDER BY COALESCE(observation.observed_at,attempt.attempted_at) DESC,intent.reservation_id LIMIT $1`, operatorCalendarReviewLimit+1)
 	if err != nil {
 		return nil, errTriageStorage
 	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (calendarConflictEntry, error) {
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (calendarReviewEntry, error) {
 		var name string
 		var start, end time.Time
-		var consultation bool
-		if err := row.Scan(&name, &start, &end, &consultation); err != nil {
-			return calendarConflictEntry{}, errTriageStorage
+		var consultation, awaitingConfirmation bool
+		if err := row.Scan(&name, &start, &end, &consultation, &awaitingConfirmation); err != nil {
+			return calendarReviewEntry{}, errTriageStorage
 		}
 		if name == "" {
 			name = "Unnamed workspace"
@@ -91,6 +93,6 @@ func (s *Foundation) readOperatorCalendarConflicts(ctx context.Context, lang str
 			}
 		}
 		item := appointmentHistoryLabel(start.In(copenhagen), end.In(copenhagen), consultation, false, lang)
-		return calendarConflictEntry{appointmentHistoryItem: item, Workspace: name}, nil
+		return calendarReviewEntry{appointmentHistoryItem: item, Workspace: name, AwaitingConfirmation: awaitingConfirmation}, nil
 	})
 }

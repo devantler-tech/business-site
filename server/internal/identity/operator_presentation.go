@@ -52,9 +52,9 @@ func (b *browser) operatorData(r *http.Request, kind, client string) pageData {
 			d.Title, d.Intro = "Revisionslog", "Se de seneste handlinger fra operatører og agenter."
 		}
 	case "operator-calendar-conflicts":
-		d.Title = "Calendar conflicts"
+		d.Title = "Calendar review"
 		if d.Lang == "da" {
-			d.Title = "Kalenderkonflikter"
+			d.Title = "Kalenderstatus"
 		}
 	case "operator-support":
 		d.Title = "Read-only support view"
