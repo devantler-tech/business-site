@@ -18,13 +18,17 @@ type calendarCreationCandidate struct {
 	client, request, acceptance, order string
 }
 
+type calendarCreationProvider interface {
+	CreateOwnedEvent(context.Context, caldav.OwnedEvent) (caldav.OwnedEventObservation, error)
+	ReadOwnedEvent(context.Context, caldav.OwnedEvent) (caldav.OwnedEventObservation, error)
+}
+
 // reconcileAppointmentCalendarCreation checks the confirmed reservation before
-// and after provider I/O. It leaves the reserved identity available for cleanup
-// if cancellation or a funding reversal wins while the provider is responding.
+// and after provider I/O. An unresolved write leaves a durable attempt.
 func reconcileAppointmentCalendarCreation(ctx context.Context, pool *pgxpool.Pool, reservation string,
-	create func(context.Context, caldav.OwnedEvent) (caldav.OwnedEventObservation, error),
+	provider calendarCreationProvider,
 ) error {
-	if create == nil {
+	if provider == nil {
 		return booking.ErrUnavailable
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
@@ -38,10 +42,29 @@ func reconcileAppointmentCalendarCreation(ctx context.Context, pool *pgxpool.Poo
 	defer release()
 
 	var event caldav.OwnedEvent
+	operation := provider.ReadOwnedEvent
 	err = pgx.BeginFunc(ctx, connection, func(tx pgx.Tx) error {
 		candidate, err := lockPendingCalendarCreation(ctx, tx, reservation)
+		if err != nil {
+			return err
+		}
 		event = candidate.event
-		return err
+		var firstAttempt bool
+		// A replay may observe the exact event but cannot issue a second PUT
+		// when a prior worker could have left one in flight.
+		if err := tx.QueryRow(ctx, `WITH timely AS (
+ SELECT $1::public.portal_consent_key AS reservation_id WHERE clock_timestamp()<$2::timestamptz
+), attempt AS (
+ INSERT INTO public.portal_appointment_calendar_attempts(reservation_id)
+ SELECT reservation_id FROM timely ON CONFLICT DO NOTHING RETURNING reservation_id
+)
+SELECT EXISTS(SELECT 1 FROM attempt) FROM timely`, reservation, event.Slot.Start).Scan(&firstAttempt); err != nil {
+			return err
+		}
+		if firstAttempt {
+			operation = provider.CreateOwnedEvent
+		}
+		return nil
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
@@ -50,7 +73,7 @@ func reconcileAppointmentCalendarCreation(ctx context.Context, pool *pgxpool.Poo
 		return creditWriteError(err)
 	}
 
-	observation, err := create(ctx, event)
+	observation, err := operation(ctx, event)
 	outcome := "created"
 	var tag *string
 	switch {

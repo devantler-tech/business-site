@@ -13,6 +13,21 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+type calendarCreationFixture struct {
+	create, read func(context.Context, caldav.OwnedEvent) (caldav.OwnedEventObservation, error)
+}
+
+func (f calendarCreationFixture) CreateOwnedEvent(ctx context.Context, event caldav.OwnedEvent) (caldav.OwnedEventObservation, error) {
+	return f.create(ctx, event)
+}
+
+func (f calendarCreationFixture) ReadOwnedEvent(ctx context.Context, event caldav.OwnedEvent) (caldav.OwnedEventObservation, error) {
+	if f.read == nil {
+		return caldav.OwnedEventObservation{}, booking.ErrUnavailable
+	}
+	return f.read(ctx, event)
+}
+
 func TestCalendarCreationSerializesProviderWritesForAReservation(t *testing.T) {
 	pool := fixtureDB(t)
 	reservation, _ := confirmedCalendarIntroduction(t, pool)
@@ -46,7 +61,7 @@ func TestCalendarCreationSerializesProviderWritesForAReservation(t *testing.T) {
 	results := make(chan error, 2)
 	start := func(database *pgxpool.Pool) {
 		workers.Go(func() {
-			results <- reconcileAppointmentCalendarCreation(ctx, database, reservation, create)
+			results <- reconcileAppointmentCalendarCreation(ctx, database, reservation, calendarCreationFixture{create: create})
 		})
 	}
 	start(oneConnection)
@@ -80,19 +95,24 @@ func TestCalendarCreationRecoversAfterProviderAccepts(t *testing.T) {
 	defer stop()
 	const tag = `"provider-version"`
 	var accepted caldav.OwnedEvent
-	calls := 0
-	create := func(_ context.Context, event caldav.OwnedEvent) (caldav.OwnedEventObservation, error) {
-		calls++
-		if accepted.Key == "" {
+	writes, reads := 0, 0
+	provider := calendarCreationFixture{
+		create: func(_ context.Context, event caldav.OwnedEvent) (caldav.OwnedEventObservation, error) {
+			writes++
 			accepted = event
 			stop()
-		} else if event.Key != accepted.Key || event.Revision != accepted.Revision ||
-			event.CalendarBinding != accepted.CalendarBinding || !event.Slot.Start.Equal(accepted.Slot.Start) || !event.Slot.End.Equal(accepted.Slot.End) {
-			t.Fatal("recovery selected a different calendar resource or revision")
-		}
-		return caldav.OwnedEventObservation{Exists: true, ETag: tag}, nil
+			return caldav.OwnedEventObservation{Exists: true, ETag: tag}, nil
+		},
+		read: func(_ context.Context, event caldav.OwnedEvent) (caldav.OwnedEventObservation, error) {
+			reads++
+			if event.Key != accepted.Key || event.Revision != accepted.Revision ||
+				event.CalendarBinding != accepted.CalendarBinding || !event.Slot.Start.Equal(accepted.Slot.Start) || !event.Slot.End.Equal(accepted.Slot.End) {
+				t.Fatal("recovery selected a different calendar resource or revision")
+			}
+			return caldav.OwnedEventObservation{Exists: true, ETag: tag}, nil
+		},
 	}
-	if err := reconcileAppointmentCalendarCreation(interrupted, pool, reservation, create); err == nil || accepted.Key == "" {
+	if err := reconcileAppointmentCalendarCreation(interrupted, pool, reservation, provider); err == nil || accepted.Key == "" {
 		t.Fatalf("the interrupted run did not leave a recoverable calendar write: %v", err)
 	}
 	fresh, err := pgxpool.NewWithConfig(t.Context(), pool.Config())
@@ -101,15 +121,64 @@ func TestCalendarCreationRecoversAfterProviderAccepts(t *testing.T) {
 	}
 	defer fresh.Close()
 	for range 2 {
-		if err := reconcileAppointmentCalendarCreation(t.Context(), fresh, reservation, create); err != nil {
+		if err := reconcileAppointmentCalendarCreation(t.Context(), fresh, reservation, provider); err != nil {
 			t.Fatal(err)
 		}
 	}
 	var retained string
 	err = fresh.QueryRow(t.Context(), `SELECT provider_tag FROM portal_appointment_calendar_observations
  WHERE reservation_id=$1 AND outcome='created'`, reservation).Scan(&retained)
-	if err != nil || retained != tag || calls != 2 {
-		t.Fatalf("recovery did not retain the provider version and stop further work: calls=%d error=%v", calls, err)
+	if err != nil || retained != tag || writes != 1 || reads != 1 {
+		t.Fatalf("recovery did not retain the provider version: writes=%d reads=%d error=%v", writes, reads, err)
+	}
+}
+
+func TestCalendarCreationDoesNotRepeatAnUnconfirmedWrite(t *testing.T) {
+	pool := fixtureDB(t)
+	reservation, _ := confirmedCalendarIntroduction(t, pool)
+	writes, reads := 0, 0
+	visible := false
+	const tag = `"late-provider-version"`
+	provider := calendarCreationFixture{
+		create: func(context.Context, caldav.OwnedEvent) (caldav.OwnedEventObservation, error) {
+			writes++
+			return caldav.OwnedEventObservation{}, booking.ErrUnavailable
+		},
+		read: func(context.Context, caldav.OwnedEvent) (caldav.OwnedEventObservation, error) {
+			reads++
+			if visible {
+				return caldav.OwnedEventObservation{Exists: true, ETag: tag}, nil
+			}
+			return caldav.OwnedEventObservation{}, nil
+		},
+	}
+	if err := reconcileAppointmentCalendarCreation(t.Context(), pool, reservation, provider); err != booking.ErrUnavailable {
+		t.Fatalf("the provider did not confirm creation: %v", err)
+	}
+	fresh, err := pgxpool.NewWithConfig(t.Context(), pool.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fresh.Close()
+	if err := reconcileAppointmentCalendarCreation(t.Context(), fresh, reservation, provider); err != booking.ErrUnavailable {
+		t.Fatalf("an unconfirmed write should stay unresolved: %v", err)
+	}
+	var unresolved bool
+	err = fresh.QueryRow(t.Context(), `SELECT EXISTS(
+ SELECT 1 FROM portal_appointment_calendar_attempts WHERE reservation_id=$1)
+ AND NOT EXISTS(SELECT 1 FROM portal_appointment_calendar_observations WHERE reservation_id=$1)`, reservation).Scan(&unresolved)
+	if err != nil || !unresolved || writes != 1 || reads != 1 {
+		t.Fatalf("provider absence must leave one unresolved attempt: writes=%d reads=%d error=%v", writes, reads, err)
+	}
+	visible = true
+	if err := reconcileAppointmentCalendarCreation(t.Context(), fresh, reservation, provider); err != nil {
+		t.Fatal("recover the late provider version", err)
+	}
+	var retained string
+	err = fresh.QueryRow(t.Context(), `SELECT provider_tag FROM portal_appointment_calendar_observations
+ WHERE reservation_id=$1 AND outcome='created'`, reservation).Scan(&retained)
+	if err != nil || retained != tag || writes != 1 || reads != 2 {
+		t.Fatalf("recovery must observe the late version by reading: writes=%d reads=%d error=%v", writes, reads, err)
 	}
 }
 
@@ -126,14 +195,14 @@ func TestCalendarCreationDiscardsObservationAfterCancellation(t *testing.T) {
 		return caldav.OwnedEventObservation{Exists: true, ETag: `"stale-version"`}, err
 	}
 	for range 2 {
-		if err := reconcileAppointmentCalendarCreation(t.Context(), pool, reservation, create); err != nil {
+		if err := reconcileAppointmentCalendarCreation(t.Context(), pool, reservation, calendarCreationFixture{create: create}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	var observed bool
-	err := pool.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM portal_appointment_calendar_observations WHERE reservation_id=$1)`,
-		reservation).Scan(&observed)
-	if err != nil || observed || calls != 1 {
+	var observed, attempted bool
+	err := pool.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM portal_appointment_calendar_observations WHERE reservation_id=$1),
+ EXISTS(SELECT 1 FROM portal_appointment_calendar_attempts WHERE reservation_id=$1)`, reservation).Scan(&observed, &attempted)
+	if err != nil || observed || !attempted || calls != 1 {
 		t.Fatalf("a cancelled appointment retained an observation or retried creation: calls=%d error=%v", calls, err)
 	}
 	// Cancellation keeps the immutable identity for later owned-event cleanup.
@@ -149,7 +218,7 @@ func TestCalendarCreationHoldsVerifiedProviderConflict(t *testing.T) {
 		return caldav.OwnedEventObservation{}, caldav.ErrOwnedEventConflict
 	}
 	for range 2 {
-		if err := reconcileAppointmentCalendarCreation(t.Context(), pool, reservation, create); err != nil {
+		if err := reconcileAppointmentCalendarCreation(t.Context(), pool, reservation, calendarCreationFixture{create: create}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -192,7 +261,7 @@ func TestPaidCalendarCreationFollowsCommittedFunding(t *testing.T) {
 				return caldav.OwnedEventObservation{Exists: true, ETag: tag}, nil
 			}
 			for range 2 {
-				if err := reconcileAppointmentCalendarCreation(t.Context(), b.pool, reservation, create); err != nil {
+				if err := reconcileAppointmentCalendarCreation(t.Context(), b.pool, reservation, calendarCreationFixture{create: create}); err != nil {
 					t.Fatal(err)
 				}
 			}
