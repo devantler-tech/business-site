@@ -202,6 +202,7 @@ func checkWorkApprovalRole(ctx context.Context, pool queryRower) error {
        OR has_table_privilege(role.oid,lease.table_name,'DELETE,TRUNCATE,TRIGGER,MAINTAIN'))
    OR has_function_privilege(role.oid,'public.portal_assign_work_lease_fence()','EXECUTE')
    OR has_function_privilege(role.oid,'public.portal_require_active_work_lease()','EXECUTE')
+   OR has_function_privilege(role.oid,'public.portal_validate_work_lease_window()','EXECUTE')
    OR has_function_privilege(role.oid,'public.portal_lock_work_queue_revision(bigint)','EXECUTE WITH GRANT OPTION')
    OR has_function_privilege(role.oid,'public.portal_record_work_queue_revision()','EXECUTE')))`).Scan(&allowed)
 	if err != nil || !allowed {

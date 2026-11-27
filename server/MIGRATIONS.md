@@ -334,6 +334,11 @@ inserts stop before acquiring the slot lock or allocating a fence. Existing
 lease history stays intact. A release is still a separate, database-timed
 transition.
 
+v47 limits the end of a new software lease to the expiry of its exact
+approval. The lease and approval intervals both exclude their end, so an
+equal expiry is valid. A rejected insert consumes neither a fence nor its
+submission key. Historical lease records are preserved.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or
