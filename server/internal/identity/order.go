@@ -186,6 +186,7 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 		return projectOrder{}, err
 	}
 	var placed time.Time
+	var heldUntil *time.Time
 	if appointment {
 		if launch || len(addonValues) != 0 || current.Proposal.OneTimeMinor <= 0 || current.Proposal.MonthlyMinor != 0 {
 			return projectOrder{}, errProposalConflict
@@ -203,6 +204,7 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 			(!earlyStart && hold.Slot.Start.Before(withdrawalDeadline(placed))) {
 			return projectOrder{}, errProposalConflict
 		}
+		heldUntil = &hold.HeldUntil
 	}
 	// A new order's add-ons must exist for the request's offering; monthly ones
 	// need hosting.
@@ -303,7 +305,7 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 	if err != nil {
 		return projectOrder{}, errTriageStorage
 	}
-	return saved, s.commitOrder(ctx, p, tx, ready)
+	return saved, s.commitOrderWithHold(ctx, p, tx, ready, heldUntil)
 }
 
 // readOrderTx reads the request's order and its charges inside a scoped,
@@ -394,10 +396,28 @@ func (s *Foundation) readOperatorOrder(ctx context.Context, p Principal, id stri
 // gate, not only the acceptance gates, must still be open, along with the
 // principal's expiry and the request's cancellation.
 func (s *Foundation) commitOrder(ctx context.Context, p Principal, tx pgx.Tx, ready func(context.Context) bool) error {
+	return s.commitOrderWithHold(ctx, p, tx, ready, nil)
+}
+
+// The first order and first confirmation both require a live hold after the
+// final provider evaluations. Replays of either committed write use no deadline.
+func (s *Foundation) commitOrderWithHold(ctx context.Context, p Principal, tx pgx.Tx, ready func(context.Context) bool, heldUntil *time.Time) error {
 	if !ready(ctx) {
 		return ErrDenied
 	}
-	return s.commitClientProposal(ctx, p, tx, time.Time{})
+	if heldUntil == nil {
+		return s.commitClientProposal(ctx, p, tx, time.Time{})
+	}
+	return s.commitClientProposalGuarded(ctx, p, tx, time.Time{}, func() error {
+		var active bool
+		if err := tx.QueryRow(ctx, `SELECT $1::timestamptz > clock_timestamp()`, *heldUntil).Scan(&active); err != nil {
+			return errTriageStorage
+		}
+		if !active {
+			return errProposalConflict
+		}
+		return nil
+	})
 }
 
 // readOrderFor reads the order in an already scoped, request-locked transaction

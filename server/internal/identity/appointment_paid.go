@@ -85,22 +85,11 @@ func (s *Foundation) confirmPaidAppointment(ctx context.Context, p Principal, re
 }
 
 func (s *Foundation) commitPaidAppointment(ctx context.Context, p Principal, tx pgx.Tx, collection string, hold appointmentHold) error {
-	if !s.collectionReady(ctx, collection) || !s.paidAppointmentsReady(ctx) {
-		return ErrDenied
+	var heldUntil *time.Time
+	if !hold.PaidConfirmed {
+		heldUntil = &hold.HeldUntil
 	}
-	return s.commitClientProposalGuarded(ctx, p, tx, time.Time{}, func() error {
-		if hold.PaidConfirmed {
-			return nil
-		}
-		// Use the database clock after the final flag evaluations. A
-		// provisional hold can expire while those evaluations are in flight.
-		var active bool
-		if err := tx.QueryRow(ctx, `SELECT $1::timestamptz > clock_timestamp()`, hold.HeldUntil).Scan(&active); err != nil {
-			return errTriageStorage
-		}
-		if !active {
-			return errProposalConflict
-		}
-		return nil
-	})
+	return s.commitOrderWithHold(ctx, p, tx, func(ctx context.Context) bool {
+		return s.collectionReady(ctx, collection) && s.paidAppointmentsReady(ctx)
+	}, heldUntil)
 }

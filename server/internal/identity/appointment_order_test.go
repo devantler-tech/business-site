@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/devantler-tech/business-site/server/internal/booking"
 	"github.com/jackc/pgx/v5"
+	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
 
 func TestPaidAppointmentQuoteRequiresItsOwnGate(t *testing.T) {
@@ -53,6 +55,90 @@ func acceptedAppointmentQuoteFixture(t *testing.T) *browserFixture {
 		t.Fatal(err)
 	}
 	return b
+}
+
+func TestPaidAppointmentOrderRollsBackWhenHoldExpiresDuringFinalEvaluation(t *testing.T) {
+	b := acceptedAppointmentQuoteFixture(t)
+	principal := authenticateExistingMember(t, b, "consent-client")
+	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
+	defer cancel()
+
+	ref := appointmentQuoteRef{Request: proposalRequestID}
+	var acceptance string
+	if err := b.pool.QueryRow(ctx, `SELECT id,proposal_version,content_hash FROM portal_proposal_acceptances WHERE request_id=$1`, proposalRequestID).
+		Scan(&acceptance, &ref.Version, &ref.Hash); err != nil {
+		t.Fatal(err)
+	}
+	start, policy := appointmentHoldFixture(t)
+	selection := appointmentOrderSelection{Reservation: secret(), Revision: 1}
+	if _, err := b.pool.Exec(ctx, `INSERT INTO portal_workspaces(id) VALUES('private-client-key') ON CONFLICT DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
+	if err := pgx.BeginFunc(ctx, b.pool, func(tx pgx.Tx) error {
+		_, err := policy.append(ctx, tx, selection.Reservation, "private-client-key", 0, booking.Interval{Start: start, End: start.Add(30 * time.Minute)}, ref)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	flags := map[string]memprovider.InMemoryFlag{}
+	for _, name := range append(acceptanceFlagNames(), "portal-invoice-billing", "portal-paid-appointments") {
+		flags[name] = memprovider.InMemoryFlag{Key: name, State: memprovider.Enabled, DefaultVariant: "on", Variants: map[string]any{"on": true}}
+	}
+	provider := &finalRequestProvider{
+		FeatureProvider: memprovider.NewInMemoryProvider(flags),
+		key:             "portal-paid-appointments", blockAt: 2, blocked: make(chan struct{}), release: make(chan struct{}),
+	}
+	if err := b.flags.SetProviderAndWait(ctx, provider); err != nil {
+		t.Fatal(err)
+	}
+	var deadline time.Time
+	if err := migrationDB(t).QueryRow(ctx, `UPDATE portal_appointment_revisions
+ SET held_until=clock_timestamp()+interval '2 seconds' WHERE reservation_id=$1 RETURNING held_until`, selection.Reservation).
+		Scan(&deadline); err != nil {
+		t.Fatal(err)
+	}
+	_, hash := b.svc.termsFor("en")
+	result := make(chan error, 1)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, err := b.svc.placeOrder(ctx, principal, proposalRequestID, acceptance, "invoice", true, false, nil, mailContext{Lang: "en", TermsHash: hash}, selection)
+		result <- err
+	}()
+	defer func() {
+		cancel()
+		<-done
+	}()
+	select {
+	case <-provider.blocked:
+	case err := <-result:
+		t.Fatalf("order never reached its final flag evaluation: %v", err)
+	case <-ctx.Done():
+		t.Fatal("order did not reach the final flag evaluation")
+	}
+	var active bool
+	if err := b.pool.QueryRow(ctx, `SELECT $1::timestamptz>clock_timestamp()`, deadline).Scan(&active); err != nil || !active {
+		t.Fatalf("hold was already expired before pausing the final flag: %v", err)
+	}
+	if _, err := b.pool.Exec(ctx, `SELECT pg_sleep(GREATEST(0, EXTRACT(EPOCH FROM $1::timestamptz-clock_timestamp())))`, deadline); err != nil {
+		t.Fatal(err)
+	}
+	close(provider.release)
+	select {
+	case err := <-result:
+		if !errors.Is(err, errProposalConflict) {
+			t.Fatalf("expired hold was not rejected at commit: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("order did not finish after its held slot expired")
+	}
+	var stored int
+	if err := b.pool.QueryRow(ctx, `SELECT
+ (SELECT count(*) FROM portal_orders WHERE request_id=$1) +
+ (SELECT count(*) FROM portal_mail_outbox WHERE kind='order-confirmation')`, proposalRequestID).Scan(&stored); err != nil || stored != 0 {
+		t.Fatalf("failed order left an order or confirmation in storage: %v", err)
+	}
 }
 
 func TestPaidAppointmentOrderKeepsItsSelectedSlot(t *testing.T) {
