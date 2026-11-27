@@ -113,7 +113,7 @@ func TestAppointmentHistoryRefusesARevokedSessionAfterReading(t *testing.T) {
 func TestAppointmentHistoryMakesTheAutumnClockChangeUnambiguous(t *testing.T) {
 	start := time.Date(2026, 10, 25, 0, 45, 0, 0, time.UTC).In(copenhagen)
 	end := start.Add(30 * time.Minute)
-	item := appointmentHistoryLabel(start, end, false, "da")
+	item := appointmentHistoryLabel(start, end, false, false, "da")
 	if item.Date != "25.10.2026" || item.StartTime != "02:45 CEST" || item.EndTime != "02:15 CET" ||
 		item.Start != "2026-10-25T02:45:00+02:00" || item.End != "2026-10-25T02:15:00+01:00" {
 		t.Fatalf("the fall clock change is ambiguous: %+v", item)

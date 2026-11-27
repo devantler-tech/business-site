@@ -13,7 +13,7 @@ import (
 const appointmentHistoryLimit = 20
 
 type appointmentHistoryItem struct {
-	Start, End, Date, StartTime, EndTime, Status string
+	Service, Start, End, Date, StartTime, EndTime, Status string
 }
 
 func (s *Foundation) appointmentHistoryReady(ctx context.Context) bool {
@@ -47,9 +47,9 @@ func (b *browser) appointmentHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	page := b.data(r, "appointments", "", "")
-	page.Title, page.Intro = "Your appointments", "Your introductory calls with Devantler Tech."
+	page.Title, page.Intro = "Your appointments", "Your introductory calls and consultations with Devantler Tech."
 	if page.Lang == "da" {
-		page.Title, page.Intro = "Dine aftaler", "Dine indledende samtaler med Devantler Tech."
+		page.Title, page.Intro = "Dine aftaler", "Dine indledende samtaler og rådgivning med Devantler Tech."
 	}
 	appointments, err := b.foundation.readAppointmentHistory(ctx, client, page.Lang)
 	if err != nil {
@@ -70,39 +70,57 @@ func (b *browser) appointmentHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Foundation) readAppointmentHistory(ctx context.Context, client, lang string) ([]appointmentHistoryItem, error) {
-	rows, err := s.pool.Query(ctx, `SELECT v.starts_at,v.ends_at,c.reservation_id IS NOT NULL
+	rows, err := s.pool.Query(ctx, `WITH history AS (
+ SELECT v.starts_at,v.ends_at,i.reservation_id,false AS consultation,c.reservation_id IS NOT NULL AS cancelled
  FROM portal_appointment_introductions i JOIN portal_appointment_revisions v USING(reservation_id,revision,client_id)
  LEFT JOIN portal_appointment_introduction_cancellations c ON c.reservation_id=i.reservation_id
  WHERE i.client_id=$1
- ORDER BY CASE WHEN c.reservation_id IS NULL AND v.ends_at>statement_timestamp() THEN v.starts_at END ASC NULLS LAST,
- v.starts_at DESC,i.reservation_id LIMIT $2`, client, appointmentHistoryLimit+1)
+ UNION ALL
+ SELECT v.starts_at,v.ends_at,v.reservation_id,true,false
+ FROM portal_orders o
+ JOIN portal_service_fulfillments f ON f.order_id=o.id AND f.client_id=o.client_id AND f.service_kind='appointment'
+ JOIN portal_service_consumers c ON c.fulfillment_id=f.id AND c.service_kind=f.service_kind
+   AND c.aggregate_id=o.appointment_reservation_id::text
+ JOIN portal_appointment_revisions v ON v.reservation_id=o.appointment_reservation_id
+   AND v.revision=o.appointment_revision AND v.client_id=o.client_id
+ WHERE o.client_id=$1
+ )
+ SELECT starts_at,ends_at,consultation,cancelled FROM history
+ ORDER BY CASE WHEN NOT cancelled AND ends_at>statement_timestamp() THEN starts_at END ASC NULLS LAST,
+ starts_at DESC,reservation_id LIMIT $2`, client, appointmentHistoryLimit+1)
 	if err != nil {
 		return nil, errTriageStorage
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (appointmentHistoryItem, error) {
 		var start, end time.Time
-		var cancelled bool
-		if err := row.Scan(&start, &end, &cancelled); err != nil {
+		var consultation, cancelled bool
+		if err := row.Scan(&start, &end, &consultation, &cancelled); err != nil {
 			return appointmentHistoryItem{}, errTriageStorage
 		}
-		return appointmentHistoryLabel(start.In(copenhagen), end.In(copenhagen), cancelled, lang), nil
+		return appointmentHistoryLabel(start.In(copenhagen), end.In(copenhagen), consultation, cancelled, lang), nil
 	})
 }
 
-func appointmentHistoryLabel(start, end time.Time, cancelled bool, lang string) appointmentHistoryItem {
+func appointmentHistoryLabel(start, end time.Time, consultation, cancelled bool, lang string) appointmentHistoryItem {
 	dateFormat := "2 January 2006"
-	confirmedLabel, cancelledLabel := "Confirmed", "Cancelled"
+	service, status, cancelledLabel := "Introductory call", "Confirmed", "Cancelled"
 	if lang == "da" {
 		dateFormat = "02.01.2006"
-		confirmedLabel, cancelledLabel = "Bekræftet", "Aflyst"
+		service, status, cancelledLabel = "Indledende samtale", "Bekræftet", "Aflyst"
 	}
-	item := appointmentHistoryItem{
-		Start: start.Format(time.RFC3339), End: end.Format(time.RFC3339),
-		Date: start.Format(dateFormat), StartTime: start.Format("15:04"), EndTime: end.Format("15:04 MST"),
-		Status: confirmedLabel,
+	if consultation {
+		service, status = "Consultation", "Booking recorded"
+		if lang == "da" {
+			service, status = "Rådgivning", "Booking registreret"
+		}
 	}
 	if cancelled {
-		item.Status = cancelledLabel
+		status = cancelledLabel
+	}
+	item := appointmentHistoryItem{
+		Service: service, Status: status,
+		Start: start.Format(time.RFC3339), End: end.Format(time.RFC3339),
+		Date: start.Format(dateFormat), StartTime: start.Format("15:04"), EndTime: end.Format("15:04 MST"),
 	}
 	if start.Format("MST") != end.Format("MST") {
 		item.StartTime = start.Format("15:04 MST")

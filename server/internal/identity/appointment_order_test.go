@@ -3,6 +3,8 @@ package identity
 import (
 	"context"
 	"errors"
+	"html"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -136,12 +138,14 @@ func TestPaidAppointmentOrderRollsBackWhenHoldExpiresDuringFinalEvaluation(t *te
 }
 
 func TestPaidAppointmentOrderKeepsItsSelectedSlot(t *testing.T) {
-	for _, tt := range []struct{ lang, label string }{
-		{"en", "Service: Consultancy"},
-		{"da", "Ydelse: Rådgivning"},
+	for _, tt := range []struct{ lang, mailLabel, historyLabel string }{
+		{"en", "Service: Consultancy", "Consultation"},
+		{"da", "Ydelse: Rådgivning", "Rådgivning"},
 	} {
 		t.Run(tt.lang, func(t *testing.T) {
 			b := acceptedAppointmentQuoteFixture(t)
+			flags := append(acceptanceFlagNames(), "portal-invoice-billing", "portal-paid-appointments", "portal-appointment-history")
+			setFixturePortalFlags(t, b, flags, []any{true, true, true, true, true, true, true, true, true})
 			p := authenticateExistingMember(t, b, "consent-client")
 			ctx := t.Context()
 			const client = "private-client-key"
@@ -200,7 +204,7 @@ func TestPaidAppointmentOrderKeepsItsSelectedSlot(t *testing.T) {
 			if err := b.pool.QueryRow(ctx, `SELECT body FROM portal_mail_outbox WHERE order_id=$1 AND producer_format=3`, first.ID).Scan(&body); err != nil {
 				t.Fatalf("appointment confirmation was not queued: %v", err)
 			}
-			for _, want := range []string{tt.label, termsText, selectedStart.Format(time.RFC3339), selectedStart.Add(30 * time.Minute).Format(time.RFC3339)} {
+			for _, want := range []string{tt.mailLabel, termsText, selectedStart.Format(time.RFC3339), selectedStart.Add(30 * time.Minute).Format(time.RFC3339)} {
 				if !strings.Contains(body, want) {
 					t.Fatalf("appointment confirmation left out %q", want)
 				}
@@ -248,6 +252,11 @@ func TestPaidAppointmentOrderKeepsItsSelectedSlot(t *testing.T) {
 				t.Fatalf("confirmation skipped the final calendar read: %v", err)
 			}
 			requireNoCalendarCreation(t, b.pool, reservation)
+			historyPath := "/portal/appointments?lang=" + tt.lang
+			if status, page, _ := b.request("GET", historyPath, nil, ""); status != http.StatusOK ||
+				strings.Contains(html.UnescapeString(page), selectedStart.Format(time.RFC3339)) {
+				t.Fatalf("funding and email alone exposed an unconfirmed appointment: status=%d", status)
+			}
 			policy.provider = calendar
 			saved, err := confirm()
 			if err != nil || !saved.PaidConfirmed || !saved.Slot.Start.Equal(selectedStart) {
@@ -259,6 +268,20 @@ func TestPaidAppointmentOrderKeepsItsSelectedSlot(t *testing.T) {
 			}
 			if requireCalendarCreation(t, b.pool, reservation, slot.Revision) != key {
 				t.Fatal("a paid confirmation retry changed the calendar event key")
+			}
+			status, page, _ := b.request("GET", historyPath, nil, "")
+			page = html.UnescapeString(page)
+			if status != http.StatusOK || !strings.Contains(page, tt.historyLabel) ||
+				strings.Count(page, selectedStart.Format(time.RFC3339)) != 1 ||
+				strings.Contains(page, start.Format(time.RFC3339)) || strings.Contains(page, first.ID) ||
+				strings.Contains(page, reservation) || strings.Contains(page, termsText) {
+				t.Fatalf("history did not show exactly the confirmed consultation or disclosed private data: status=%d", status)
+			}
+			b.signOut()
+			triageSignIn(t, b, "other-appointment-client", "other-appointment-workspace", "client")
+			if status, page, _ := b.request("GET", historyPath+"&workspace="+client, nil, ""); status != http.StatusOK ||
+				strings.Contains(html.UnescapeString(page), selectedStart.Format(time.RFC3339)) {
+				t.Fatalf("another workspace could read the confirmed consultation: status=%d", status)
 			}
 			err = pgx.BeginFunc(ctx, b.pool, func(tx pgx.Tx) error {
 				commitments, err := readAppointmentCommitments(ctx, tx, secret(), saved.HeldUntil.Add(time.Second), saved.Slot)

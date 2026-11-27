@@ -117,7 +117,9 @@ recovery for an expired hold with a payment remain part of the activation work.
 ## Customer appointment history
 
 The read-only appointment history shows confirmed and cancelled introductory
-calls for the signed-in customer's workspace. It displays Copenhagen time and
-lists upcoming calls before past or cancelled calls. The portal rechecks the
-original session before releasing the page. The independently default-off
+calls and recorded fixed-quote consultations for the signed-in customer's
+workspace. Consultations appear only after the exact held slot is committed
+as the appointment order's durable fulfillment. The history displays Copenhagen
+time and lists upcoming appointments before past or cancelled ones. The portal
+rechecks the original session before releasing the page. The independently default-off
 `portal-appointment-history` switch has no environment activation mapping.
