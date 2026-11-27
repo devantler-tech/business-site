@@ -281,6 +281,11 @@ It records either the matching event's validator or a conflict for operator
 review. The runtime can read and append observations. The original reservation
 and intent also govern observation retention.
 
+v38 records a 30-day removal deadline for customer sign-in accounts when an
+operator permanently closes their workspace. It references the recorded
+end of membership and follows its retention. The runtime can read and append
+records. Provider removal is a separate operation.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

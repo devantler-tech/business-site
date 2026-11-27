@@ -9,6 +9,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -134,8 +135,14 @@ func (b *browser) closeWorkspace(ctx context.Context, tx pgx.Tx, workspace strin
  WHERE issuer=$1 AND client_id=$2 AND role='client' AND NOT revoked`, issuer, workspace); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM portal_memberships
- WHERE issuer=$1 AND client_id=$2 AND role='client'`, issuer, workspace); err != nil {
+	rows, err := tx.Query(ctx, `DELETE FROM portal_memberships
+ WHERE issuer=$1 AND client_id=$2 AND role='client' RETURNING subject,incarnation::text`, issuer, workspace)
+	if err != nil {
+		return err
+	}
+	type removedMember struct{ Subject, Incarnation string }
+	removed, err := pgx.CollectRows(rows, pgx.RowToStructByPos[removedMember])
+	if err != nil {
 		return err
 	}
 	var billing bool
@@ -145,9 +152,33 @@ func (b *browser) closeWorkspace(ctx context.Context, tx pgx.Tx, workspace strin
 	if billing {
 		return errWorkspaceStillBills
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO portal_workspace_settings(workspace_id,closed_at) VALUES($1,now())
- ON CONFLICT(workspace_id) DO UPDATE SET closed_at=EXCLUDED.closed_at`, workspace)
-	return err
+	if _, err := tx.Exec(ctx, `INSERT INTO portal_workspace_settings(workspace_id,closed_at) VALUES($1,now())
+ ON CONFLICT(workspace_id) DO UPDATE SET closed_at=EXCLUDED.closed_at`, workspace); err != nil {
+		return err
+	}
+	closedAccounts := make([]string, 0, len(removed))
+	for _, member := range removed {
+		if customeridentity.DexUser(member.Subject, customeridentity.ZitadelConnectorID) != "" && b.foundation.canInvite(member.Subject, "client") {
+			closedAccounts = append(closedAccounts, member.Incarnation)
+		}
+	}
+	return recordClosedCustomerAccounts(ctx, tx, issuer, workspace, closedAccounts)
+}
+
+func recordClosedCustomerAccounts(ctx context.Context, tx pgx.Tx, issuer, workspace string, closedAccounts []string) error {
+	if len(closedAccounts) == 0 {
+		return nil
+	}
+	saved, err := tx.Exec(ctx, `INSERT INTO portal_customer_account_closures(membership_event,closed_at,remove_by)
+ SELECT h.incarnation,w.closed_at,w.closed_at+interval '720 hours'
+ FROM portal_membership_transitions h
+ JOIN portal_workspace_settings w ON w.workspace_id=h.client_id
+ JOIN unnest($3::text[]) AS prior(incarnation) ON h.previous_incarnation=prior.incarnation::uuid
+ WHERE h.issuer=$1 AND h.client_id=$2 AND h.role='client' AND h.kind='delete'`, issuer, workspace, closedAccounts)
+	if err != nil || saved.RowsAffected() != int64(len(closedAccounts)) {
+		return errTriageStorage
+	}
+	return nil
 }
 
 func (b *browser) removeCustomerMember(ctx context.Context, r *http.Request) (any, error) {

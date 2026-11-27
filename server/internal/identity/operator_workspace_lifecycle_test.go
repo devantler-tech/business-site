@@ -10,7 +10,8 @@ import (
 	"time"
 )
 
-func TestOperatorRenamesWorkspaceAndRemovesItsMember(t *testing.T) {
+func operatorWithWorkspaceCustomer(t *testing.T) *browserFixture {
+	t.Helper()
 	b := newOperatorBrowserFixture(t)
 	b.invite(customerSubject, "fixture-workspace", "client")
 	b.signOut()
@@ -19,6 +20,11 @@ func TestOperatorRenamesWorkspaceAndRemovesItsMember(t *testing.T) {
 	b.signOut()
 	b.as(operatorSubject)
 	b.finish(b.startAt(operatorLink))
+	return b
+}
+
+func TestOperatorRenamesWorkspaceAndRemovesItsMember(t *testing.T) {
+	b := operatorWithWorkspaceCustomer(t)
 	token := b.csrf("/portal/")
 
 	rename := url.Values{"workspace": {"fixture-workspace"}, "name": {"North Lab"}, "csrf_token": {token}}
@@ -50,14 +56,7 @@ func TestOperatorRenamesWorkspaceAndRemovesItsMember(t *testing.T) {
 }
 
 func TestOperatorDeletesWorkspaceAndClosesItsInvitations(t *testing.T) {
-	b := newOperatorBrowserFixture(t)
-	b.invite("active-client", "fixture-workspace", "client")
-	b.signOut()
-	b.as("active-client")
-	b.finish(b.start())
-	b.signOut()
-	b.as(operatorSubject)
-	b.finish(b.startAt(operatorLink))
+	b := operatorWithWorkspaceCustomer(t)
 	b.invite("waiting-client", "fixture-workspace", "client")
 	b.invite("unrelated-client", "other-workspace", "client")
 	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_requests(id,client_id,submission_key,product,title,brief) VALUES
@@ -83,8 +82,21 @@ func TestOperatorDeletesWorkspaceAndClosesItsInvitations(t *testing.T) {
 	if err := b.pool.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM portal_requests WHERE client_id='fixture-workspace')`).Scan(&retained); err != nil || !retained {
 		t.Fatalf("deletion erased retained business records: %v", err)
 	}
+	if status, _, _ := b.request("POST", operatorAPIRoot+"/workspaces/delete", form, b.site.URL); status != http.StatusOK {
+		t.Fatalf("retry workspace closure: status %d", status)
+	}
+	var exact, total bool
+	if err := b.pool.QueryRow(t.Context(), `SELECT
+ EXISTS(SELECT 1 FROM portal_customer_account_closures q
+ JOIN portal_membership_transitions h ON h.incarnation=q.membership_event
+ JOIN portal_workspace_settings w ON w.workspace_id=h.client_id
+ WHERE h.issuer=$1 AND h.subject=$2 AND h.kind='delete' AND h.client_id='fixture-workspace'
+ AND q.closed_at=w.closed_at AND q.remove_by=q.closed_at+interval '720 hours'),
+ (SELECT count(*)=1 FROM portal_customer_account_closures)`, b.f.issuer, customerSubject).Scan(&exact, &total); err != nil || !exact || !total {
+		t.Fatalf("workspace closure did not record exactly one deadline for its closed sign-in account: %v", err)
+	}
 	b.signOut()
-	b.as("active-client")
+	b.as(customerSubject)
 	b.refused(b.start())
 	b.as("waiting-client")
 	b.refused(b.start())
