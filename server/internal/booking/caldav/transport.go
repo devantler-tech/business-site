@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/devantler-tech/business-site/server/internal/booking"
@@ -90,24 +91,37 @@ func (c *Client) sourceClient(ctx context.Context) (*http.Client, func(), error)
 func (c *Client) sourceRequest(ctx context.Context, method, resource string, body io.Reader) (*http.Request, error) {
 	address := url.URL{Scheme: "https", Host: c.origin.Host, Path: resource}
 	request, err := http.NewRequestWithContext(ctx, method, address.String(), body)
-	if err != nil || c.authorizeSourceRequest(request) != nil {
+	if err != nil {
 		return nil, booking.ErrUnavailable
+	}
+	if err := c.authorizeSourceRequest(request); err != nil {
+		return nil, err
 	}
 	return request, nil
 }
 
 func (c *Client) authorizeSourceRequest(request *http.Request) error {
-	ctx := request.Context()
-	if ctx.Err() != nil {
-		return booking.ErrUnavailable
+	user, password, err := c.sourceCredentials(request.Context())
+	if err != nil {
+		return err
 	}
-	user, password, err := c.credentials(ctx)
-	if err != nil || user == "" || password == "" || ctx.Err() != nil {
-		return booking.ErrUnavailable
+	if c.ownedBinding != "" && c.bindingForAccount(user) != c.ownedBinding {
+		return ErrOwnedEventConflict
 	}
 	request.SetBasicAuth(user, password)
 	request.Header.Set("Accept", ical.MIMEType)
 	return nil
+}
+
+func (c *Client) sourceCredentials(ctx context.Context) (string, string, error) {
+	if c.credentials == nil || ctx.Err() != nil {
+		return "", "", booking.ErrUnavailable
+	}
+	user, password, err := c.credentials(ctx)
+	if err != nil || user == "" || password == "" || strings.ContainsRune(user, ':') || ctx.Err() != nil {
+		return "", "", booking.ErrUnavailable
+	}
+	return user, password, nil
 }
 
 func readCalendarBody(ctx context.Context, response *http.Response, limit int64) ([]byte, error) {

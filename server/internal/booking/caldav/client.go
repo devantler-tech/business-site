@@ -17,6 +17,7 @@ type Client struct {
 	origin        *url.URL
 	calendars     []string
 	ownedCalendar string
+	ownedBinding  string
 	httpClient    *http.Client
 	network       *sourceNetwork
 	credentials   func(context.Context) (string, string, error)

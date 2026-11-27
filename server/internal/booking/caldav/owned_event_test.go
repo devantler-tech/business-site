@@ -14,6 +14,7 @@ import (
 )
 
 const fixtureEventKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+const fixtureCalendarBinding = "729c5d14ca4591e4c5be484ad5e2a3b7f1a7ca28b642f69b9fe4e694f8059488"
 
 const fixtureOwnedEvent = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Devantler Tech//Booking//EN\r\n" +
 	"BEGIN:" + ical.CompEvent + "\r\nUID:portal-" + fixtureEventKey + "@devantler.tech\r\n" +
@@ -27,7 +28,10 @@ func fixtureOwnedSelection() Config {
 
 func fixtureEvent() OwnedEvent {
 	start := time.Date(2027, time.March, 27, 21, 0, 0, 0, time.UTC)
-	return OwnedEvent{Key: fixtureEventKey, Slot: booking.Interval{Start: start, End: start.Add(30 * time.Minute)}, Revision: 2}
+	return OwnedEvent{
+		Key: fixtureEventKey, CalendarBinding: fixtureCalendarBinding,
+		Slot: booking.Interval{Start: start, End: start.Add(30 * time.Minute)}, Revision: 2,
+	}
 }
 
 func ownedEventErrorKind(err error) string {

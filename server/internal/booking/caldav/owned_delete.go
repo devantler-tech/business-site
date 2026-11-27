@@ -18,6 +18,10 @@ func (c *Client) DeleteOwnedEvent(ctx context.Context, event OwnedEvent, expecte
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	c, err = c.forOwnedCalendar(ctx, event.CalendarBinding)
+	if err != nil {
+		return err
+	}
 	client, closeConnection, err := c.sourceClient(ctx)
 	if err != nil {
 		return err
