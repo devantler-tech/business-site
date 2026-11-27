@@ -48,7 +48,10 @@ func (c *Client) Profiles(ctx context.Context, ids []string) (map[string]custome
 			if address, err := mail.ParseAddress(email); err != nil || address.Name != "" || address.Address != email || len(email) > 254 {
 				email = ""
 			}
-			profiles[account.ID] = customeridentity.Profile{Name: name, Email: email}
+			profiles[account.ID] = customeridentity.Profile{
+				Name: name, Email: email,
+				EmailVerified: email != "" && account.State == "USER_STATE_ACTIVE" && account.Human.Email.Verified,
+			}
 		}
 	}
 	return profiles, nil

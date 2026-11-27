@@ -11,6 +11,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 	"github.com/jackc/pgx/v5"
 	"github.com/justinas/nosurf"
 )
@@ -38,6 +39,14 @@ func contactText(s string, limit int, required bool) bool {
 	return true
 }
 
+func contactEmail(email string) bool {
+	if !contactText(email, 254, true) || email != strings.TrimSpace(email) {
+		return false
+	}
+	address, err := mail.ParseAddress(email)
+	return err == nil && address.Address == email && address.Name == ""
+}
+
 // parseContact accepts only bounded, single-value contact fields and a valid
 // expected revision. Submitted record IDs and verification claims are rejected.
 func parseContact(r *http.Request) (contactData, error) {
@@ -56,19 +65,16 @@ func parseContact(r *http.Request) (contactData, error) {
 		}
 	}
 	d := contactData{Name: r.PostForm.Get("name"), Email: r.PostForm.Get("email"), Company: r.PostForm.Get("company")}
-	if !contactText(d.Name, 120, true) || !contactText(d.Company, 160, false) || !contactText(d.Email, 254, true) || d.Email != strings.TrimSpace(d.Email) {
-		return contactData{}, ErrDenied
-	}
-	address, err := mail.ParseAddress(d.Email)
-	if err != nil || address.Address != d.Email || address.Name != "" {
+	if !contactText(d.Name, 120, true) || !contactText(d.Company, 160, false) || !contactEmail(d.Email) {
 		return contactData{}, ErrDenied
 	}
 	d.Name = strings.TrimSpace(d.Name)
 	d.Company = strings.TrimSpace(d.Company)
-	d.Revision, err = strconv.ParseInt(r.PostForm.Get("revision"), 10, 64)
-	if err != nil || d.Revision < 0 || d.Revision == int64(^uint64(0)>>1) {
+	revision, err := strconv.ParseInt(r.PostForm.Get("revision"), 10, 64)
+	if err != nil || revision < 0 || revision == int64(^uint64(0)>>1) {
 		return contactData{}, ErrDenied
 	}
+	d.Revision = revision
 	return d, nil
 }
 
@@ -143,7 +149,8 @@ func (s *Foundation) saveContact(ctx context.Context, p Principal, d contactData
 	return nil
 }
 
-// contact renders only the current client's stored contact profile.
+// contact renders the current client's profile and suggests a verified account
+// address on the first visit. Rendering never changes the saved contact.
 func (b *browser) contact(w http.ResponseWriter, r *http.Request) {
 	client, allowed := b.contactClient(w, r)
 	if !allowed {
@@ -154,11 +161,35 @@ func (b *browser) contact(w http.ResponseWriter, r *http.Request) {
 	// rechecks original durable authority after any SDK wait.
 	verification := b.foundation.contactVerificationReady(r.Context())
 	d, scopedClient, err := b.foundation.readContactScoped(r.Context(), authority.principal)
+	if err == nil && scopedClient == client && d.Revision == 0 {
+		if suggested := b.foundation.suggestedContactEmail(r.Context(), authority.principal); suggested != "" {
+			// Another member may have saved a workspace contact during lookup.
+			d, scopedClient, err = b.foundation.readContactScoped(r.Context(), authority.principal)
+			if err == nil && scopedClient == client && d.Revision == 0 {
+				d.Email = suggested
+			}
+		}
+	}
 	if err != nil || scopedClient != client {
 		b.render(w, r, 503, "unavailable", "", "")
 		return
 	}
 	b.renderContact(w, r, 200, d, "", verification, authority)
+}
+
+func (s *Foundation) suggestedContactEmail(ctx context.Context, p Principal) string {
+	id := customeridentity.DexUser(p.subject, customeridentity.ZitadelConnectorID)
+	if s.customers == nil || p.isClientPreview() || id == "" {
+		return ""
+	}
+	lookup, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	profiles, err := s.customers.Profiles(lookup, []string{id})
+	profile := profiles[id]
+	if err != nil || lookup.Err() != nil || !profile.EmailVerified || !contactEmail(profile.Email) {
+		return ""
+	}
+	return profile.Email
 }
 
 // requireContactClient preserves the authentication and role-denial responses.
