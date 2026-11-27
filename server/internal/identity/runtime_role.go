@@ -26,6 +26,15 @@ func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
  AND NOT has_table_privilege(current_user,'portal_membership_transitions','DELETE,TRUNCATE,TRIGGER,MAINTAIN')
  AND NOT has_function_privilege(current_user,'public.portal_record_membership_transition()','EXECUTE')
  AND NOT has_function_privilege(current_user,'public.portal_assign_membership_incarnation()','EXECUTE')
+ AND NOT EXISTS (
+   SELECT 1 FROM pg_roles candidate
+   WHERE (candidate.rolname=current_user OR pg_has_role(current_user,candidate.oid,'MEMBER'))
+     AND (has_function_privilege(candidate.oid,'public.portal_guard_hosting_period_operator()','EXECUTE')
+       OR EXISTS (
+         SELECT 1 FROM (VALUES ('public.portal_hosting_entitlements'),('public.portal_hosting_period_revisions'),
+                               ('public.portal_hosting_period_heads')) AS hosting(table_name)
+         WHERE has_any_column_privilege(candidate.oid,hosting.table_name,'SELECT,INSERT,UPDATE,REFERENCES')
+            OR has_table_privilege(candidate.oid,hosting.table_name,'DELETE,TRUNCATE,TRIGGER,MAINTAIN'))))
  AND NOT EXISTS (SELECT 1 FROM pg_class c WHERE c.relowner=r.oid AND c.relnamespace='public'::regnamespace)
  AND NOT EXISTS (SELECT 1 FROM pg_type t WHERE t.typowner=r.oid AND t.typnamespace='public'::regnamespace AND t.typtype='d')
  AND NOT EXISTS (SELECT 1 FROM pg_database d WHERE d.datname=current_database() AND d.datdba=r.oid)

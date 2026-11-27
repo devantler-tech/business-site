@@ -274,6 +274,53 @@ func TestRetentionPurgesServiceFulfillmentAndConsumer(t *testing.T) {
 	}
 }
 
+func TestRetentionPurgesHostingPeriodsForFormerWorkspace(t *testing.T) {
+	b := acceptedServiceQuoteFixture(t, proposalServiceSoftware)
+	enroll(t, b.svc, b.f, "active-hosting-member", "active-hosting-client", "client")
+	migrator := migrationDB(t)
+	ctx := t.Context()
+	const otherRequest = "HHHHHHHHHHHHHHHHHHHHHHHHHH"
+	if _, err := migrator.Exec(ctx, `INSERT INTO portal_requests(id,client_id,submission_key,product,title,brief)
+ VALUES($1,'active-hosting-client',$1,'website','Fictional hosted site','Hosting fixture')`, otherRequest); err != nil {
+		t.Fatal("prepare a second workspace with a hosted project", err)
+	}
+	if _, err := migrator.Exec(ctx, `INSERT INTO portal_hosting_entitlements(request_id,client_id)
+ SELECT id,client_id FROM portal_requests WHERE id=$1 OR id=$2`, proposalRequestID, otherRequest); err != nil {
+		t.Fatal("prepare the two workspace entitlements", err)
+	}
+	tag, err := migrator.Exec(ctx, `WITH saved AS (
+ INSERT INTO portal_hosting_period_revisions(request_id,client_id,period_id,revision,acceptance_id,
+  proposal_version,content_hash,starts_at,ends_at,scope,operator_incarnation)
+ SELECT a.request_id,a.client_id,$2,1,a.id,a.proposal_version,a.content_hash,
+  '2024-01-01T00:00:00Z','2024-02-01T00:00:00Z','Agreed fictional hosting scope',m.incarnation
+ FROM portal_proposal_acceptances a CROSS JOIN portal_memberships m
+ WHERE a.request_id=$1 AND m.subject='proposal-operator' AND m.role='operator'
+ RETURNING request_id,client_id,period_id,revision
+ )
+ INSERT INTO portal_hosting_period_heads(request_id,client_id,period_id,revision)
+ SELECT request_id,client_id,period_id,revision FROM saved`, proposalRequestID, secret())
+	if err != nil || tag.RowsAffected() != 1 {
+		t.Fatal("record the former workspace's hosting period", err)
+	}
+	if _, err := migrator.Exec(ctx, `UPDATE portal_memberships SET revoked=true WHERE client_id='private-client-key'`); err != nil {
+		t.Fatal("close the former workspace's membership", err)
+	}
+	if n := purgeAged(t, migrator); n != 1 {
+		t.Fatalf("expected only the former workspace to be purged, purged %d", n)
+	}
+	var formerEvidence, activeEntitlement bool
+	err = migrator.QueryRow(ctx, `SELECT
+ EXISTS (SELECT 1 FROM portal_hosting_period_heads WHERE request_id=$1)
+ OR EXISTS (SELECT 1 FROM portal_hosting_period_revisions WHERE request_id=$1)
+ OR EXISTS (SELECT 1 FROM portal_hosting_entitlements WHERE request_id=$1)
+ OR EXISTS (SELECT 1 FROM portal_proposal_acceptances WHERE request_id=$1),
+ EXISTS (SELECT 1 FROM portal_hosting_entitlements WHERE request_id=$2 AND client_id='active-hosting-client')`,
+		proposalRequestID, otherRequest).Scan(&formerEvidence, &activeEntitlement)
+	if err != nil || formerEvidence || !activeEntitlement {
+		t.Fatalf("hosting retention changed the wrong records: former=%t active=%t: %v", formerEvidence, activeEntitlement, err)
+	}
+}
+
 func TestRetentionPurgesOnlyFormerClientsAppointmentRevisions(t *testing.T) {
 	b := newBrowserFixture(t)
 	ctx := t.Context()
