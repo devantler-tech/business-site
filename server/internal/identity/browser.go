@@ -444,12 +444,8 @@ func (b *browser) startSignIn(w http.ResponseWriter, r *http.Request, connector 
 		b.render(w, r, 503, "unavailable", "", "")
 		return
 	}
-	if err = b.sessions.RenewToken(r.Context()); err != nil {
-		b.render(w, r, 503, "unavailable", "", "")
-		return
-	}
 	// Starting a new sign-in intentionally removes any old authenticated identity.
-	if err = b.sessions.Clear(r.Context()); err != nil {
+	if err = b.renewEmptySession(r.Context()); err != nil {
 		b.render(w, r, 503, "unavailable", "", "")
 		return
 	}
@@ -473,6 +469,13 @@ func (b *browser) startSignIn(w http.ResponseWriter, r *http.Request, connector 
 	http.Redirect(w, r, address, http.StatusSeeOther)
 }
 
+func (b *browser) renewEmptySession(ctx context.Context) error {
+	if err := b.sessions.RenewToken(ctx); err != nil {
+		return err
+	}
+	return b.sessions.Clear(ctx)
+}
+
 // refuse ends a sign-in that authenticated but has no membership. It shows no
 // error page and keeps no identity: the portal and upstream sessions end and the
 // browser returns to a fresh login. The reason is never revealed, so every
@@ -485,11 +488,7 @@ func (b *browser) refuse(w http.ResponseWriter, r *http.Request) {
 	}
 	refused++
 	lang := b.sessions.GetString(ctx, "lang")
-	if err := b.sessions.RenewToken(ctx); err != nil {
-		b.render(w, r, 503, "unavailable", "", "")
-		return
-	}
-	if err := b.sessions.Clear(ctx); err != nil {
+	if err := b.renewEmptySession(ctx); err != nil {
 		b.render(w, r, 503, "unavailable", "", "")
 		return
 	}
@@ -533,11 +532,7 @@ func (b *browser) retrySignIn(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/portal/sign-in?lang="+lang, http.StatusSeeOther)
 		return
 	}
-	if err := b.sessions.RenewToken(ctx); err != nil {
-		b.render(w, r, 503, "unavailable", "", "")
-		return
-	}
-	if err := b.sessions.Clear(ctx); err != nil {
+	if err := b.renewEmptySession(ctx); err != nil {
 		b.render(w, r, 503, "unavailable", "", "")
 		return
 	}
@@ -631,11 +626,7 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lang := b.sessions.GetString(r.Context(), "lang")
-	if err = b.sessions.RenewToken(r.Context()); err != nil {
-		b.render(w, r, 503, "unavailable", "", "")
-		return
-	}
-	if err = b.sessions.Clear(r.Context()); err != nil {
+	if err = b.renewEmptySession(r.Context()); err != nil {
 		b.render(w, r, 503, "unavailable", "", "")
 		return
 	}

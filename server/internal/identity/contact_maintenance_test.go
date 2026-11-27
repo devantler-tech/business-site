@@ -240,6 +240,13 @@ func checkMaintenanceInventoryPage(name string, index int, markup string, task b
 	if index >= count/2 {
 		lang = "da"
 	}
+	if name == "portal.html" && maintenanceCases[name][index%len(maintenanceCases[name])] == "no-access" {
+		normalized, err := checkSignInRetryForm(markup, lang)
+		if err != nil {
+			return err
+		}
+		markup = normalized
+	}
 	if !task && name == "portal.html" {
 		state := maintenanceCases[name][index%len(maintenanceCases[name])]
 		if state == "home" || state == "home-links" {
@@ -283,6 +290,24 @@ func checkMaintenanceInventoryPage(name string, index int, markup string, task b
 		return errors.New("maintained page state differs from frozen reference")
 	}
 	return nil
+}
+
+// Validate the new action before comparing the remainder of the old page.
+func checkSignInRetryForm(markup, lang string) (string, error) {
+	label := "Sign in with another account"
+	if lang == "da" {
+		label = "Log ind med en anden konto"
+	}
+	form := `
+<form method="post" action="/portal/sign-in/retry?lang=` + lang + `">
+  <input type="hidden" name="csrf_token" value="fictional-csrf">
+  <button class="button" type="submit">` + label + `</button>
+</form>
+`
+	if strings.Count(markup, form) != 1 {
+		return "", errors.New("sign-in retry form differs from its native contract")
+	}
+	return strings.Replace(markup, form, "", 1), nil
 }
 
 // Verify the exact localized heading before restoring its original reference
