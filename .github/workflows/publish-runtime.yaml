@@ -75,6 +75,8 @@ jobs:
     needs: admit
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      run-attempt: ${{ github.run_attempt }}
     concurrency:
       group: publish-verified-${{ github.repository }}
       queue: max
@@ -138,6 +140,7 @@ jobs:
           PUBLIC_DIGEST: ${{ needs.admit.outputs.public-digest }}
           ORIGINAL_CI_RUN_ID: ${{ needs.admit.outputs.ci-run-id }}
           ORIGINAL_CI_RUN_ATTEMPT: ${{ needs.admit.outputs.ci-run-attempt }}
+          PUBLISHER_RUN_ATTEMPT: ${{ needs.publish.outputs.run-attempt }}
         run: bash scripts/verify-runtime-publication.sh
       - name: Preserve the independently verified public pair receipt
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

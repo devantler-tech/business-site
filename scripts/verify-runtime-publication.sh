@@ -19,6 +19,9 @@ readonly workflow="$repo/.github/workflows/publish-runtime.yaml@refs/tags/v$VERS
 [[ "${IMAGE_DIGEST:-}" =~ ^sha256:[0-9a-f]{64}$ && "${PUBLIC_DIGEST:-}" =~ ^[0-9a-f]{64}$ ]] || fail 'original digests'
 [[ "${ORIGINAL_CI_RUN_ID:-}" =~ ^[1-9][0-9]{0,14}$ && "${ORIGINAL_CI_RUN_ATTEMPT:-}" =~ ^[1-9][0-9]{0,5}$ &&
   "${GITHUB_RUN_ID:-}" =~ ^[1-9][0-9]{0,14}$ && "${GITHUB_RUN_ATTEMPT:-}" =~ ^[1-9][0-9]{0,5}$ && -d "${RUNNER_TEMP:-}" ]] || fail 'run identity'
+# GitHub retains successful job outputs on a verification-only retry. Bind signatures to
+# the publish job's attempt and keep checking that this verifier is on the current attempt.
+[[ "${PUBLISHER_RUN_ATTEMPT:-}" =~ ^[1-9][0-9]{0,5}$ && "$PUBLISHER_RUN_ATTEMPT" -le "$GITHUB_RUN_ATTEMPT" ]] || fail 'publisher attempt'
 [[ ! -e "$RUNNER_TEMP/runtime-publication.json" && ! -L "$RUNNER_TEMP/runtime-publication.json" ]] || fail 'receipt path already exists'
 work="$(mktemp -d "$RUNNER_TEMP/runtime-pair.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
@@ -69,7 +72,7 @@ check_current_runs() {
   ' "$work/publisher.json" >/dev/null || fail 'publication attempt changed or failed'
 }
 check_current_runs
-claims="$(jq -n --arg source "$SOURCE_SHA" --arg version "$VERSION" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" \
+claims="$(jq -n --arg source "$SOURCE_SHA" --arg version "$VERSION" --arg run "$GITHUB_RUN_ID" --arg attempt "$PUBLISHER_RUN_ATTEMPT" \
   --arg image "$IMAGE_DIGEST" --arg public "$PUBLIC_DIGEST" --arg ci "$ORIGINAL_CI_RUN_ID" --arg ci_attempt "$ORIGINAL_CI_RUN_ATTEMPT" --arg workflow "$workflow" '{
     "devantler.repository":"devantler-tech/business-site","devantler.source-sha":$source,"devantler.source-ref":("v"+$version),
     "devantler.version":$version,"devantler.run-id":$run,"devantler.run-attempt":$attempt,"devantler.workflow-ref":$workflow,
@@ -157,9 +160,10 @@ if [[ -f "$work/manifests/README.md" ]]; then
 fi
 check_current_runs
 jq -n --arg source "$SOURCE_SHA" --arg version "$VERSION" --arg image "$image@$IMAGE_DIGEST" --arg manifests "$artifact@$manifests_digest" \
-  --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg ci "$ORIGINAL_CI_RUN_ID" --arg ci_attempt "$ORIGINAL_CI_RUN_ATTEMPT" \
+  --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg publisher_attempt "$PUBLISHER_RUN_ATTEMPT" \
+  --arg ci "$ORIGINAL_CI_RUN_ID" --arg ci_attempt "$ORIGINAL_CI_RUN_ATTEMPT" \
   --arg public "$PUBLIC_DIGEST" --arg identity "https://github.com/$workflow" '{repository:"devantler-tech/business-site",sourceRevision:$source,version:$version,
-    image:$image,manifests:$manifests,publicationRunId:$run,publicationRunAttempt:$attempt,ciRunId:$ci,ciRunAttempt:$ci_attempt,
+    image:$image,manifests:$manifests,publicationRunId:$run,publicationRunAttempt:$attempt,publisherRunAttempt:$publisher_attempt,ciRunId:$ci,ciRunAttempt:$ci_attempt,
     publicDigest:$public,publicProfile:"production-template",publisherIdentity:$identity}' >"$work/receipt.json"
 mv "$work/receipt.json" "$RUNNER_TEMP/runtime-publication.json"
 printf 'Signed immutable image/manifest pair, version aliases, source contents and current attempts verified.\n'
