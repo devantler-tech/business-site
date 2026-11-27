@@ -318,6 +318,24 @@ jobs:
       - name: Verify rendered portal targets and ordinary document passthrough
         working-directory: .
         run: bash scripts/portal-links-preprocess.test.sh
+      - name: Install the pinned Lychee checker
+        working-directory: .
+        run: |
+          archive="$(mktemp)"
+          trap 'rm -f -- "$archive"' EXIT
+          curl --disable --proto '=https' --fail --silent --show-error --location --retry 2 --max-time 60 \
+            --output "$archive" https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-x86_64-unknown-linux-gnu.tar.gz
+          printf '%s  %s\n' '1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a' "$archive" | sha256sum --check --status
+          install_dir="$RUNNER_TEMP/portal-link-checker"
+          mkdir -p "$install_dir"
+          tar -xzf "$archive" -C "$install_dir" --strip-components=1 lychee-x86_64-unknown-linux-gnu/lychee
+          test -x "$install_dir/lychee"
+          printf '%s\n' "$install_dir" >> "$GITHUB_PATH"
+      - name: Verify public GitHub records with read-only credentials
+        working-directory: .
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/check-portal-links.sh --github-records
       - name: Verify exact fictional credential examples and adjacent leak rejection
         working-directory: .
         run: npx --yes --package="secretlint@$(node -p 'require("./package.json").devDependencies.secretlint')" -- node --test scripts/portal-credential-quality.test.mjs

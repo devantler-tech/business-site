@@ -16,6 +16,7 @@ REPOSITORY_SECRETLINT_RULES_PATH: /github/workspace
 # Private forms have mixed methods and authentication. The adapter retains every
 # target in explicit method-aware coverage; ordinary documents stay byte-identical.
 # Pace repeated requests to the same host. All failed responses still fail the scan.
+SPELL_LYCHEE_CLI_EXECUTABLE: ["bash", "/github/workspace/scripts/check-portal-links.sh"]
 SPELL_LYCHEE_ARGUMENTS:
   - "--preprocess"
   - "/github/workspace/scripts/portal-links-preprocess.sh"
@@ -33,6 +34,20 @@ SPELL_LYCHEE_ARGUMENTS:
   - >-
     ^https://github\.com/bufbuild/buf/blob/v1\.72\.0/private/bufpkg/bufmodule/digest\.go$
     https://raw.githubusercontent.com/bufbuild/buf/v1.72.0/private/bufpkg/bufmodule/digest.go
+  # The public API verifies the same plain records when GitHub's HTML pages
+  # return gateway errors. Leave queries and fragment links on their own paths.
+  - "--remap"
+  - >-
+    ^https://github\.com/devantler-tech/(business-site|monorepo)/issues/([1-9][0-9]*)$
+    https://api.github.com/repos/devantler-tech/$1/issues/$2
+  - "--remap"
+  - >-
+    ^https://github\.com/devantler-tech/(business-site|monorepo)/pull/([1-9][0-9]*)$
+    https://api.github.com/repos/devantler-tech/$1/pulls/$2
+  - "--remap"
+  - >-
+    ^https://github\.com/justinas/nosurf/security/advisories/(GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})$
+    https://api.github.com/repos/justinas/nosurf/security-advisories/$1
   # retsinformation.dk (the Danish law database) refuses GitHub-hosted runners with 403 while
   # its links answer 200 elsewhere (#685). Skip only that host; every other host is still
   # checked and every other failed response still fails the scan.

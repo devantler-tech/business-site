@@ -93,7 +93,7 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
       - name: Publish and sign the release as this repository
-        uses: devantler-tech/.github/actions/publish-app@61d8f70f25d7d5deb8bd914136b329b5a59ff43b # v22.7.4
+        uses: devantler-tech/.github/actions/publish-app@d45338f0ba120e87bdb05c1f70691afe2ec9d2ca # v22.7.5
         with:
           mode: prebuilt-webapp
           app-name: business-site
@@ -123,6 +123,8 @@ jobs:
         uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
       - name: Setup Flux artifact reader
         uses: fluxcd/flux2/action@3fa784edd773d56630bb9f62645e08f70c2cff0a # v2.10.0
+        with:
+          version: '2.10.1'
       - name: Authenticate only for registry reads
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:

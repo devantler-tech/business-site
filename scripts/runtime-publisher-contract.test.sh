@@ -79,6 +79,9 @@ publish_valid() {
       (.uses//""|test("@[0-9a-f]{40}$"))) and
     .jobs.verify.needs==["admit","publish"] and .jobs.verify.if==null and
     .jobs.verify.permissions=={"contents":"read","actions":"read","packages":"read"} and
+    ([.jobs.verify.steps[] | select(.name=="Setup Flux artifact reader")] |
+      length==1 and (.[0].uses//""|test("^fluxcd/flux2/action@[0-9a-f]{40}$")) and
+      (.[0].with.version//""|test("^[0-9]+[.][0-9]+[.][0-9]+$"))) and
     .jobs.verify.steps[-2].run=="bash scripts/verify-runtime-publication.sh" and
     .jobs.verify.steps[-2].env.PUBLISHER_RUN_ATTEMPT=="\u0024{{ needs.publish.outputs.run-attempt }}" and
     (.jobs.verify.steps[-1].uses|startswith("actions/upload-artifact@")) and
@@ -118,6 +121,8 @@ for mutation in '.on.push={tags:["v*"]}' '.jobs.admit.if="always()"' '.jobs.publ
   '.jobs.publish.steps[1].with["prebuilt-ci-run-id"]="1"' '.jobs.publish.steps[1].with["deploy-path"]="./"' \
   '.jobs.publish.steps[1].with["app-manifest"]="webapp.yaml"' \
   '.jobs.publish.steps[1].uses|=sub("@[0-9a-f]{40}$";"@main")' '.jobs.verify.needs=["admit"]' \
+  '.jobs.verify.steps |= map(if .name=="Setup Flux artifact reader" then del(.with.version) else . end)' \
+  '.jobs.verify.steps |= map(if .name=="Setup Flux artifact reader" then .with.version="latest" else . end)' \
   '.jobs.verify.steps[-2]["continue-on-error"]=true' 'del(.jobs.publish.outputs["run-attempt"])' \
   '.jobs.verify.steps[-2].env.PUBLISHER_RUN_ATTEMPT="\u0024{{ github.run_attempt }}"' \
   '.jobs.publish.steps[1].uses|=sub("@[0-9a-f]{40}$";"@v21.7.2")' '.jobs.publish.steps[1].uses|=sub("[0-9a-f]$";"")' \
