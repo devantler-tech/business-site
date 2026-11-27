@@ -318,6 +318,11 @@ An unconfirmed attempt survives a restart and allows only a read of the
 reserved event on retry. Provider absence during that read leaves the attempt
 unresolved. The attempt follows retention of the immutable calendar intent.
 
+v44 records the calendar result of cancelling an introductory meeting. It
+references both the cancellation and the original creation observation. One
+verified absence or conflict is retained per reservation. Retention of either
+source removes the result with it.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

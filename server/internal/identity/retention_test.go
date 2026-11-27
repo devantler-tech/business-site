@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -295,8 +296,22 @@ func TestRetentionPurgesOnlyFormerClientsAppointmentRevisions(t *testing.T) {
 			t.Fatal("prepare the fictional introduction", err)
 		}
 		if client == "former-booking-client" {
+			policy := appointmentHoldPolicy{calendarBinding: fixtureCalendarDestination}
+			if err := pgx.BeginFunc(ctx, b.pool, func(tx pgx.Tx) error {
+				return policy.queueCalendarCreation(ctx, tx, root, 1)
+			}); err != nil {
+				t.Fatal("prepare the former client's calendar intent", err)
+			}
+			if _, err := b.pool.Exec(ctx, `INSERT INTO portal_appointment_calendar_observations
+ (reservation_id,outcome,provider_tag) VALUES($1,'created','"retention-version"')`, root); err != nil {
+				t.Fatal("prepare the former client's calendar observation", err)
+			}
 			if _, err := b.pool.Exec(ctx, `INSERT INTO portal_appointment_introduction_cancellations(reservation_id) VALUES($1)`, root); err != nil {
 				t.Fatal("prepare the former client's cancellation", err)
+			}
+			if _, err := b.pool.Exec(ctx, `INSERT INTO portal_appointment_calendar_removals
+ (reservation_id,outcome) VALUES($1,'removed')`, root); err != nil {
+				t.Fatal("prepare the former client's calendar removal", err)
 			}
 		}
 	}
@@ -308,13 +323,15 @@ func TestRetentionPurgesOnlyFormerClientsAppointmentRevisions(t *testing.T) {
 		t.Fatalf("expected to erase one former client, erased %d", n)
 	}
 	var reservations, revisions, introductions, cancellations int
-	var active bool
+	var active, calendarEvidence bool
 	err := b.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM portal_appointment_reservations),
  (SELECT count(*) FROM portal_appointment_revisions), (SELECT count(*) FROM portal_appointment_introductions),
  (SELECT count(*) FROM portal_appointment_introduction_cancellations), EXISTS(
- SELECT 1 FROM portal_appointment_introductions WHERE client_id='active-booking-client')`).Scan(&reservations, &revisions, &introductions, &cancellations, &active)
-	if err != nil || reservations != 1 || revisions != 1 || introductions != 1 || cancellations != 0 || !active {
-		t.Fatalf("reservation retention crossed clients: roots=%d revisions=%d introductions=%d cancellations=%d active=%t err=%v", reservations, revisions, introductions, cancellations, active, err)
+ SELECT 1 FROM portal_appointment_introductions WHERE client_id='active-booking-client'),
+ EXISTS (SELECT 1 FROM portal_appointment_calendar_removals)`).Scan(&reservations, &revisions, &introductions, &cancellations, &active, &calendarEvidence)
+	if err != nil || reservations != 1 || revisions != 1 || introductions != 1 || cancellations != 0 || !active || calendarEvidence {
+		t.Fatalf("reservation retention crossed clients: roots=%d revisions=%d introductions=%d cancellations=%d active=%t calendar=%t err=%v",
+			reservations, revisions, introductions, cancellations, active, calendarEvidence, err)
 	}
 }
 

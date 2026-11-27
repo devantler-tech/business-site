@@ -98,6 +98,10 @@ recording a match or conflict. For a consultation it also verifies settled
 funding before and after the provider call. A cancellation, withdrawal or
 funding reversal stops new creation attempts and leaves the identity available
 for event cleanup. An interrupted readback can use the original identity again.
+An explicitly cancelled introduction with a successful creation observation
+can be reconciled using that saved event version. A verified absence or a
+version conflict is retained once. An unavailable provider leaves cleanup
+pending. An uncertain original creation remains unresolved without deletion.
 Workers hold a per-reservation lock from the first check through the provider
 call and observation commit. A second worker checks for a saved result before
 contacting the provider. The database transaction ends before the provider call
