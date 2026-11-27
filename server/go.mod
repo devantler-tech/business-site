@@ -7,12 +7,11 @@ require (
 	github.com/alexedwards/scs/v2 v2.9.1-0.20250927102904-c45a9d145a22
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/emersion/go-ical v0.0.0-20261112170022-46c5b53a1723
-	github.com/emersion/go-webdav v0.7.0
-	github.com/jackc/pgx/v5 v5.12.0
+	github.com/jackc/pgx/v5 v5.13.0
 	github.com/justinas/nosurf v1.2.0
 	github.com/open-feature/go-sdk v1.20.0
 	github.com/open-feature/go-sdk-contrib/providers/from-env v0.1.7
-	golang.org/x/net v0.62.0
+	golang.org/x/net v0.63.0
 	golang.org/x/oauth2 v0.38.0
 )
 
@@ -23,6 +22,6 @@ require (
 	github.com/jackc/puddle/v2 v2.2.3 // indirect
 	github.com/teambition/rrule-go v1.8.2 // indirect
 	go.uber.org/mock v0.6.0 // indirect
-	golang.org/x/sync v0.24.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
+	golang.org/x/sync v0.25.0 // indirect
+	golang.org/x/text v0.44.0 // indirect
 )

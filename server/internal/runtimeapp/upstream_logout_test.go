@@ -1,6 +1,9 @@
 package runtimeapp
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 // settingsEnv serves values as the process environment.
 func settingsEnv(values map[string]string) func(string) string {
@@ -50,6 +53,40 @@ func TestUpstreamLogoutConfiguration(t *testing.T) {
 		}
 	}
 	requireProjected(t, "PORTAL_UPSTREAM_END_SESSION_URL", "PORTAL_UPSTREAM_CLIENT_ID")
+}
+
+func TestUpstreamLogoutDefaultsRespectPortalAndExistingSettings(t *testing.T) {
+	const endpoint, client = "https://accounts.example.invalid/end", "release-client"
+	cfg, err := ReadConfig(settingsEnv(withPortal(nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	configured, err := cfg.WithUpstreamLogoutDefaults(endpoint, client)
+	if err != nil || configured.endSession != endpoint || configured.endSessionClient != client {
+		t.Fatal("the complete portal did not accept the release logout pair", err)
+	}
+
+	const existingEndpoint, existingClient = "https://old-accounts.example.invalid/end", "platform-client"
+	existing, err := ReadConfig(settingsEnv(withPortal(map[string]string{
+		"PORTAL_UPSTREAM_END_SESSION_URL": existingEndpoint, "PORTAL_UPSTREAM_CLIENT_ID": existingClient,
+	})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	withDefaults, err := existing.WithUpstreamLogoutDefaults(endpoint, client)
+	if err != nil || withDefaults.endSession != existingEndpoint || withDefaults.endSessionClient != existingClient {
+		t.Fatal("the existing projection's logout pair was replaced or mixed", err)
+	}
+	if _, err := existing.WithUpstreamLogoutDefaults("https://accounts.example.invalid/end?next=bad", client); !errors.Is(err, ErrConfig) {
+		t.Fatal("malformed defaults were accepted behind the existing projection", err)
+	}
+	if _, err := cfg.WithUpstreamLogoutDefaults(endpoint, ""); !errors.Is(err, ErrConfig) {
+		t.Fatal("an incomplete release logout pair was accepted", err)
+	}
+	public, err := (Config{}).WithUpstreamLogoutDefaults(endpoint, client)
+	if err != nil || public != (Config{}) {
+		t.Fatal("logout defaults configured a public-only runtime", err)
+	}
 }
 
 // The operator list is optional and only with a portal. Portal startup checks

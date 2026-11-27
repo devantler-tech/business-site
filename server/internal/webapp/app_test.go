@@ -31,6 +31,47 @@ func loadPublicFixture(t *testing.T) *Artifact {
 	return a
 }
 
+func TestTrustpilotProfileHandoff(t *testing.T) {
+	a := loadPublicFixture(t)
+	hosted := a.HostHandler(nil, Hosts{Public: "devantler.tech", Portal: "portal.devantler.tech"})
+	for _, handler := range []struct {
+		name, base string
+		handler    http.Handler
+	}{
+		{"single host", "https://example.test", a.Handler(nil)},
+		{"public host", "https://devantler.tech", hosted},
+		{"portal host", "https://portal.devantler.tech", hosted},
+	} {
+		t.Run(handler.name, func(t *testing.T) {
+			for _, method := range []string{http.MethodGet, http.MethodHead} {
+				w := httptest.NewRecorder()
+				// Caller-supplied queries never reach the review provider.
+				handler.handler.ServeHTTP(w, httptest.NewRequest(method, handler.base+"/trustpilot/?next=https://example.test", nil))
+				if w.Code != http.StatusFound || w.Header().Get("Location") != "https://www.trustpilot.com/review/devantler.tech" {
+					t.Fatalf("%s handoff: got %d %q", method, w.Code, w.Header().Get("Location"))
+				}
+				if w.Body.Len() != 0 || w.Header().Get("Referrer-Policy") != "no-referrer" ||
+					w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("Set-Cookie") != "" {
+					t.Fatalf("%s handoff returned unexpected privacy headers or a body", method)
+				}
+			}
+			for _, tc := range []struct {
+				method, path string
+				status       int
+			}{
+				{http.MethodPost, "/trustpilot/", http.StatusMethodNotAllowed},
+				{http.MethodGet, "/trustpilot%2f", http.StatusNotFound},
+			} {
+				w := httptest.NewRecorder()
+				handler.handler.ServeHTTP(w, httptest.NewRequest(tc.method, handler.base+tc.path, nil))
+				if w.Code != tc.status || w.Header().Get("Location") != "" {
+					t.Fatalf("%s %s: got %d %q", tc.method, tc.path, w.Code, w.Header().Get("Location"))
+				}
+			}
+		})
+	}
+}
+
 // TestPublicRoutesAndClosedPortal preserves visitor routes while reserving private paths.
 func TestPublicRoutesAndClosedPortal(t *testing.T) {
 	a := loadPublicFixture(t)

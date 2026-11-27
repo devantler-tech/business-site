@@ -2,16 +2,16 @@ import { launchDiscount, type Locale } from './business-copy.ts';
 import company from '../../data/company.json' with { type: 'json' };
 
 // Privacy notice and customer terms (#19). Plain statements of what the business
-// does and of the statutory rights, not a compliance claim. Keep the street
-// address out: these pages link to the company-information page instead, and
-// each proposal carries the complete withdrawal form with the address filled in.
+// does and of the statutory rights, not a compliance claim. These pages link to
+// the company-information page. Order confirmations include the complete
+// withdrawal form with the postal address.
 
 /** A paragraph, a bullet list, or a list of links. */
 export type LegalBlock = string | { list: readonly string[] } | { links: readonly { href: string; label: string }[] };
 export type LegalSection = { title: string; blocks: readonly LegalBlock[] };
 export type LegalPage = { title: string; description: string; intro: string; updated: string; sections: readonly LegalSection[] };
 
-const updated = { en: 'Last updated 16 November 2026.', da: 'Senest opdateret 16. november 2026.' } as const;
+const updated = { en: 'Last updated 24 November 2026.', da: 'Senest opdateret 24. november 2026.' } as const;
 const companyPath = { en: '/company/', da: '/da/company/' } as const;
 
 /** The trader line of the terms; the phone number appears once company.json has one. */
@@ -35,9 +35,11 @@ const privacy = (portal: boolean) => ({
         { links: [{ href: companyPath.en, label: 'Company information and postal address' }] },
       ] },
       { title: 'Cookies and storage on your device', blocks: [
-        'This website sets no cookies, uses no analytics or advertising tracking and loads no content from other websites.',
+        'The public website sets no cookies of its own.',
+        'The review link opens Trustpilot’s website. Trustpilot’s privacy and cookie policies apply there.',
+        { links: [{ href: 'https://legal.trustpilot.com/for-everyone/end-user-privacy-terms', label: 'Trustpilot’s privacy policy' }, { href: 'https://corporate.trustpilot.com/legal/for-everyone/cookie-policy/may-2025', label: 'Trustpilot’s cookie policy' }] },
         'If you choose an appearance (System, Light or Dark), your browser saves that choice on your device so the next page uses it. The choice is never sent to me. You can remove it by clearing this site’s data in your browser.',
-        ...(portal ? ['The customer portal and its sign-in pages use cookies only to keep you signed in and to protect forms against forgery. The portal’s session cookie can remain after you close your browser, but expires within 30 minutes or sooner if your sign-in expires. Signing out ends the portal session immediately. Its form-protection cookie expires after 30 minutes. The sign-in service at accounts.devantler.tech sets a browser identifier that ties your sign-in sessions to this browser, kept for one year, and a form-protection cookie that expires after 12 hours. None of these cookies is used for anything else.'] : []),
+        ...(portal ? ['The customer portal and its sign-in pages use their own cookies only to keep you signed in and to protect forms against forgery. The portal’s session cookie can remain after you close your browser, but expires within 30 minutes or sooner if your sign-in expires. Signing out ends the portal session immediately. Its form-protection cookie expires after 30 minutes. The sign-in service at accounts.devantler.tech sets a browser identifier that ties your sign-in sessions to this browser, kept for one year, and a form-protection cookie that expires after 12 hours. None of these cookies is used for anything else.'] : []),
       ] },
       { title: 'Visiting the website', blocks: [
         'Like every website, the server that delivers a page receives your IP address, browser details and the address of the page you ask for. This is used only to deliver the website and keep it secure, not to track you. The legal basis is my legitimate interest in running a secure website (GDPR Article 6(1)(f)).',
@@ -61,6 +63,10 @@ const privacy = (portal: boolean) => ({
         'Sign-in runs on my own services, ZITADEL at accounts.devantler.tech and Dex at login.devantler.tech, on the same EU platform as the portal. Emails about sign-in and the portal are sent through Amazon Web Services (Amazon SES) in Frankfurt. When you place an order, the portal sends what billing needs to Numina for an invoice, or to Stripe for card or MobilePay. When you pay by card or MobilePay, Stripe collects your billing address and, for a business, its name and VAT number, to issue your invoice.',
         'You can choose to sign in with GitHub instead. It never creates an account: it links to the account you were invited to, either automatically when your GitHub email address matches the invitation, or after one sign-in with your password and two-step verification. With GitHub sign-in, GitHub’s own login protects your account. ZITADEL receives your GitHub user ID and username, your public GitHub profile and your email addresses. It keeps only the link to your GitHub account (user ID and username), and uses your email address only to find your invited account. GitHub learns that you sign in to Devantler Tech. You can remove the link in your account, or ask me to. If you do not use GitHub sign-in, GitHub receives nothing about you.',
         'The legal basis is our agreement, and the steps you ask for before one (GDPR Article 6(1)(b)). Your account and portal records are kept while you are a customer, and for 3 years after your last portal access ends, the general Danish limitation period for claims. The portal then deletes them. Accounting records are kept for five years, as described above. Backups of the portal and sign-in databases are stored with Cloudflare and kept for 30 days.',
+      ] }] : []),
+      ...(portal ? [{ title: 'Portal support', blocks: [
+        'If you ask me for help with the portal, I record your request. When instructions or demo data are insufficient, I may use a read-only view to check your workspace’s access status, contact setup and request status.',
+        'My legal basis is my legitimate interest in resolving reported portal problems and checking that support access is appropriate (GDPR Article 6(1)(f)). I record who opened the view, when, the case reference and the account involved. The daily cleanup deletes support access logs once they reach 90 days. You can object using the contact details under Your rights below.',
       ] }] : []),
       { title: 'Who else receives the data', blocks: [
         'I do not sell personal data or share it for marketing. These providers receive data:',
@@ -93,9 +99,11 @@ const privacy = (portal: boolean) => ({
         { links: [{ href: companyPath.da, label: 'Virksomhedsoplysninger og postadresse' }] },
       ] },
       { title: 'Cookies og lagring på din enhed', blocks: [
-        'Hjemmesiden sætter ingen cookies, bruger ingen statistik- eller reklamesporing og henter intet indhold fra andre hjemmesider.',
+        'Den offentlige hjemmeside sætter ingen egne cookies.',
+        'Anmeldelseslinket åbner Trustpilots hjemmeside. Der gælder Trustpilots privatlivs- og cookiepolitik.',
+        { links: [{ href: 'https://legal.trustpilot.com/for-everyone/end-user-privacy-terms', label: 'Trustpilots privatlivspolitik' }, { href: 'https://dk.corporate.trustpilot.com/legal/for-everyone/cookie-policy/may-2025', label: 'Trustpilots cookiepolitik' }] },
         'Hvis du vælger et udseende (System, Lys eller Mørk), gemmer din browser valget på din enhed, så næste side bruger det. Valget sendes aldrig til mig. Du kan fjerne det ved at slette hjemmesidens data i din browser.',
-        ...(portal ? ['Kundeportalen og dens login-sider bruger kun cookies til at holde dig logget ind og til at beskytte formularer mod forfalskning. Portalens sessionscookie kan blive gemt, efter at du har lukket browseren, men udløber senest efter 30 minutter eller tidligere, hvis dit login udløber. Når du logger ud, afsluttes portalsessionen straks. Cookien til formularbeskyttelse udløber efter 30 minutter. Login-tjenesten på accounts.devantler.tech sætter et browser-id, der knytter dine login-sessioner til denne browser og gemmes i et år, og en formularbeskyttelse, der udløber efter 12 timer. Ingen af disse cookies bruges til andet.'] : []),
+        ...(portal ? ['Kundeportalen og dens login-sider bruger kun deres egne cookies til at holde dig logget ind og til at beskytte formularer mod forfalskning. Portalens sessionscookie kan blive gemt, efter at du har lukket browseren, men udløber senest efter 30 minutter eller tidligere, hvis dit login udløber. Når du logger ud, afsluttes portalsessionen straks. Cookien til formularbeskyttelse udløber efter 30 minutter. Login-tjenesten på accounts.devantler.tech sætter et browser-id, der knytter dine login-sessioner til denne browser og gemmes i et år, og en formularbeskyttelse, der udløber efter 12 timer. Ingen af disse cookies bruges til andet.'] : []),
       ] },
       { title: 'Når du besøger hjemmesiden', blocks: [
         'Som ved alle hjemmesider modtager den server, der leverer siden, din IP-adresse, oplysninger om din browser og adressen på den side, du beder om. Det bruges kun til at levere hjemmesiden og holde den sikker, ikke til at spore dig. Behandlingsgrundlaget er min legitime interesse i at drive en sikker hjemmeside (databeskyttelsesforordningens artikel 6, stk. 1, litra f).',
@@ -119,6 +127,10 @@ const privacy = (portal: boolean) => ({
         'Login kører på mine egne tjenester, ZITADEL på accounts.devantler.tech og Dex på login.devantler.tech, på samme EU-platform som portalen. E-mails om login og portalen sendes gennem Amazon Web Services (Amazon SES) i Frankfurt. Når du afgiver en ordre, sender portalen det, faktureringen kræver, til Numina ved betaling via faktura eller til Stripe ved betaling med kort eller MobilePay. Betaler du med kort eller MobilePay, indsamler Stripe din faktureringsadresse og, for en virksomhed, dens navn og momsnummer, så Stripe kan udstede din faktura.',
         'Du kan i stedet vælge at logge ind med GitHub. Det opretter aldrig en konto, men kobles til den konto, du er inviteret til: automatisk, når din e-mailadresse hos GitHub svarer til invitationen, eller efter ét login med din adgangskode og totrinsbekræftelse. Ved login med GitHub beskytter GitHubs eget login din konto. ZITADEL modtager dit GitHub-bruger-id og brugernavn, din offentlige GitHub-profil og dine e-mailadresser. Den gemmer kun koblingen til din GitHub-konto (bruger-id og brugernavn) og bruger kun din e-mailadresse til at finde din inviterede konto. GitHub får at vide, at du logger ind hos Devantler Tech. Du kan fjerne koblingen i din konto eller bede mig om det. Bruger du ikke login med GitHub, modtager GitHub intet om dig.',
         'Behandlingsgrundlaget er vores aftale og de tiltag, du beder om, inden en aftale indgås (artikel 6, stk. 1, litra b). Din konto og dine portaloplysninger gemmes, mens du er kunde, og i 3 år efter, at din sidste adgang til portalen er ophørt, som er den almindelige forældelsesfrist for krav. Derefter sletter portalen dem. Regnskabsmateriale gemmes i fem år som beskrevet ovenfor. Sikkerhedskopier af portalens og logintjenesternes databaser opbevares hos Cloudflare i 30 dage.',
+      ] }] : []),
+      ...(portal ? [{ title: 'Support i kundeportalen', blocks: [
+        'Når du beder mig om hjælp til portalen, dokumenterer jeg din henvendelse. Hvis en vejledning eller demodata ikke er nok, kan jeg se status for adgang, kontaktoplysninger og forespørgsler i dit arbejdsområde. Visningen giver kun læseadgang.',
+        'Behandlingsgrundlaget er min berettigede interesse i at løse de portalproblemer, du melder, og kontrollere adgangen (artikel 6, stk. 1, litra f). Jeg registrerer, hvem der åbnede visningen, tidspunktet, sagens reference og den konto, sagen gælder. Adgangsloggen slettes ved den daglige oprydning, når den er 90 dage gammel. Du kan gøre indsigelse som beskrevet under Dine rettigheder nedenfor.',
       ] }] : []),
       { title: 'Hvem modtager ellers oplysningerne', blocks: [
         'Jeg sælger ikke personoplysninger og deler dem ikke til markedsføring. Disse leverandører modtager oplysninger:',
@@ -147,16 +159,17 @@ const terms = {
     title: 'Terms for projects and hosting',
     description: 'How agreements with Devantler Tech work: proposals, prices, payment, your right of withdrawal and ending hosting.',
     intro: 'These terms apply when you agree a project or hosting with Devantler Tech. Your written proposal gives the details of your project. Where the proposal and these terms differ, the proposal applies, but no proposal reduces your rights as a private customer.',
-    updated: updated.en,
+    updated: 'Last updated 22 November 2026.',
     sections: [
       { title: 'Who you agree with', blocks: [
         traderLine('en', company),
         { links: [{ href: companyPath.en, label: 'Company information and postal address' }] },
       ] },
       { title: 'Proposal and agreement', blocks: [
-        'The first consultation is free and does not commit you to anything.',
-        'You receive a written proposal by email. It describes what will be built or hosted, the total price, any monthly price, the schedule and the payment terms. These terms and the withdrawal form, with my postal address filled in, come with the proposal.',
-        'The agreement is made when you accept the proposal in writing. I then confirm the agreement by email, with these terms attached.',
+        'Get in touch and we’ll talk through your idea by email or phone. The first conversation is free and you don’t have to commit to a project. I’ll then invite you to the client portal.',
+        'You can review and accept your written proposal there. It sets out what I’ll build or host, the total price, any monthly price, the schedule and the payment terms. Before ordering, you can read these terms and the withdrawal form in the portal.',
+        'For paid work, the agreement is made when you place your order in the portal after accepting the proposal. I confirm the agreement by email before work starts. The confirmation includes these terms and the withdrawal form with my postal address.',
+        'You can follow your project’s progress and submit further requests in the portal.',
       ] },
       { title: 'Prices', blocks: [
         'Prices are in Danish kroner. For private customers and Danish businesses they include 25% Danish VAT. The prices on this website are fixed prices for the scope each offer describes; your proposal states the fixed price for your project, any monthly hosting price and the VAT that applies to you.',
@@ -172,14 +185,14 @@ const terms = {
         'Your proposal states the schedule. You can try the result before it goes live.',
       ] },
       { title: 'Your right of withdrawal (private customers)', blocks: [
-        'As a private customer, you can withdraw from an agreement made by email or online within 14 days, without giving a reason. The 14 days run from the day the agreement is made. If you receive these terms in writing only later, they run from that day instead. If the last day is a Saturday, Sunday, public holiday, 5 June, 24 December or 31 December, you have until the next working day.',
+        'As a private customer, you can withdraw from your agreement within 14 days, without giving a reason. The 14 days run from the day the agreement is made. If you receive these terms in writing only later, they run from that day instead. If the last day is a Saturday, Sunday, public holiday, 5 June, 24 December or 31 December, you have until the next working day.',
         `To withdraw, tell me clearly before the deadline, for example by email to ${company.email}. You can use the form below, but you do not have to. It is enough to send your message before the deadline.`,
-        'I only start work within the 14 days if you expressly ask me to: by ticking the box for it when you order in the customer portal, or in writing when you accept the proposal. When you ask, you also confirm that you lose the right of withdrawal once the work is completely finished.',
+        'I only start work within the 14 days if you expressly ask me to by ticking the box when you place your order in the client portal. When you ask, you also confirm that you lose the right of withdrawal once the work is completely finished.',
         'If you withdraw after the work has started, you pay for the work done until you told me, in proportion to the whole agreement. Once the work you asked me to start early is completely finished, you can no longer withdraw. If you do not ask for an early start, I start after the 14 days.',
         'If you withdraw, I refund what you have paid, minus any payment for work already done, without undue delay and no later than 14 days after I receive your message. I use the same payment method you used, unless you expressly agree to another, and the refund costs you nothing.',
       ] },
       { title: 'Withdrawal form', blocks: [
-        'Complete and return this form only if you wish to withdraw from the agreement. The copy that comes with your proposal has my postal address filled in.',
+        'Complete and return this form only if you wish to withdraw from the agreement. The copy in your order confirmation includes my postal address.',
         { list: [
           `To: Devantler Tech, [postal address on the company information page], ${company.email}`,
           'I/We (*) hereby give notice that I/We (*) withdraw from my/our (*) contract for the provision of the following service (*):',
@@ -212,16 +225,17 @@ const terms = {
     title: 'Handelsbetingelser for projekter og hosting',
     description: 'Sådan fungerer aftaler med Devantler Tech: tilbud, priser, betaling, din fortrydelsesret og opsigelse af hosting.',
     intro: 'Disse betingelser gælder, når du aftaler et projekt eller hosting med Devantler Tech. Dit skriftlige tilbud beskriver detaljerne i dit projekt. Er der uoverensstemmelse mellem tilbuddet og betingelserne, gælder tilbuddet, men intet tilbud forringer dine rettigheder som privatkunde.',
-    updated: updated.da,
+    updated: 'Senest opdateret 22. november 2026.',
     sections: [
       { title: 'Hvem du indgår aftale med', blocks: [
         traderLine('da', company),
         { links: [{ href: companyPath.da, label: 'Virksomhedsoplysninger og postadresse' }] },
       ] },
       { title: 'Tilbud og aftale', blocks: [
-        'Den første samtale er gratis og uforpligtende.',
-        'Du får et skriftligt tilbud på e-mail. Det beskriver, hvad der skal bygges eller hostes, den samlede pris, en eventuel månedspris, tidsplanen og betalingsbetingelserne. Disse betingelser og fortrydelsesformularen, med min postadresse udfyldt, følger med tilbuddet.',
-        'Aftalen er indgået, når du skriftligt accepterer tilbuddet. Derefter bekræfter jeg aftalen på e-mail med disse betingelser vedhæftet.',
+        'Kontakt mig, så taler vi om din idé på e-mail eller telefon. Den første samtale er gratis og uforpligtende. Derefter inviterer jeg dig til kundeportalen.',
+        'I portalen kan du læse og acceptere dit skriftlige tilbud. Det beskriver, hvad jeg skal bygge eller hoste, den samlede pris, en eventuel månedspris, tidsplanen og betalingsbetingelserne. Inden du bestiller, kan du læse disse betingelser og standardfortrydelsesformularen i portalen.',
+        'Ved betalt arbejde indgår vi aftalen, når du afgiver din bestilling i portalen efter at have accepteret tilbuddet. Jeg bekræfter aftalen på e-mail, inden arbejdet begynder. E-mailen indeholder disse betingelser og fortrydelsesformularen med min postadresse.',
+        'Du kan følge med i dit projekt og sende nye forespørgsler i portalen.',
       ] },
       { title: 'Priser', blocks: [
         'Priserne er i danske kroner. For privatkunder og danske virksomheder er de inkl. 25 % moms. Priserne på hjemmesiden er faste priser for det omfang, hver ydelse beskriver; dit tilbud oplyser den faste pris for dit projekt, en eventuel månedspris for hosting og den moms, der gælder for dig.',
@@ -237,14 +251,14 @@ const terms = {
         'Dit tilbud oplyser tidsplanen. Du kan afprøve resultatet, før det går i luften.',
       ] },
       { title: 'Din fortrydelsesret (privatkunder)', blocks: [
-        'Som privatkunde kan du fortryde en aftale, der er indgået på e-mail eller online, inden for 14 dage uden at give en begrundelse. De 14 dage regnes fra den dag, aftalen indgås. Får du først disse betingelser på skrift senere, regnes de i stedet fra den dag. Falder den sidste dag på en lørdag, søndag, helligdag, grundlovsdag, juleaftensdag eller nytårsaftensdag, har du frist til den følgende hverdag.',
+        'Som privatkunde kan du fortryde din aftale inden for 14 dage uden at give en begrundelse. De 14 dage regnes fra den dag, aftalen indgås. Får du først disse betingelser på skrift senere, regnes de i stedet fra den dag. Falder den sidste dag på en lørdag, søndag, helligdag, grundlovsdag, juleaftensdag eller nytårsaftensdag, har du frist til den følgende hverdag.',
         `Hvis du vil fortryde, skal du give mig en tydelig besked inden fristen, fx på e-mail til ${company.email}. Du kan bruge formularen nedenfor, men det er ikke et krav. Det er nok, at du sender beskeden inden fristens udløb.`,
-        'Jeg begynder kun arbejdet inden for de 14 dage, hvis du udtrykkeligt beder om det: ved at sætte kryds i feltet til det, når du bestiller i kundeportalen, eller skriftligt, når du accepterer tilbuddet. Når du beder om det, bekræfter du samtidig, at du mister fortrydelsesretten, når arbejdet er helt udført.',
+        'Jeg begynder kun arbejdet inden for de 14 dage, hvis du udtrykkeligt beder om det ved at sætte kryds i feltet, når du bestiller i kundeportalen. Når du beder om det, bekræfter du samtidig, at du mister fortrydelsesretten, når arbejdet er helt udført.',
         'Fortryder du, efter at arbejdet er begyndt, betaler du et beløb, der står i forhold til det arbejde, der er udført, indtil du fortrød, sammenlignet med hele aftalen. Når det arbejde, du har bedt mig begynde tidligt, er helt udført, kan du ikke længere fortryde. Beder du ikke om tidlig start, begynder jeg efter de 14 dage.',
         'Fortryder du, tilbagebetaler jeg det, du har betalt, med fradrag af en eventuel betaling for udført arbejde, uden unødig forsinkelse og senest 14 dage efter, at jeg har modtaget din besked. Jeg bruger samme betalingsmiddel, som du brugte, medmindre du udtrykkeligt accepterer et andet, og tilbagebetalingen koster dig intet.',
       ] },
       { title: 'Standardfortrydelsesformular', blocks: [
-        'Denne formular udfyldes og returneres kun, hvis fortrydelsesretten gøres gældende. Den udgave, der følger med dit tilbud, har min postadresse udfyldt.',
+        'Denne formular udfyldes og returneres kun, hvis fortrydelsesretten gøres gældende. Udgaven i din ordrebekræftelse indeholder min postadresse.',
         { list: [
           `Til: Devantler Tech, [postadressen under virksomhedsoplysninger], ${company.email}`,
           'Jeg/vi (*) meddeler herved, at jeg/vi (*) ønsker at gøre fortrydelsesretten gældende i forbindelse med min/vores (*) aftale om levering af følgende tjenesteydelser (*):',

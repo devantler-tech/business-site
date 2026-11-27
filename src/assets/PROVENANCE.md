@@ -17,8 +17,8 @@ Closes the acceptance criteria of [#2176](https://github.com/devantler-tech/mono
 ## `agentic-engineering-process.png`
 
 Retired inline diagram from the Agentic Engineering blog post, retained as a historical
-asset. It is not consumed by the site. The post now links to the maintained diagram in
-`src/content/docs/agentic-engineering.mdx` instead of displaying a duplicate.
+asset. It is not consumed by the site. The post now carries the maintained Mermaid diagram
+itself; the former `/agentic-engineering/` reference page redirects to it (#697).
 
 - **Origin:** rendered from the earlier Mermaid `block-beta` definition at its historical
   monorepo path, `docs/src/content/docs/agentic-engineering.mdx`.

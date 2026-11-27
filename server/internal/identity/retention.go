@@ -16,6 +16,15 @@ import (
 // and other accounting records live in Numina and Stripe, not here.
 const RetentionYears = 3
 
+// Keep a workspace available for account management while it still bills.
+// Card subscriptions must have a confirmed end at the provider.
+const activeWorkspaceBilling = `o.monthly_minor>0 AND (
+  NOT EXISTS (SELECT 1 FROM portal_order_withdrawals w WHERE w.order_id=o.id)
+    AND NOT EXISTS (SELECT 1 FROM portal_order_ends e WHERE e.order_id=o.id AND e.last_month<date_trunc('month',now() AT TIME ZONE 'Europe/Copenhagen')::date)
+  OR EXISTS (SELECT 1 FROM portal_card_checkouts k WHERE k.order_id=o.id AND k.subscription_id IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM portal_card_cancellations c WHERE c.subscription_id=k.subscription_id AND c.cancel_at<=now())
+    AND NOT EXISTS (SELECT 1 FROM portal_withdrawal_cancellations c WHERE c.subscription_id=k.subscription_id AND c.cancel_at<=now())))`
+
 // retentionDue lists the clients due for purging; with a nonempty $2, only that
 // client. Every membership event of theirs was a client membership, the last
 // one lies before the cutoff $1, no membership or invitation is still open, and
@@ -31,13 +40,14 @@ const retentionDue = `SELECT a.client_id FROM portal_membership_transitions a
  HAVING bool_and(a.role='client') AND max(greatest(a.recorded_at,n.recorded_at)) < $1
  AND NOT EXISTS (SELECT 1 FROM portal_memberships m WHERE m.client_id=a.client_id AND NOT m.revoked)
  AND NOT EXISTS (SELECT 1 FROM portal_invitations i WHERE i.client_id=a.client_id AND NOT i.revoked AND i.expires_at>now())
- AND NOT EXISTS (SELECT 1 FROM portal_orders o WHERE o.client_id=a.client_id AND o.monthly_minor>0 AND (
-   NOT EXISTS (SELECT 1 FROM portal_order_withdrawals w WHERE w.order_id=o.id)
-     AND NOT EXISTS (SELECT 1 FROM portal_order_ends e WHERE e.order_id=o.id AND e.last_month<date_trunc('month',now() AT TIME ZONE 'Europe/Copenhagen')::date)
-   OR EXISTS (SELECT 1 FROM portal_card_checkouts k WHERE k.order_id=o.id AND k.subscription_id IS NOT NULL
-     AND NOT EXISTS (SELECT 1 FROM portal_card_cancellations c WHERE c.subscription_id=k.subscription_id AND c.cancel_at<=now())
-     AND NOT EXISTS (SELECT 1 FROM portal_withdrawal_cancellations c WHERE c.subscription_id=k.subscription_id AND c.cancel_at<=now()))))
- ORDER BY a.client_id`
+ AND NOT EXISTS (SELECT 1 FROM portal_orders o WHERE o.client_id=a.client_id AND (` + activeWorkspaceBilling + `))
+ UNION SELECT w.workspace_id FROM portal_workspace_settings w WHERE w.closed_at<$1
+ AND ($2::text='' OR w.workspace_id=$2::text)
+ AND NOT EXISTS (SELECT 1 FROM portal_membership_transitions h WHERE h.client_id=w.workspace_id)
+ AND NOT EXISTS (SELECT 1 FROM portal_memberships m WHERE m.client_id=w.workspace_id)
+ AND NOT EXISTS (SELECT 1 FROM portal_invitations i WHERE i.client_id=w.workspace_id AND NOT i.revoked AND i.expires_at>now())
+ AND NOT EXISTS (SELECT 1 FROM portal_orders o WHERE o.client_id=w.workspace_id AND (` + activeWorkspaceBilling + `))
+ ORDER BY client_id`
 
 // purgeRecords deletes one client's portal records in dependency order:
 // billing and email first, then work, proposals, requests, contacts and
@@ -132,8 +142,9 @@ func clientHasRecords(column string) string {
 // migration role: the web runtime can delete none of this history.
 func PurgeExpiredClients(ctx context.Context, pool *pgxpool.Pool, now time.Time) (int, error) {
 	cutoff := now.AddDate(-RetentionYears, 0, 0)
-	// The operator audit log keeps every call for the same period, then forgets it.
-	if _, err := pool.Exec(ctx, `DELETE FROM portal_operator_audit WHERE at<$1`, cutoff); err != nil {
+	// Support access is checked more frequently and has a shorter audit window.
+	if _, err := pool.Exec(ctx, `DELETE FROM portal_operator_audit WHERE at<$1 OR (at<$2 AND action LIKE 'support.%')`,
+		cutoff, now.AddDate(0, 0, -90)); err != nil {
 		return 0, errTriageStorage
 	}
 	rows, err := pool.Query(ctx, retentionDue, cutoff, "")
@@ -168,6 +179,9 @@ func purgeOne(ctx context.Context, pool *pgxpool.Pool, client string, cutoff tim
 		return false, errTriageStorage
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err = lockWorkspace(ctx, tx, client); err != nil {
+		return false, errors.Join(errTriageStorage, err)
+	}
 	if _, err = tx.Exec(ctx, `LOCK TABLE portal_invitations, portal_memberships IN SHARE ROW EXCLUSIVE MODE`); err != nil {
 		return false, errors.Join(errTriageStorage, err)
 	}

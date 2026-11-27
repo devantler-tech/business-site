@@ -359,6 +359,7 @@ production setting below uses the same maintained-provider JSON as the identity 
 | OpenFeature capability        | Production setting                 |
 |-------------------------------|------------------------------------|
 | `portal-contact-verification` | `PORTAL_CONTACT_VERIFICATION_FLAG` |
+| `portal-support`              | `PORTAL_SUPPORT_FLAG`              |
 | `portal-requests`             | `PORTAL_REQUESTS_FLAG`             |
 | `portal-triage`               | `PORTAL_TRIAGE_FLAG`               |
 | `portal-proposals`            | `PORTAL_PROPOSALS_FLAG`            |
@@ -393,6 +394,16 @@ acceptance fixtures, not deployed Dex/ZITADEL, mail/MFA or visual-browser proof.
 Source checks do not establish deployed acceptance: #305 retains runtime delivery,
 [Issue #302](https://github.com/devantler-tech/business-site/issues/302) owns live
 identity acceptance and #21 owns later intake/payment activation.
+
+### Isolated client preview identity profile
+
+`PORTAL_IDENTITY_PROFILE=preview` binds the portal to `dev.devantler.tech`, a
+dedicated broker audience and one verified operator subject. It requires a
+projected sign-in credential and verified TLS to a PostgreSQL service in the
+preview namespace with its own database and web role. The profile supports
+identity and project flows. Real card and invoice collection, email, customer
+provisioning and work approvals stay closed. The simulated checkout is tracked
+in [#689](https://github.com/devantler-tech/business-site/issues/689).
 
 ### Production public-content template
 

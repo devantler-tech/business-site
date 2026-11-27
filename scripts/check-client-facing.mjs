@@ -100,7 +100,7 @@ for (const locale of ['en', 'da']) {
     const archive = projects.match(/<details\b([^>]*\bid="research"[^>]*)>([\s\S]*?)<\/details>/);
     assert.ok(archive, 'Historical bookmarks retain a native disclosure');
     assert.doesNotMatch(archive[1], /\bopen(?:\s|=|$)/, 'Historical material is not promoted on ordinary visits');
-    assert.ok(archive[2].includes(locale === 'da' ? 'Tidligere projektlinks' : 'Earlier project links'));
+    assert.ok(archive[2].includes(locale === 'da' ? 'Tidligere forskning' : 'Earlier research'));
     assert.doesNotMatch(projects, /<section\b[^>]*aria-labelledby="research-title"/);
     assert.ok(projects.includes('data-hosting-project'));
     assert.ok(projects.includes(locale === 'da' ? 'ikke en hostinggaranti' : 'not a hosting guarantee'));

@@ -86,6 +86,7 @@ var wantPresentationAssets = []struct{ name, contentType string }{
 	{"logo-light.svg", "image/svg+xml"},
 	{"portal.css", "text/css; charset=utf-8"},
 	{"portal.js", "text/javascript; charset=utf-8"},
+	{"trustpilot-link.css", "text/css; charset=utf-8"},
 }
 
 // TestBrowserPresentationAssets exercises the actual handlers, bytes and default-off
@@ -178,6 +179,33 @@ func TestBrowserSignInPage(t *testing.T) {
 		wantCSP := "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; form-action 'self' https://" + issuer.Host + "; frame-ancestors 'none'; base-uri 'none'"
 		if got := res.Header.Get("Content-Security-Policy"); got != wantCSP {
 			t.Errorf("security policy=%q want %q", got, wantCSP)
+		}
+	}
+}
+
+func TestTrustpilotLinkIsConfinedToClientHome(t *testing.T) {
+	b := &browser{foundation: &Foundation{}}
+	const profile = "/trustpilot/"
+	for _, kind := range []string{"home", "operator", "no-access"} {
+		for _, lang := range []string{"en", "da"} {
+			r := httptest.NewRequest("GET", "/portal/?lang="+lang, nil)
+			w := httptest.NewRecorder()
+			w.Header().Set("Content-Security-Policy", "default-src 'none'")
+			b.render(w, r, http.StatusOK, kind, "synthetic-workspace", "")
+			body := w.Body.String()
+			if got := w.Header().Get("Content-Security-Policy"); got != "default-src 'none'" {
+				t.Errorf("%s %s CSP = %q", kind, lang, got)
+			}
+			if kind != "home" {
+				if strings.Contains(body, profile) {
+					t.Fatalf("%s %s exposes a customer footer link", kind, lang)
+				}
+				continue
+			}
+			if strings.Count(body, profile) != 1 || !strings.Contains(body, `href="`+profile+`" rel="noreferrer"`) ||
+				strings.Contains(body, "<iframe") || strings.Contains(body, "data-review-consent") {
+				t.Errorf("%s client home must render one profile link", lang)
+			}
 		}
 	}
 }

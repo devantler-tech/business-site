@@ -15,6 +15,7 @@ export const runtimeSecretFixture = {
   "portal-database-ca": "fictional database trust material\n",
   "smtp-username": "fictional-smtp-username",
   "smtp-password": "fictional-smtp-password",
+  "portal-zitadel-token": "fictional-directory-token",
 };
 
 /** Read-only numeric listing verifies the actual copied file, never an input-header assumption. */

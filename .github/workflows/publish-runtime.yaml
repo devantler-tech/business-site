@@ -28,7 +28,7 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
       - name: Setup the exact receipt-reader toolchain
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: server/go.mod
           cache: false
@@ -62,6 +62,8 @@ jobs:
           persist-credentials: false
       - name: Verify the original image signature and complete provenance
         env:
+          PREBUILT_CI_AUTH_MODE: job-token
+          PREBUILT_CI_READ_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ github.sha }}
           IMAGE_DIGEST: ${{ steps.admit.outputs.image-digest }}
           PUBLIC_DIGEST: ${{ steps.admit.outputs.public-digest }}
@@ -71,22 +73,35 @@ jobs:
 
   publish:
     needs: admit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: publish-verified-${{ github.repository }}
+      queue: max
+      cancel-in-progress: false
     permissions:
       contents: read
+      actions: read
       packages: write
       id-token: write
-    uses: devantler-tech/.github/.github/workflows/publish-app.yaml@a76d5df9371cf712a8f60307fde060825a34cf35 # v21.3.4
-    with:
-      app-name: business-site
-      deploy-path: ./deploy
-      enable-caller-pin: true
-      enable-signed-promotion: true
-      enable-prebuilt-webapp: true
-      enable-signed-recovery: false
-      prebuilt-image-digest: ${{ needs.admit.outputs.image-digest }}
-      prebuilt-public-digest: ${{ needs.admit.outputs.public-digest }}
-      prebuilt-ci-run-id: ${{ needs.admit.outputs.ci-run-id }}
-      prebuilt-ci-run-attempt: ${{ needs.admit.outputs.ci-run-attempt }}
+    steps:
+      - name: Checkout the immutable release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Publish and sign the release as this repository
+        uses: devantler-tech/.github/actions/publish-app@61d8f70f25d7d5deb8bd914136b329b5a59ff43b # v22.7.4
+        with:
+          mode: prebuilt-webapp
+          app-name: business-site
+          deploy-path: ./deploy
+          app-manifest: base/webapp.yaml
+          prebuilt-ci-auth-mode: job-token
+          prebuilt-image-digest: ${{ needs.admit.outputs.image-digest }}
+          prebuilt-public-digest: ${{ needs.admit.outputs.public-digest }}
+          prebuilt-ci-run-id: ${{ needs.admit.outputs.ci-run-id }}
+          prebuilt-ci-run-attempt: ${{ needs.admit.outputs.ci-run-attempt }}
 
   verify:
     needs: [admit, publish]

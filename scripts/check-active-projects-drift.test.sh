@@ -52,18 +52,17 @@ fail_match() { # name root expected-substring
 
 # Build a fully-consistent maintained catalogue: three composite actions and
 # three callable workflows, plus ordinary workflows the guard must ignore.
-# No retired checkout is created. Three submodules, one
-# matching template doc page, and a homepage whose featured project is present
+# No retired checkout is created. Three submodules (the starter template
+# omitted), and a homepage whose featured project is present
 # on Active Projects — all guarded surfaces agreeing with their live sources.
 build_fixture() {
   local root="$1"
   rm -rf "$root"
   local mdx_dir="$root/src/content/docs/projects"
-  local tpl_dir="$root/src/content/docs/templates"
   local actions_dir="$root/github/devantler-tech/.github-public/actions"
   local rw_dir="$root/github/devantler-tech/.github-public/.github/workflows"
   local current="$root/github/devantler-tech/.github-public"
-  mkdir -p "$mdx_dir" "$tpl_dir" "$actions_dir/alpha" "$actions_dir/beta" "$rw_dir"
+  mkdir -p "$mdx_dir" "$actions_dir/alpha" "$actions_dir/beta" "$rw_dir"
   mkdir -p "$current/actions/current-alpha" "$current/.github/workflows"
   printf 'name: current-alpha\n' > "$current/actions/current-alpha/action.yml"
   printf 'on: [push, workflow_call]\n' > "$current/.github/workflows/current-ci.yml"
@@ -92,13 +91,6 @@ build_fixture() {
 	url = https://github.com/devantler-tech/foo-template.git
 EOF
 
-  cat > "$tpl_dir/foo.md" <<'EOF'
----
-title: Foo Template
----
-**Repository**: [devantler-tech/foo-template](https://github.com/devantler-tech/foo-template)
-EOF
-
   cat > "$mdx_dir/active.mdx" <<'EOF'
 ---
 title: Active Projects
@@ -106,7 +98,7 @@ title: Active Projects
 
 <div class="projects-page">
 
-{/* projects-submodules: applications/bar=grouped,github/devantler-tech/.github-public=section,templates/foo-template=templates-page */}
+{/* projects-submodules: applications/bar=grouped,github/devantler-tech/.github-public=section,templates/foo-template=omitted */}
 {/* public-products: .github,foo-template */}
 
 ## [⚡ Actions](https://github.com/devantler-tech/.github)
@@ -224,33 +216,13 @@ EOF
 fail_match "Submodules: unrecorded new submodule" "$c" \
   "Submodule drift: the 'projects-submodules' marker does not match"
 
-# 10. Templates page (forward): a templates-page submodule (recorded in
-#     .gitmodules so the submodule check still passes) has no matching template
-#     doc page → templates set-equality fires on the "missing a doc page" side.
-c="$tmp/templates-missing-page"; build_fixture "$c"
-sed -i.bak 's#templates/foo-template=templates-page#templates/foo-template=templates-page,templates/baz-template=templates-page#' \
-  "$(mdx_path "$c")"
-cat >> "$c/.gitmodules" <<'EOF'
-[submodule "baz-template"]
-	path = templates/baz-template
-	url = https://github.com/devantler-tech/baz-template.git
-EOF
-fail_match "Templates: templates-page submodule with no doc page" "$c" \
-  "link is wrong): [baz-template]"
-
-# 11. Templates page (reverse): a template doc page whose repo is NOT
-#     dispositioned =templates-page in the marker (and not a submodule, so the
-#     submodule check still passes) → templates set-equality fires on the
-#     "has a doc page but not dispositioned" side.
-c="$tmp/templates-extra-page"; build_fixture "$c"
-cat > "$c/src/content/docs/templates/qux.md" <<'EOF'
----
-title: Qux Template
----
-**Repository**: [devantler-tech/qux-template](https://github.com/devantler-tech/qux-template)
-EOF
-fail_match "Templates: doc page not dispositioned templates-page" "$c" \
-  "not dispositioned templates-page in the marker: [qux-template]"
+# 10. Retired Templates page: the site no longer has template guides (#697), so
+#     the old `=templates-page` disposition fails closed instead of promising a
+#     page that does not exist.
+c="$tmp/templates-page-retired"; build_fixture "$c"
+sed -i.bak 's#templates/foo-template=omitted#templates/foo-template=templates-page#' "$(mdx_path "$c")"
+fail_match "Submodules: retired templates-page disposition fails closed" "$c" \
+  "Invalid projects-submodules disposition"
 
 # 12. die_missing: a required submodule is absent → hard error (exit 1 with the
 #     "is the submodule checked out?" message), distinct from a drift failure.

@@ -1,0 +1,33 @@
+a.trustpilot-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  box-sizing: border-box;
+  min-block-size: 44px;
+  max-inline-size: 100%;
+  margin-block-start: 0.75rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+  color: var(--ink);
+  font-size: 0.925rem;
+  text-decoration: none;
+}
+
+a.trustpilot-link:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+a.trustpilot-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.trustpilot-link-arrow {
+  color: var(--accent);
+}

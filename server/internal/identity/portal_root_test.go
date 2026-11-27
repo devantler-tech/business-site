@@ -25,8 +25,14 @@ var freshKey = regexp.MustCompile(`(name="[a-z_]*key" value=")[^"]*"`)
 // two must be identical, so every root address names exactly the internal route
 // the shared-host link contract already validates, and none keeps the prefix.
 func TestRootPortalPagesMatchTheirSharedHostPages(t *testing.T) {
-	// A shared host links the public site as "/"; a root portal names its origin.
-	stripPrefix := strings.NewReplacer(`href="/"`, `href="`+fixtureSite+`/"`, `href="/da/"`, `href="`+fixtureSite+`/da/"`, `="/portal/`, `="/`, `="/portal?`, `="/?`, `="/portal"`, `="/"`)
+	// A dedicated portal links to the public origin for the homepage and privacy notice.
+	stripPrefix := strings.NewReplacer(
+		`href="/"`, `href="`+fixtureSite+`/"`,
+		`href="/da/"`, `href="`+fixtureSite+`/da/"`,
+		`href="/privacy/"`, `href="`+fixtureSite+`/privacy/"`,
+		`href="/da/privacy/"`, `href="`+fixtureSite+`/da/privacy/"`,
+		`="/portal/`, `="/`, `="/portal?`, `="/?`, `="/portal"`, `="/"`,
+	)
 	for _, name := range []string{"portal.html", "contact.html", "requests.html", "triage.html", "work-review.html"} {
 		t.Run(name, func(t *testing.T) {
 			shared, err := renderedLinkPagesFor(name, pages(internalRoot, ""), &browser{})

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { load } from 'js-yaml';
+import manifest from '../package.json' with { type: 'json' };
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const configPath = join(root, '.htmlhintrc');
@@ -18,11 +19,11 @@ function mandatoryQualityChecks(candidate) {
   assert.equal(job.if, undefined);
   assert.ok(job['continue-on-error'] == null || job['continue-on-error'] === false);
   for (const command of [
-    'npx --yes --package=htmlhint@1.9.2 -- node --test scripts/portal-template-quality.test.mjs',
-    'npx --yes --package=cspell@10.4.1 -- node --test scripts/portal-spelling-quality.test.mjs',
+    `npx --yes --package="htmlhint@$(node -p 'require("./package.json").devDependencies.htmlhint')" -- node --test scripts/portal-template-quality.test.mjs`,
+    `npx --yes --package="cspell@$(node -p 'require("./package.json").devDependencies.cspell')" -- node --test scripts/portal-spelling-quality.test.mjs`,
     'node --test scripts/portal-go-analyzer-quality.test.mjs',
     'bash scripts/portal-links-preprocess.test.sh',
-    'npx --yes --package=secretlint@13.1.0 --package=@secretlint/secretlint-rule-preset-recommend@13.1.0 -- node --test scripts/portal-credential-quality.test.mjs',
+    `npx --yes --package="secretlint@$(node -p 'require("./package.json").devDependencies.secretlint')" -- node --test scripts/portal-credential-quality.test.mjs`,
     'go install github.com/mgechev/revive@v1.16.0\nPORTAL_REVIVE="$GOBIN/revive" bash scripts/portal-package-quality.test.sh\n',
   ]) {
     const steps = job.steps.filter(step => step.run === command);
@@ -68,6 +69,7 @@ test('package grouping retains selected-file analysis and every HTML rule', () =
       '--remap',
       '^https://github\\.com/bufbuild/buf/blob/v1\\.72\\.0/private/bufpkg/bufmodule/digest\\.go$ ' +
         'https://raw.githubusercontent.com/bufbuild/buf/v1.72.0/private/bufpkg/bufmodule/digest.go',
+      '--exclude', '^https://www\\.retsinformation\\.dk/',
     ],
   });
   assert.deepEqual(rules, {
@@ -106,15 +108,15 @@ function lint(files) {
   return { status: result.status, output: result.stdout + result.stderr };
 }
 
-test('the pinned checker analyzes all five actual Go HTML templates', () => {
+test('the pinned checker analyzes all six actual Go HTML templates', () => {
   const version = spawnSync('htmlhint', ['--version'], { encoding: 'utf8', timeout: 30000 });
   assert.ifError(version.error);
   assert.equal(version.status, 0);
-  assert.equal(version.stdout.trim(), '1.9.2');
-  const result = lint(['portal', 'contact', 'requests', 'triage', 'work-review'].map(name =>
+  assert.equal(version.stdout.trim(), manifest.devDependencies.htmlhint);
+  const result = lint(['portal', 'operator', 'contact', 'requests', 'triage', 'work-review'].map(name =>
     join(root, 'server/internal/identity/web', `${name}.html`)));
   assert.equal(result.status, 0, result.output);
-  assert.match(result.output, /Scanned 5 files/);
+  assert.match(result.output, /Scanned 6 files/);
 });
 
 for (const [name, content] of [

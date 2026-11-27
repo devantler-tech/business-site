@@ -10,13 +10,12 @@ fail() {
   printf 'runtime publication: refused %s\n' "$1" >&2
   exit 1
 }
-# The frozen source's own publisher caller is the only record of the accepted shared publisher;
-# accept exactly one full commit of the organisation's publish-app workflow, never a branch or tag.
-workflow="$(yq -r '.jobs.publish.uses' .github/workflows/publish-runtime.yaml 2>/dev/null)" || fail 'accepted publisher caller read'
-[[ "$workflow" =~ ^devantler-tech/\.github/\.github/workflows/publish-app\.yaml@[0-9a-f]{40}$ ]] || fail 'accepted publisher reference'
-readonly workflow
 [[ "${GITHUB_REPOSITORY:-}" == "$repo" && "${SOURCE_SHA:-}" =~ ^[0-9a-f]{40}$ && "${GITHUB_SHA:-}" == "$SOURCE_SHA" ]] || fail 'source context'
 [[ "${VERSION:-}" =~ ^(0|[1-9][0-9]{0,14})\.(0|[1-9][0-9]{0,14})\.(0|[1-9][0-9]{0,14})$ && "${GITHUB_REF:-}" == "refs/tags/v$VERSION" ]] || fail 'version context'
+# This repository signs its own releases (devantler-tech/monorepo ADR 0017): the only accepted
+# publisher is this release workflow on this exact release tag, never another repository,
+# workflow, branch or the retired shared publisher.
+readonly workflow="$repo/.github/workflows/publish-runtime.yaml@refs/tags/v$VERSION"
 [[ "${IMAGE_DIGEST:-}" =~ ^sha256:[0-9a-f]{64}$ && "${PUBLIC_DIGEST:-}" =~ ^[0-9a-f]{64}$ ]] || fail 'original digests'
 [[ "${ORIGINAL_CI_RUN_ID:-}" =~ ^[1-9][0-9]{0,14}$ && "${ORIGINAL_CI_RUN_ATTEMPT:-}" =~ ^[1-9][0-9]{0,5}$ &&
   "${GITHUB_RUN_ID:-}" =~ ^[1-9][0-9]{0,14}$ && "${GITHUB_RUN_ATTEMPT:-}" =~ ^[1-9][0-9]{0,5}$ && -d "${RUNNER_TEMP:-}" ]] || fail 'run identity'
@@ -113,16 +112,39 @@ done
 # Flux reads the read-only registry credentials established by the workflow's login action.
 mkdir "$work/manifests"
 flux pull artifact "oci://$artifact@$manifests_digest" --output "$work/manifests" || fail 'immutable manifest pull'
+readonly manifest_members=(
+  kustomization.yaml
+  base/kustomization.yaml base/webapp.yaml
+  prod/kustomization.yaml prod/http-route-public.yaml prod/http-route-portal.yaml
+  prod/network-policy.yaml prod/disruption-budget.yaml prod/secret-store.yaml
+  prod/external-secret-disclosure.yaml prod/external-secret-numina.yaml prod/external-secret-stripe.yaml
+  prod/job-portal-migration.yaml prod/cronjob-portal-retention.yaml
+  dev/kustomization.yaml dev/job-preview-migration.yaml
+)
+is_manifest_member() {
+  local expected
+  for expected in "${manifest_members[@]}"; do
+    [[ "$1" != "$expected" ]] || return 0
+  done
+  return 1
+}
 entries="$(find "$work/manifests" -mindepth 1 -print)" || fail 'manifest inventory'
 while IFS= read -r entry; do
   member=${entry#"$work/manifests/"}
-  case "$member" in webapp.yaml | http-route-public.yaml | http-route-portal.yaml | network-policy.yaml | disruption-budget.yaml | secret-store.yaml | external-secret-disclosure.yaml | external-secret-numina.yaml | external-secret-stripe.yaml | job-portal-migration.yaml | cronjob-portal-retention.yaml | kustomization.yaml | README.md) ;; *) fail 'unexpected manifest member' ;; esac
+  case "$member" in
+    base | prod | dev)
+      [[ -d "$entry" && ! -L "$entry" ]] || fail 'manifest overlay directory'
+      continue
+      ;;
+    README.md) ;;
+    *) is_manifest_member "$member" || fail 'unexpected manifest member' ;;
+  esac
   [[ -f "$entry" && ! -L "$entry" && "$(wc -c <"$entry")" -le 1048576 ]] || fail 'manifest member bounds'
 done <<<"$entries"
-for member in webapp.yaml http-route-public.yaml http-route-portal.yaml network-policy.yaml disruption-budget.yaml secret-store.yaml external-secret-disclosure.yaml external-secret-numina.yaml external-secret-stripe.yaml job-portal-migration.yaml cronjob-portal-retention.yaml kustomization.yaml; do
+for member in "${manifest_members[@]}"; do
   [[ -f "$work/manifests/$member" && -f "deploy/$member" && ! -L "deploy/$member" ]] || fail 'missing source manifest'
   yq -o=json -I=0 '.' "deploy/$member" >"$work/source.json" || fail 'source manifest parse'
-  if [[ "$member" == webapp.yaml ]]; then
+  if [[ "$member" == base/webapp.yaml ]]; then
     jq --arg image "$image@$IMAGE_DIGEST" '.spec.image=$image' "$work/source.json" >"$work/pinned.json"
     mv "$work/pinned.json" "$work/source.json"
   fi

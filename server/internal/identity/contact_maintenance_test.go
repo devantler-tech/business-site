@@ -240,6 +240,16 @@ func checkMaintenanceInventoryPage(name string, index int, markup string, task b
 	if index >= count/2 {
 		lang = "da"
 	}
+	if !task && name == "portal.html" {
+		state := maintenanceCases[name][index%len(maintenanceCases[name])]
+		if state == "home" || state == "home-links" {
+			withoutLink, err := checkClientHomeTrustpilotLink(markup, lang)
+			if err != nil {
+				return err
+			}
+			markup = withoutLink
+		}
+	}
 	if err := checkMaintenanceDocument(markup, lang, name == "contact.html", task); err != nil {
 		return err
 	}

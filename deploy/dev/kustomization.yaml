@@ -1,0 +1,70 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# The platform reconciles this overlay at `path: ./dev` and owns its
+# authenticated ingress. Preview uses separate runtime and migration inputs.
+namespace: business-site-dev
+resources:
+  - ../base
+  - job-preview-migration.yaml
+replacements:
+  - source:
+      kind: WebApp
+      name: business-site-dev
+      fieldPath: spec.image
+    targets:
+      - select:
+          kind: Job
+          name: business-site-dev-migration
+        fieldPaths:
+          - spec.template.spec.containers.[name=migrate].image
+        options:
+          create: true
+patches:
+  # A tenant WebApp's name and spec.name must equal its namespace; spec.name also
+  # names and labels the generated Deployment and Service.
+  - target:
+      kind: WebApp
+      name: business-site
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: business-site-dev
+      - op: replace
+        path: /spec/name
+        value: business-site-dev
+      - op: replace
+        path: /spec/host
+        value: dev.devantler.tech
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      # Configure the preview explicitly so new production settings do not
+      # become preview inputs when the shared WebApp evolves.
+      - op: replace
+        path: /spec/args
+        value:
+          - --public
+          - /app/public
+          - --listen
+          - 0.0.0.0:8080
+          - --company-disclosure-projection
+          - /run/webapp-inputs/disclosure
+          - --public-host
+          - devantler.tech
+          - --portal-host
+          - dev.devantler.tech
+          - --portal-settings-projection
+          - /run/webapp-inputs/portal-settings
+      - op: replace
+        path: /spec/secretProjections
+        value:
+          - secretName: business-site-dev-runtime
+            items:
+              - key: company-disclosure
+                path: disclosure
+              - key: portal-settings
+                path: portal-settings
+              - key: portal-client-secret
+                path: portal-client-secret
+              - key: portal-database-ca
+                path: portal-database-ca

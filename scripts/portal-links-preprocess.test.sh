@@ -14,6 +14,7 @@ for template in portal contact requests triage work-review; do
   grep -q 'data-route-checked-' "$scratch/$template.html"
   if grep -q '{{' "$scratch/$template.html"; then echo 'portal-links: unrendered template' >&2; exit 1; fi
 done
+grep -q 'data-route-checked-href="/trustpilot/"' "$scratch/portal.html"
 # Byte identity also preserves every normal public/document target for Lychee.
 bash "$root/scripts/portal-links-preprocess.sh" "$root/server/README.md" >"$scratch/README.md"
 cmp "$root/server/README.md" "$scratch/README.md"
@@ -43,7 +44,7 @@ if [[ "$#" -eq 1 ]]; then
   # remain visible to the actual checker, including a deliberately broken one.
   controls="$(mktemp -d "$root/server/.portal-link-controls.XXXXXX")"
   trap 'rm -rf -- "$scratch" "$controls"' EXIT
-  lychee --no-progress --max-retries 0 --timeout 10 --preprocess "$root/scripts/portal-links-preprocess.sh" "$root/server/internal/identity/web/portal.html" "$root/server/internal/identity/web/contact.html" "$root/server/internal/identity/web/requests.html" "$root/server/internal/identity/web/triage.html" "$root/server/internal/identity/web/work-review.html"
+  lychee --no-progress --max-retries 0 --timeout 10 --preprocess "$root/scripts/portal-links-preprocess.sh" "$root/server/internal/identity/web/portal.html" "$root/server/internal/identity/web/operator.html" "$root/server/internal/identity/web/contact.html" "$root/server/internal/identity/web/requests.html" "$root/server/internal/identity/web/triage.html" "$root/server/internal/identity/web/work-review.html"
   printf '<html><body><a href="https://devantler.tech/portal-link-contract-missing-01a132ba/">Broken link control</a></body></html>\n' >"$controls/broken.html"
   if lychee --no-progress --max-retries 0 --timeout 10 --preprocess "$root/scripts/portal-links-preprocess.sh" "$controls/broken.html" >"$scratch/broken-receipt" 2>&1; then
     echo 'portal-links: real Lychee accepted a broken ordinary link' >&2; exit 1

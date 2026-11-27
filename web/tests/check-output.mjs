@@ -1,5 +1,15 @@
 import { readFile, readdir } from "node:fs/promises";
 import assert from "node:assert/strict";
+import { parse } from "parse5";
+
+/**
+ * @param {import("parse5").DefaultTreeAdapterTypes.Node} node
+ * @returns {import("parse5").DefaultTreeAdapterTypes.Element[]}
+ */
+function scriptsIn(node) {
+  if ("tagName" in node && node.tagName === "script") return [node];
+  return "childNodes" in node ? node.childNodes.flatMap(scriptsIn) : [];
+}
 
 const enabled = process.argv[2] === "enabled";
 assert.ok(enabled || process.argv[2] === "disabled", "declare enabled or disabled output");
@@ -52,12 +62,18 @@ for (const [path, locale, title] of pages) {
     assert.ok(html.includes('href="https://www.linkedin.com/in/nikolai-emil-damm-14a786150/"'));
     assert.ok(html.includes("<picture") && html.includes('type="image/avif"') && html.includes('type="image/webp"'));
   }
-  const scripts = [...html.matchAll(/<script\b[^>]*src="([^"]+)"[^>]*>/g)];
-  assert.equal(scripts.length, 1, "only the existing local theme controller, no application hydration");
-  assert.match(scripts[0][1], /^\/_app\/immutable\/assets\/theme\.[A-Za-z0-9_-]+\.js$/);
-  await readFile(new URL(scripts[0][1].slice(1), root));
-  assert.ok(!html.includes('type="module"') && !html.includes("sveltekit.start"));
-  assert.ok(!html.includes("data:text/javascript") && !/<script[^>]*src="https?:/.test(html));
+  const scripts = scriptsIn(parse(html));
+  const expected = [/^\/_app\/immutable\/assets\/theme\.[A-Za-z0-9_-]+\.js$/];
+  assert.equal(scripts.length, expected.length, "only the local controllers for this route");
+  for (const [index, script] of scripts.entries()) {
+    const src = script.attrs.find(attribute => attribute.name === "src")?.value;
+    assert.ok(src, "every script has a local asset");
+    assert.match(src, expected[index]);
+    const type = script.attrs.find(attribute => attribute.name === "type")?.value;
+    assert.equal(type, index === 1 ? "module" : undefined, "only the collector controller is a module");
+    await readFile(new URL(src.slice(1), root));
+  }
+  assert.doesNotMatch(html, /sveltekit\.start|data:text\/javascript/, "no application hydration or inline program URLs");
 }
 /** @param {URL} dir @returns {Promise<URL[]>} */
 async function walk(dir) {

@@ -258,7 +258,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup the exact receipt-reader toolchain
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
@@ -293,7 +293,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
@@ -311,7 +311,7 @@ jobs:
         run: node --test scripts/portal-quality-provisioning.test.mjs
       - name: Verify actual Go-template HTML quality and retained attribute failures
         working-directory: .
-        run: npx --yes --package=htmlhint@1.9.2 -- node --test scripts/portal-template-quality.test.mjs
+        run: npx --yes --package="htmlhint@$(node -p 'require("./package.json").devDependencies.htmlhint')" -- node --test scripts/portal-template-quality.test.mjs
       - name: Verify compatible embedded Go analysis and genuine finding rejection
         working-directory: .
         run: node --test scripts/portal-go-analyzer-quality.test.mjs
@@ -320,10 +320,10 @@ jobs:
         run: bash scripts/portal-links-preprocess.test.sh
       - name: Verify exact fictional credential examples and adjacent leak rejection
         working-directory: .
-        run: npx --yes --package=secretlint@13.1.0 --package=@secretlint/secretlint-rule-preset-recommend@13.1.0 -- node --test scripts/portal-credential-quality.test.mjs
+        run: npx --yes --package="secretlint@$(node -p 'require("./package.json").devDependencies.secretlint')" -- node --test scripts/portal-credential-quality.test.mjs
       - name: Verify portal copy and API vocabulary with retained typo failures
         working-directory: .
-        run: npx --yes --package=cspell@10.4.1 -- node --test scripts/portal-spelling-quality.test.mjs
+        run: npx --yes --package="cspell@$(node -p 'require("./package.json").devDependencies.cspell')" -- node --test scripts/portal-spelling-quality.test.mjs
       - name: Verify package documentation with all selected Go files
         working-directory: .
         env:
@@ -368,7 +368,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
@@ -427,7 +427,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
@@ -565,7 +565,7 @@ jobs:
       - test-combined-runtime
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@cc156a3693019fdbe9817c46f1a91cd50a124695 # v21.7.3
+        uses: devantler-tech/.github/actions/aggregate-job-checks@61d8f70f25d7d5deb8bd914136b329b5a59ff43b # v22.7.4
         with:
           job-results: >-
             ${{ needs.changes.result }}
@@ -600,7 +600,7 @@ jobs:
       - publish-container
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@cc156a3693019fdbe9817c46f1a91cd50a124695 # v21.7.3
+        uses: devantler-tech/.github/actions/aggregate-job-checks@61d8f70f25d7d5deb8bd914136b329b5a59ff43b # v22.7.4
         with:
           check-workflow-startup: "true"
           job-results: >-
@@ -667,7 +667,7 @@ jobs:
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup Go for the image projection checks
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum

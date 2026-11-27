@@ -9,12 +9,8 @@ import test from 'node:test';
 import { load } from 'js-yaml';
 
 const root = process.cwd();
-const packages = {
-  htmlhint: '1.9.2',
-  secretlint: '13.1.0',
-  '@secretlint/secretlint-rule-preset-recommend': '13.1.0',
-  cspell: '10.4.1',
-};
+const checkers = ['htmlhint', 'secretlint', 'cspell'];
+const exactVersion = /^\d+\.\d+\.\d+(?:-[\dA-Za-z-]+(?:\.[\dA-Za-z-]+)*)?(?:\+[\dA-Za-z-]+(?:\.[\dA-Za-z-]+)*)?$/;
 
 const manifest = JSON.parse(readFileSync('package.json'));
 const lock = JSON.parse(readFileSync('package-lock.json'));
@@ -31,24 +27,42 @@ function assertProvisioning(manifest, lock, workflow) {
     assert.equal(steps[index].if, undefined);
     assert.ok(steps[index]['continue-on-error'] == null || steps[index]['continue-on-error'] === false);
   }
-  for (const [name, version] of Object.entries(packages)) {
-    assert.equal(manifest.devDependencies[name], version, `${name} must not provision in npx`);
+  for (const name of checkers) {
+    const version = manifest.devDependencies[name];
+    assert.match(version ?? '', exactVersion, `${name} must use an exact version`);
     assert.equal(lock.packages[''].devDependencies[name], version);
     const entry = lock.packages[`node_modules/${name}`];
     assert.equal(entry.version, version);
     assert.match(entry.integrity, /^sha512-/);
-    const check = steps.findIndex(s => s.run?.includes(`--package=${name}@${version}`));
+    const packageArgument = `--package="${name}@$(node -p 'require("./package.json").devDependencies.${name}')"`;
+    const check = steps.findIndex(s => s.run?.includes(packageArgument));
     assert.ok(check > install, `${name}'s actual pinned checker must remain after npm ci`);
   }
 }
 
 test('portal checker provisioning is exact and part of the existing clean install', () => assertProvisioning(manifest, lock, workflow));
 
+test('a synchronized checker bump needs no CI workflow edit', () => {
+  const updatedManifest = structuredClone(manifest);
+  const updatedLock = structuredClone(lock);
+  for (const name of checkers) {
+    const version = '123.0.0';
+    updatedManifest.devDependencies[name] = version;
+    updatedLock.packages[''].devDependencies[name] = version;
+    updatedLock.packages[`node_modules/${name}`].version = version;
+  }
+  assertProvisioning(updatedManifest, updatedLock, workflow);
+});
+
 for (const [name, mutate] of [
   ['missing checker', (m) => { delete m.devDependencies.htmlhint; }],
-  ['floating checker', (m) => { m.devDependencies.htmlhint = '^1.9.2'; }],
-  ['stale root lock', (_, l) => { l.packages[''].devDependencies.htmlhint = '1.9.1'; }],
-  ['stale installed lock', (_, l) => { l.packages['node_modules/htmlhint'].version = '1.9.1'; }],
+  ['floating checker', (m) => { m.devDependencies.htmlhint = `^${m.devDependencies.htmlhint}`; }],
+  ['stale root lock', (_, l) => { l.packages[''].devDependencies.htmlhint = '0.0.1'; }],
+  ['stale installed lock', (_, l) => { l.packages['node_modules/htmlhint'].version = '0.0.1'; }],
+  ['literal workflow pin', (_, __, w) => {
+    const step = w.jobs['test-portal-quality'].steps.find(s => s.run?.includes('--package="htmlhint@'));
+    step.run = 'npx --yes --package=htmlhint@0.0.1 -- node --test scripts/portal-template-quality.test.mjs';
+  }],
   ['missing integrity', (_, l) => { delete l.packages['node_modules/htmlhint'].integrity; }],
   ['missing fault control', (_, __, w) => { w.jobs['test-portal-quality'].steps = w.jobs['test-portal-quality'].steps.filter(s => !s.run?.includes('portal-quality-provisioning')); }],
   ['conditional fault control', (_, __, w) => { w.jobs['test-portal-quality'].steps.find(s => s.run?.includes('portal-quality-provisioning')).if = 'false'; }],
@@ -102,7 +116,7 @@ test('installed exact checkers need no registry resolution and retain observer f
     let resolveRequested;
     const requested = new Promise(resolve => { resolveRequested = resolve; });
     onRequest = resolveRequested;
-    const missing = run(scratch, ['htmlhint@1.9.2']);
+    const missing = run(scratch, [`htmlhint@${manifest.devDependencies.htmlhint}`]);
     try {
       await Promise.race([requested, missing.result.then(result => {
         throw new Error(`unprovisioned control did not reach stalled registry: ${JSON.stringify(result)}`);
@@ -115,11 +129,8 @@ test('installed exact checkers need no registry resolution and retain observer f
     }
     onRequest = undefined;
     const before = requests.length;
-    for (const specifications of [
-      ['htmlhint@1.9.2'],
-      ['secretlint@13.1.0', '@secretlint/secretlint-rule-preset-recommend@13.1.0'],
-      ['cspell@10.4.1'],
-    ]) {
+    for (const name of checkers) {
+      const specifications = [`${name}@${manifest.devDependencies[name]}`];
       assert.deepEqual(await run(root, specifications).result, { code: 0, signal: null, output: '' });
       const failure = await run(root, specifications, 17).result;
       assert.equal(failure.code, 17, failure.output);

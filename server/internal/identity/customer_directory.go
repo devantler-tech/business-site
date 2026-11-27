@@ -1,10 +1,15 @@
 package identity
 
-import "context"
+import (
+	"context"
+
+	"github.com/devantler-tech/business-site/server/internal/customeridentity"
+)
 
 // CustomerDirectory is limited to the configured Customers organization. It
 // delegates account setup and mail to the provider and never deletes users.
 type CustomerDirectory interface {
+	Profiles(context.Context, []string) (map[string]customeridentity.Profile, error)
 	EnsureUser(context.Context, string, string, func() bool) (string, error)
 	DeactivateUser(context.Context, string, func() bool) error
 	ReactivateUser(context.Context, string, func() bool) error

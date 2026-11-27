@@ -50,7 +50,7 @@ func TestPortalLinkPreprocessor(t *testing.T) {
 		}
 		return
 	}
-	for name, want := range map[string]int{"portal.html": 24, "contact.html": 12, "requests.html": 38, "triage.html": 24, "work-review.html": 18} {
+	for name, want := range map[string]int{"portal.html": 24, "contact.html": 12, "requests.html": 38, "triage.html": 24, "work-review.html": 18, "operator.html": 14} {
 		t.Run(name, func(t *testing.T) {
 			pages, err := renderedLinkPages(name)
 			if err != nil || len(pages) != want {
@@ -93,6 +93,8 @@ func TestPortalLinkRejections(t *testing.T) {
 		"unknown language":              `<a href="/portal/?lang=de">Home</a>`,
 		"unknown query":                 `<a href="/portal/?next=elsewhere">Home</a>`,
 		"misplaced cursor":              `<a href="/portal/contact?cursor=invalid">Contact</a>`,
+		"misplaced workspace":           `<a href="/portal/contact?workspace=sample">Contact</a>`,
+		"invalid invitation workspace":  `<a href="/portal/operator/invitations/new?workspace=%0A">Invite</a>`,
 		"missing fragment":              `<a href="#absent">Skip</a>`,
 		"encoded route":                 `<a href="/portal%2f/logout">Out</a>`,
 		"empty target":                  `<a href="">Nothing</a>`,
@@ -245,6 +247,51 @@ func renderedLinkPagesFor(name string, templates *template.Template, b *browser)
 			return nil
 		}
 		switch name {
+		case "operator.html":
+			for _, view := range []struct {
+				path, kind     string
+				triage, events bool
+			}{
+				{"/operator", "operator", false, false},
+				{"/operator", "operator", true, false},
+				{"/operator/customers", "operator-customers", true, false},
+				{"/operator/invitations/new", "operator-invite", true, false},
+				{"/operator/audit", "operator-audit", true, false},
+				{"/operator/audit", "operator-audit", true, true},
+				{"/operator/support", "operator-support", true, false},
+			} {
+				err := add("/portal"+view.path, func(w *httptest.ResponseRecorder, r *http.Request) error {
+					d := b.operatorData(r, view.kind, "fictional-operator")
+					d.CSRF, d.TriageEnabled = "fictional-csrf", view.triage
+					if view.kind == "operator-customers" {
+						return templates.ExecuteTemplate(w, name, managementPage{
+							pageData: d, SupportAvailable: true,
+							Workspaces: []workspaceView{{ID: "fictional-workspace", Name: "Fictional workspace", Manageable: true, Members: []workspaceMember{
+								{Subject: strings.Repeat("FictionalMember", 9), Role: "client"},
+								{Subject: "fictional-disabled", Role: "client", Revoked: true},
+							}}},
+							Invitations: []pendingInvitation{{Subject: "fictional-invitation", Workspace: "fictional-workspace", Expires: request.Submitted}},
+						})
+					}
+					if view.kind == "operator-support" {
+						d.RequestsEnabled = true
+						return templates.ExecuteTemplate(w, name, supportPage{
+							pageData: d, Case: "CASE-1234", ContactSaved: true, SharingOpen: true,
+							Requests: []supportRequest{{Product: "website", Submitted: request.Submitted, ProposalShared: true}},
+						})
+					}
+					if view.events {
+						d.Audit = []auditEntry{
+							{At: request.Submitted, Kind: "operator", Subject: "fictional-operator", Action: "invitations.create", Target: "fictional-workspace", Outcome: "allowed"},
+							{At: request.Submitted.Add(-time.Minute), Kind: "agent", Subject: "fictional-agent", Action: "workspaces.list", Outcome: "refused"},
+						}
+					}
+					return templates.ExecuteTemplate(w, name, d)
+				})
+				if err != nil {
+					return nil, err
+				}
+			}
 		case "portal.html":
 			for _, kind := range []string{"no-access", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict"} {
 				uri := "/portal/"
@@ -403,8 +450,8 @@ func linkAttribute(n *html.Node, key string) string {
 }
 
 // validateRenderedLinks accounts for every URL-bearing attribute. Checked private
-// targets remain explicit data attributes, not Lychee GET requests. External and
-// public targets remain ordinary attributes for Lychee; no status is exempted.
+// targets and the runtime's fixed review handoff remain explicit data
+// attributes. Other public and external targets retain normal Lychee checking.
 func validateRenderedLinks(page linkPage) (string, int, error) {
 	if strings.Contains(page.markup, "{{") {
 		return "", 0, errors.New("unexpanded template field")
@@ -486,6 +533,13 @@ func validateRenderedLinks(page linkPage) (string, int, error) {
 				continue
 			}
 			if ref.IsAbs() || ref.Host != "" {
+				continue
+			}
+			if n.Data == "a" && attr.Key == "href" && attr.Val == "/trustpilot/" {
+				if err := checkTrustpilotHandoff(); err != nil {
+					return "", count, err
+				}
+				n.Attr[i].Key = "data-route-checked-href"
 				continue
 			}
 			target := base.ResolveReference(ref)
@@ -602,6 +656,10 @@ func registeredLinkTarget(mux *http.ServeMux, method string, target *url.URL) er
 		case "review":
 			if values[0] != "funding" || pattern != "GET /portal/operator/requests/{id}/work-review" {
 				return errors.New("invalid target funding review")
+			}
+		case "workspace":
+			if pattern != "GET /portal/operator/invitations/new" || !validCustomerWorkspace(values[0]) {
+				return errors.New("invalid invitation workspace")
 			}
 		default:
 			return errors.New("unexpected target query")

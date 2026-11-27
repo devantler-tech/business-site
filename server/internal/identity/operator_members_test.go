@@ -9,12 +9,22 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 )
 
 // managementDirectory replaces only the external identity-provider boundary.
 // Real HTTP handlers, sessions, feature evaluation and PostgreSQL remain in use.
 type managementDirectory struct {
-	change func(context.Context, string, bool) error
+	change   func(context.Context, string, bool) error
+	profiles func([]string) map[string]customeridentity.Profile
+}
+
+func (d *managementDirectory) Profiles(_ context.Context, ids []string) (map[string]customeridentity.Profile, error) {
+	if d.profiles == nil {
+		return nil, ErrDenied
+	}
+	return d.profiles(ids), nil
 }
 
 func (*managementDirectory) EnsureUser(context.Context, string, string, func() bool) (string, error) {

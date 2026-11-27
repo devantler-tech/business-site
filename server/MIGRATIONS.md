@@ -232,7 +232,7 @@ deletes rows older than the retention period.
 
 v29 adds `portal_workspaces`, including workspaces with no members yet, and records the
 workspace IDs already used by invitations and memberships. Grant SELECT/INSERT only;
-the runtime cannot rename or delete a workspace. The existing former-customer retention
+workspace identifiers are immutable. The existing former-customer retention
 purge removes its workspace identifier together with its expired records.
 
 v30 adds nullable producer evidence to the existing immutable mail outbox. New
@@ -242,6 +242,16 @@ partial metadata, a mismatched order/acceptance or a changed body. Existing rows
 retain NULL metadata; no legacy email or sender receipt is upgraded into proof.
 Runtime grants stay SELECT/INSERT only on the outbox and sender receipt tables.
 This grants no service execution authority and does not prove inbox receipt.
+
+v31 adds immutable simulated purchase receipts for the fictional client workspace.
+The named preview database and runtime login receive SELECT/INSERT. The normal
+runtime has no receipt privileges. The migration changes no billing or work records.
+
+v32 adds workspace names and closure records beside immutable workspace IDs. Grant
+SELECT/INSERT and UPDATE only on the display name and closure timestamp. Operator
+deletion removes portal access and revokes pending invitations in one transaction.
+The retained ID prevents reusing the workspace while its historical records remain.
+The retention purge removes eligible closed workspaces and their settings together.
 
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event

@@ -1,7 +1,7 @@
 # AGENTS.md — business-site
 
-Devantler Tech's public English/Danish business website, Projects catalogue, journal and
-supporting technical pages. This file is canonical; the monorepo's reviewed
+Devantler Tech's public English/Danish business website, Projects catalogue and journal.
+This file is canonical; the monorepo's reviewed
 [shared engineering contract](https://github.com/devantler-tech/monorepo/blob/main/AGENTS.md)
 also applies. Use isolated worktrees, signed commits, issue-backed draft PRs and current-head
 review/CI/user-path evidence. Never use an admin merge bypass or request Copilot review.
@@ -12,16 +12,20 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   and `public/` retain framework-neutral copy, authored Markdown, images and downloads.
   Local builds, publication and both Go package profiles always use Svelte. The retired
   frontend release flag has no effect; Astro applications, compiler and recovery option are removed.
-- English/Danish Home, About and Projects, the complete English Journal, all technical guides,
-  RSS, discovery assets and historical redirects are permanent. Preserve incoming heading
-  bookmarks, the Devantler Tech favicon (`public/favicon.png`, the green "D" icon) and the
-  header wordmark (`src/assets/brand/`), which the maintainer approved on 2026-11-15. Never
-  invent Danish article or guide routes.
+- English/Danish Home, About and Projects, the complete English Journal, RSS, discovery assets
+  and historical redirects are permanent. Preserve incoming heading bookmarks, the Devantler
+  Tech favicon (`public/favicon.png`, the green "D" icon) and the header wordmark
+  (`src/assets/brand/`), which the maintainer approved on 2026-11-15. Never invent Danish
+  article routes.
+- The site has no technical guides. The maintainer retired the template guides and the
+  Agentic Engineering page on 2026-11-22 (#697): the template READMEs are their documentation
+  and the Journal post carries the process diagram. Their old addresses stay as `noindex`,
+  bookmark-preserving redirects listed in `web/src/retired-guides.ts`. Link to a template's
+  repository rather than adding a guide page for it.
 - `src/data/build-content.mjs` compiles the maintained Markdown with Satteri, YAML metadata,
   Expressive Code, Sharp and the existing CV renderer. It never evaluates MDX. Historical
-  `.mdx` filenames remain content inputs, not executable components. Technical template
-  cards come from the maintained template collection. Catalogue/CV legacy metadata remains
-  available to the cross-product drift guards; it is not another web application.
+  `.mdx` filenames remain content inputs, not executable components. Catalogue/CV legacy
+  metadata remains available to the cross-product drift guards; it is not another web application.
 - `scripts/build-journal-reference.sh` prepares source-bound content under ignored
   `.generated/`; the normal build invokes it automatically. Use it before standalone
   `web/` builds. Complete own-source Git history, before/after input fingerprints, exact
@@ -59,16 +63,18 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   records the rejected private-frontend experiment; public Svelte remains selected.
 - `.github/workflows/ci.yaml` validates source and uploads a downloadable production preview.
 - `deploy/` is the Kustomize package for the namespace-bound Platform WebApp contract;
-  read `deploy/README.md` before changing it. One runtime serves `devantler.tech` (public pages)
+  read `deploy/README.md` before changing it. Shared manifests live in `deploy/base/`, prod-only
+  ones in `deploy/prod/` (the root `kustomization.yaml` includes only `prod/`), and
+  `deploy/dev/` patches the base for the dev deployment (#542). One runtime serves `devantler.tech` (public pages)
   and `portal.devantler.tech` (the portal), routing by host so nothing appears twice, and it
   grants no portal activation. Platform hostname approval and registration remain separate.
   The source-owned runtime release/publisher callers are default-off behind the
   explicit `RUNTIME_PUBLICATION_ENABLED` repository variable. Original main-CI
   archive admission, the accepted original-image verifier and independent paired
   publication readback are mandatory. Keep private dependencies and migration inputs absent;
-  portal settings and their private inputs come only from the platform's projected
-  `business-site-runtime` Secret, and the schema migration Job reads only the platform's
-  `business-site-portal-db-migration` Secret.
+  the platform's projected `business-site-runtime` Secret supplies private portal inputs.
+  The production deployment package supplies the public upstream logout defaults.
+  The schema migration Job reads only the platform's `business-site-portal-db-migration` Secret.
 - The platform serves devantler.tech from that signed runtime; GitHub Pages is retired
   (devantler-tech/platform#6177). `scripts/publishing-contract.test.sh` refuses any workflow that
   builds or deploys a Pages site. Both former Pages publishers remain only at historical
@@ -117,8 +123,8 @@ cross-product drift check runs in the monorepo against its pinned site and maint
 standalone CI exercises the checker's hermetic fixtures and the actual CV. Do not substitute
 fixtures for the aggregator's cross-product validation or weaken a failing check.
 
-Exercise English/Danish Home, About and Projects, journal and technical navigation, old
-project redirects/bookmarks, the CV, keyboard disclosures, mobile layouts and synchronized
+Exercise English/Danish Home, About and Projects, journal navigation, old project and
+retired-guide redirects/bookmarks, the CV, keyboard disclosures, mobile layouts and synchronized
 System/Light/Dark appearance before promotion. Stop any local preview server after checking it.
 `CI - Required Checks` aggregates every applicable CI job with `always()`. Merge is squash,
 pinned to the reviewed head, after the repository's ordered review lanes and complete readiness

@@ -24,6 +24,50 @@ test("the real Kustomize package renders deterministically and admits the public
   assert.equal(result.stdout, "tenant package: public-only package accepted\n");
 });
 
+test("the artifact root renders the production overlay", () => {
+  assert.equal(render(), render(path.join(root, "deploy/prod")));
+});
+
+test("the hosted preview keeps its application and schema migration private", () => {
+  const preview = yaml.loadAll(render(path.join(root, "deploy/dev")));
+  assert.deepEqual(preview.map((document) => document.kind).sort(), ["Job", "WebApp"]);
+  assert.ok(preview.every((document) => document.metadata.namespace === "business-site-dev"));
+  const app = preview.find((document) => document.kind === "WebApp");
+  assert.equal(app.metadata.name, "business-site-dev");
+  assert.equal(app.spec.name, "business-site-dev");
+  assert.equal(app.spec.host, "dev.devantler.tech");
+  assert.equal(app.spec.replicas, 1);
+  assert.deepEqual(app.spec.secretProjections, [{
+    secretName: "business-site-dev-runtime",
+    items: [
+      { key: "company-disclosure", path: "disclosure" },
+      { key: "portal-settings", path: "portal-settings" },
+      { key: "portal-client-secret", path: "portal-client-secret" },
+      { key: "portal-database-ca", path: "portal-database-ca" },
+    ],
+  }]);
+  const [base] = yaml.loadAll(render(path.join(root, "deploy/base")));
+  assert.equal(app.spec.image, base.spec.image);
+  assert.deepEqual(app.spec.args, [
+    "--public", "/app/public",
+    "--listen", "0.0.0.0:8080",
+    "--company-disclosure-projection", "/run/webapp-inputs/disclosure",
+    "--public-host", "devantler.tech",
+    "--portal-host", "dev.devantler.tech",
+    "--portal-settings-projection", "/run/webapp-inputs/portal-settings",
+  ]);
+  const job = preview.find((document) => document.kind === "Job");
+  assert.equal(job.metadata.name, "business-site-dev-migration");
+  const pod = job.spec.template.spec;
+  assert.equal(pod.automountServiceAccountToken, false);
+  assert.equal(pod.containers[0].image, app.spec.image);
+  assert.deepEqual(pod.containers[0].args, [
+    "--migrate", "--migration-database-projection", "/run/portal-migration/database-url",
+    "--runtime-role", "portal_preview_web",
+  ]);
+  assert.equal(pod.volumes.find((volume) => volume.name === "migration").secret.secretName, "business-site-dev-migration");
+});
+
 test("the rendered network policy allows only the two billing APIs on HTTPS", () => {
   const network = yaml.loadAll(render()).find((d) => d?.kind === "CiliumNetworkPolicy");
   // One named-destination rule keeps egress default deny for every other peer.
@@ -64,7 +108,10 @@ test("the rendered package projects the platform's runtime Secret with portal se
   assert.notEqual(disclosure.spec.target.name, app.spec.secretProjections[0].secretName);
   assert.deepEqual(app.spec.secretProjections, [{
     secretName: "business-site-runtime",
-    items: ["disclosure", "portal-settings", "portal-client-secret", "portal-database-ca", "smtp-username", "smtp-password"].map((path) => ({ key: path === "disclosure" ? disclosure.spec.data[0].secretKey : path, path })),
+    items: [
+      "disclosure", "portal-settings", "portal-client-secret", "portal-database-ca",
+      "smtp-username", "smtp-password", "portal-zitadel-token",
+    ].map((path) => ({ key: path === "disclosure" ? disclosure.spec.data[0].secretKey : path, path })),
   }]);
   // Each projected file the runtime reads is a path the projection actually supplies.
   for (const flag of ["--company-disclosure-projection", "--portal-settings-projection"]) {
@@ -147,9 +194,11 @@ for (const [name, mutate] of [
   ["a migration credential item", (d) => { d[0].spec.secretProjections[0].items.push({ key: "migration-database", path: "migration-database" }); }],
   ["a renamed settings path", (d) => { d[0].spec.secretProjections[0].items[1].path = "settings"; }],
   ["a settings key projected at another key's path", (d) => { d[0].spec.secretProjections[0].items[1].key = "portal-client-secret"; }],
-  ["a missing settings argument", (d) => { d[0].spec.args.splice(-2, 2); }],
-  ["settings outside the projection", (d) => { d[0].spec.args[d[0].spec.args.length - 1] = "/tmp/portal-settings"; }],
+  ["a missing settings argument", (d) => { d[0].spec.args.splice(d[0].spec.args.indexOf("--portal-settings-projection"), 2); }],
+  ["settings outside the projection", (d) => { d[0].spec.args[d[0].spec.args.indexOf("--portal-settings-projection") + 1] = "/tmp/portal-settings"; }],
   ["a repeated settings argument", (d) => { d[0].spec.args.push("--portal-settings-projection", "/run/webapp-inputs/portal-settings"); }],
+  ["an unapproved upstream logout endpoint", (d) => { d[0].spec.args[d[0].spec.args.indexOf("--portal-upstream-logout-url") + 1] = "https://foreign.example.invalid/end"; }],
+  ["a different upstream logout client", (d) => { d[0].spec.args[d[0].spec.args.indexOf("--portal-upstream-logout-client-id") + 1] = "123"; }],
   ["a one-shot invitation argument", (d) => { d[0].spec.args.push("--portal-invite"); }],
   ["world ingress", (d) => { d[1].spec.ingress[0].fromEntities = ["world"]; }],
   ["extra egress", (d) => { d[1].spec.egress = [{ toEntities: ["world"] }]; }],
@@ -305,23 +354,24 @@ test("every package pod passes the cluster's pod-security admission rule", () =>
 });
 
 test("the migration Job and retention CronJob run whatever image the publisher pins in the WebApp", () => {
-  // The shared publisher rewrites only webapp.yaml's WebApp image; the package
-  // build copies it into both jobs, so neither runs another release's image.
+  // The shared publisher pins the WebApp image. The production overlay copies
+  // that image into both jobs.
   const fixture = mkdtempSync(path.join(tmpdir(), "tenant-package-"));
   try {
     cpSync(path.join(root, "deploy"), fixture, { recursive: true });
     const pinned = `ghcr.io/devantler-tech/business-site@sha256:${"b".repeat(64)}`;
-    const app = yaml.load(readFileSync(path.join(fixture, "webapp.yaml"), "utf8"));
+    const appManifest = path.join(fixture, "base/webapp.yaml");
+    const app = yaml.load(readFileSync(appManifest, "utf8"));
     app.spec.image = pinned;
-    writeFileSync(path.join(fixture, "webapp.yaml"), yaml.dump(app));
+    writeFileSync(appManifest, yaml.dump(app));
     const rendered = yaml.loadAll(render(fixture));
     const job = rendered.find((d) => d?.kind === "Job");
     assert.equal(job.spec.template.spec.containers[0].image, pinned);
     const cron = rendered.find((d) => d?.kind === "CronJob");
     assert.equal(cron.spec.jobTemplate.spec.template.spec.containers[0].image, pinned);
-    const cronSource = yaml.load(readFileSync(path.join(root, "deploy/cronjob-portal-retention.yaml"), "utf8"));
+    const cronSource = yaml.load(readFileSync(path.join(root, "deploy/prod/cronjob-portal-retention.yaml"), "utf8"));
     assert.equal(cronSource.spec.jobTemplate.spec.template.spec.containers[0].image, undefined, "the source CronJob names no image of its own");
-    const source = yaml.load(readFileSync(path.join(root, "deploy/job-portal-migration.yaml"), "utf8"));
+    const source = yaml.load(readFileSync(path.join(root, "deploy/prod/job-portal-migration.yaml"), "utf8"));
     assert.equal(source.spec.template.spec.containers[0].image, undefined, "the source Job names no image of its own");
   } finally {
     rmSync(fixture, { recursive: true });

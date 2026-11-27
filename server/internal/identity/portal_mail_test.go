@@ -7,8 +7,10 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/devantler-tech/business-site/server/internal/mail"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const fixtureTermsEN = "Project terms\n\nWithdrawal form\nTo: Devantler Tech, Example Road 1, 1234 Exampletown, ned@devantler.tech\nI/We withdraw from the following service:"
@@ -71,24 +73,40 @@ func deliverFixtureMail(t *testing.T, b *browserFixture, m *fakeMailer) []mail.M
 func TestOrderAndWithdrawalAreConfirmedByEmail(t *testing.T) {
 	b := billingFixture(t)
 	m := mailFixture(t, b)
+	config := b.pool.Config()
+	config.MaxConns, config.MinConns, config.MinIdleConns = 1, 0, 0
+	pool, err := pgxpool.NewWithConfig(t.Context(), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	dispatcher := New(pool, b.svc.broker, b.svc.flags)
+	if err := dispatcher.EnableMail(m); err != nil {
+		t.Fatal(err)
+	}
+	dispatch := func() error {
+		ctx, cancel := context.WithTimeout(t.Context(), 4*time.Second)
+		defer cancel()
+		return dispatcher.SendQueuedMail(ctx)
+	}
 	f := orderForm(t, b, "da")
 	f.Set("early_start", "yes")
 	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", f, b.site.URL); status != 303 {
 		t.Fatalf("order refused: %d", status)
 	}
 	m.fail = true
-	if err := b.svc.SendQueuedMail(t.Context()); err == nil || len(m.messages()) != 0 {
+	if err := dispatch(); err == nil || len(m.messages()) != 0 {
 		t.Fatal("a refused email counted as sent")
 	}
 	m.fail = false
 	// Closing the portal stops delivery; reopening it resumes.
 	setFixturePortalFlags(t, b, append(acceptanceFlagNames(), "portal-invoice-billing"), []any{false, true, true, true, true, true, true})
-	if err := b.svc.SendQueuedMail(t.Context()); err != nil || len(m.messages()) != 0 {
+	if err := dispatch(); err != nil || len(m.messages()) != 0 {
 		t.Fatal("mail was sent with the portal closed", err)
 	}
 	billingFlags(t, b, true)
 	for range 2 {
-		if err := b.svc.SendQueuedMail(t.Context()); err != nil {
+		if err := dispatch(); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -110,7 +128,7 @@ func TestOrderAndWithdrawalAreConfirmedByEmail(t *testing.T) {
 	if status, _, _ := b.request("POST", withdrawalPath, w, b.site.URL); status != 303 {
 		t.Fatalf("withdrawal refused: %d", status)
 	}
-	if err := b.svc.SendQueuedMail(t.Context()); err != nil {
+	if err := dispatch(); err != nil {
 		t.Fatal(err)
 	}
 	if sent = m.messages(); len(sent) != 2 || sent[1].Subject != "Receipt for your withdrawal" || !strings.Contains(sent[1].Body, "We have received your withdrawal from order "+order) || !strings.Contains(sent[1].Body, "You pay for the work done until you withdrew") {
@@ -119,7 +137,7 @@ func TestOrderAndWithdrawalAreConfirmedByEmail(t *testing.T) {
 	if status, _, _ := b.request("POST", withdrawalPath, w, b.site.URL); status != 303 {
 		t.Fatalf("repeated withdrawal refused: %d", status)
 	}
-	if err := b.svc.SendQueuedMail(t.Context()); err != nil || len(m.messages()) != 2 {
+	if err := dispatch(); err != nil || len(m.messages()) != 2 {
 		t.Fatal("a repeated withdrawal sent a second receipt", err)
 	}
 	_, body, _ := operatorOrderForm(t, b, "mail-operator")

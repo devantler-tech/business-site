@@ -16,6 +16,18 @@ const find = (nodes, name) => nodes.find(node => attr(node, name) !== undefined)
 const load = path => { assert.ok(existsSync(path), "required bilingual page is missing"); return walk(parse(readFileSync(path, "utf8"))); };
 /** @param {MarkupNode} node */
 const links = node => walk(node).filter(item => item.tagName === "a").map(item => [text(item), attr(item,"href")]);
+/** @param {MarkupNode} node */
+const trustpilotLink = node => node.tagName === "a" && attr(node, "class")?.split(/\s+/).includes("trustpilot-link");
+/** @param {MarkupNode} node */
+const loadsTrustpilot = node => {
+  const imageCandidates = attr(node, "srcset")?.split(",").map(entry => entry.trim().split(/\s+/)[0]) ?? [];
+  const targets = [attr(node, "src"), attr(node, "data-src"), ...imageCandidates];
+  return targets.some(target => {
+    if (!target) return false;
+    const { hostname } = new URL(target, "https://devantler.tech");
+    return hostname === "trustpilot.com" || hostname.endsWith(".trustpilot.com");
+  });
+};
 /** @param {string} dir @returns {string[]} */
 const files = dir => readdirSync(dir, {withFileTypes:true}).flatMap(entry => entry.isDirectory() ? files(join(dir,entry.name)) : [join(dir,entry.name)]);
 /** The portal's privacy section is released separately from the rest of the notice. */
@@ -65,9 +77,21 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
       for (const language of ["en","da","x-default"]) assert.ok(actual.some(node => attr(node,"hreflang") === language && attr(node,"href") === `https://devantler.tech/${language === "da" ? "da/" : ""}${route}`), "canonical language alternative is local and complete");
       assert.ok(actual.some(node => attr(node,"rel") === "canonical" && attr(node,"href") === `https://devantler.tech/${prefix}${route}`));
       assert.ok(actual.some(node => node.tagName === "html" && attr(node,"lang") === locale));
+      const profileLinks = walk(footer).filter(trustpilotLink);
+      assert.equal(profileLinks.length, Number(identity), "the profile link follows the company release");
+      assert.ok(!actual.some(loadsTrustpilot), "the page makes no Trustpilot subresource requests");
+      assert.ok(!find(actual, "data-review-consent"), "the direct link needs no review consent banner");
+      if (identity) {
+        const [directLink] = profileLinks;
+        assert.equal(attr(directLink, "hidden"), undefined, "the link is visible by default");
+        assert.equal(attr(directLink, "href"), "https://www.trustpilot.com/review/devantler.tech");
+        assert.equal(attr(directLink, "rel"), "noreferrer");
+        assert.equal(text(directLink).replace(/\s*↗$/, ""), locale === "da" ? "Anmeldelser på Trustpilot" : "Reviews on Trustpilot");
+      }
       if (route === "") {
         const contact = actual.find(node => attr(node,"id") === "contact");
         assert.ok(contact);
+        assert.ok(!walk(contact).some(trustpilotLink), "the contact section keeps its contact actions together");
         assert.ok(links(contact).some(([,href])=>href===(identity?"mailto:ned@devantler.tech":"https://www.linkedin.com/in/nikolai-emil-damm-14a786150/")), "contact journey retains its approved destination");
 
 
@@ -129,7 +153,7 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
     for (const language of ["en","da","x-default"]) assert.ok(actual.some(node => attr(node,"hreflang") === language && attr(node,"href") === `https://devantler.tech/${language === "da" ? "da/" : ""}company/`));
   }
   // Supporting frames participate too, not only the six top-level pages.
-  for (const route of ["blog/index.html", "blog/welcome/index.html", "templates/index.html"]) {
+  for (const route of ["blog/index.html", "blog/welcome/index.html", "blog/tags/kubernetes/index.html"]) {
     const nodes = load(join(candidate,route)), footer = find(nodes,"data-business-footer");
     assert.ok(footer,"supporting page retains the business footer");
     assert.equal(links(footer).some(([,href]) => href === "/company/"),identity);

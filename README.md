@@ -1,10 +1,9 @@
 # Devantler Tech website
 
 The source for [devantler.tech](https://devantler.tech): an independent software business's
-website, public project catalogue, Journal and technical guides. Visit the published site to
+website, public project catalogue and Journal. Visit the published site to
 explore the work; use this repository to improve its content or presentation. Home, About and
-Projects are available in English and Danish. The Journal, CV and detailed technical guides
-are in English.
+Projects are available in English and Danish. The Journal and CV are in English.
 
 The public site uses SvelteKit's prerendered static output, served by this repository's Go
 runtime on the devantler-tech platform. The same runtime carries a separate, default-off portal
@@ -13,9 +12,9 @@ production authentication, customer intake or payments. You do not need a databa
 account or publishing credentials to work on the static site.
 
 The [SvelteKit frontend](web/README.md) implements English/Danish
-Home, About and Projects pages, the complete English Journal, technical guides and discovery assets.
+Home, About and Projects pages, the complete English Journal and discovery assets.
 Every local build, publication and Go package uses Svelte. A native Markdown/content build
-retains the complete articles, guides, feed, downloads and the Devantler Tech logo favicon.
+retains the complete articles, feed, downloads and the Devantler Tech logo favicon.
 See the [Svelte-only decision](docs/adr/0027-svelte-only-public-build.md).
 
 ## Run the site locally
