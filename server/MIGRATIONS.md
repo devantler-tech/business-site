@@ -276,6 +276,11 @@ approval, payment, membership, mail confirmation and closure evidence advance
 it when their transaction commits. The web role can read the revision. The
 migration-owned triggers are its only writer in normal operation.
 
+v37 stores the first verified calendar result for a confirmed free introduction.
+It records either the matching event's validator or a conflict for operator
+review. The runtime can read and append observations. The original reservation
+and intent also govern observation retention.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or
