@@ -45,11 +45,8 @@ type OwnedEventObservation struct {
 // ReadOwnedEvent observes one canonical object in the dedicated calendar.
 // An existing object with any unexpected event content requires reconciliation.
 func (c *Client) ReadOwnedEvent(ctx context.Context, event OwnedEvent) (OwnedEventObservation, error) {
-	if !c.validSources() || c.ownedCalendar == "" || !slices.Contains(c.calendars, c.ownedCalendar) ||
-		!ownedEventKey.MatchString(event.Key) || event.Revision < 1 || event.Revision > 1<<31-1 ||
-		event.Slot.Start.IsZero() || !event.Slot.Start.Before(event.Slot.End) ||
-		event.Slot.End.Sub(event.Slot.Start) > 24*time.Hour ||
-		event.Slot.Start.Nanosecond() != 0 || event.Slot.End.Nanosecond() != 0 {
+	resource, uid, err := c.ownedEventTarget(event)
+	if err != nil {
 		return OwnedEventObservation{}, booking.ErrUnavailable
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -59,8 +56,23 @@ func (c *Client) ReadOwnedEvent(ctx context.Context, event OwnedEvent) (OwnedEve
 		return OwnedEventObservation{}, booking.ErrUnavailable
 	}
 	defer closeConnection()
+	return c.readOwnedEvent(ctx, client, resource, uid, event)
+}
+
+func (c *Client) ownedEventTarget(event OwnedEvent) (resource, uid string, err error) {
+	if !c.validSources() || c.ownedCalendar == "" || !slices.Contains(c.calendars, c.ownedCalendar) ||
+		!ownedEventKey.MatchString(event.Key) || event.Revision < 1 || event.Revision > 1<<31-1 ||
+		event.Slot.Start.IsZero() || !event.Slot.Start.Before(event.Slot.End) ||
+		event.Slot.End.Sub(event.Slot.Start) > 24*time.Hour ||
+		event.Slot.Start.Nanosecond() != 0 || event.Slot.End.Nanosecond() != 0 {
+		return "", "", booking.ErrUnavailable
+	}
 	stem := "portal-" + event.Key
-	request, err := c.sourceRequest(ctx, http.MethodGet, c.ownedCalendar+stem+".ics", nil)
+	return c.ownedCalendar + stem + ".ics", stem + "@devantler.tech", nil
+}
+
+func (c *Client) readOwnedEvent(ctx context.Context, client *http.Client, resource, uid string, event OwnedEvent) (OwnedEventObservation, error) {
+	request, err := c.sourceRequest(ctx, http.MethodGet, resource, nil)
 	if err != nil {
 		return OwnedEventObservation{}, err
 	}
@@ -78,7 +90,7 @@ func (c *Client) ReadOwnedEvent(ctx context.Context, event OwnedEvent) (OwnedEve
 		return OwnedEventObservation{}, booking.ErrUnavailable
 	}
 	data, err := readCalendarBody(ctx, response, maxOwnedEventBytes)
-	if err != nil || !matchesOwnedEvent(data, stem+"@devantler.tech", event) {
+	if err != nil || !matchesOwnedEvent(data, uid, event) {
 		return OwnedEventObservation{}, booking.ErrUnavailable
 	}
 	return OwnedEventObservation{Exists: true, ETag: tags[0]}, nil

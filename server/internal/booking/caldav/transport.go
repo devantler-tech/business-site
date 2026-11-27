@@ -90,16 +90,24 @@ func (c *Client) sourceClient(ctx context.Context) (*http.Client, func(), error)
 func (c *Client) sourceRequest(ctx context.Context, method, resource string, body io.Reader) (*http.Request, error) {
 	address := url.URL{Scheme: "https", Host: c.origin.Host, Path: resource}
 	request, err := http.NewRequestWithContext(ctx, method, address.String(), body)
-	if err != nil || ctx.Err() != nil {
+	if err != nil || c.authorizeSourceRequest(request) != nil {
 		return nil, booking.ErrUnavailable
+	}
+	return request, nil
+}
+
+func (c *Client) authorizeSourceRequest(request *http.Request) error {
+	ctx := request.Context()
+	if ctx.Err() != nil {
+		return booking.ErrUnavailable
 	}
 	user, password, err := c.credentials(ctx)
 	if err != nil || user == "" || password == "" || ctx.Err() != nil {
-		return nil, booking.ErrUnavailable
+		return booking.ErrUnavailable
 	}
 	request.SetBasicAuth(user, password)
 	request.Header.Set("Accept", ical.MIMEType)
-	return request, nil
+	return nil
 }
 
 func readCalendarBody(ctx context.Context, response *http.Response, limit int64) ([]byte, error) {

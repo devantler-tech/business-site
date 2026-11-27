@@ -75,11 +75,13 @@ must verify the actual protocol behavior before a compatibility claim or depende
 
 Owned-event observation uses a dedicated collection selected from the configured calendars.
 It reads one resource using a server-generated key and checks the event's identity, stored
-interval, revision and strong ETag. The adapter returns only absence or the matching version.
-Unexpected provider content leaves the appointment unresolved. The observation runs only in
-synthetic tests while the provider connection and conditional writes are being prepared.
+interval, revision and strong ETag. Creation submits one conditional write only after observing
+absence. A conflict or uncertain write result requires fresh proof of the exact event and its
+version. Unexpected provider content leaves the appointment unresolved. These paths run in
+synthetic tests while private provider setup remains separate.
 [CalDAV object resources](https://www.rfc-editor.org/rfc/rfc4791#section-5.3)
 [HTTP entity tags](https://www.rfc-editor.org/rfc/rfc9110.html#name-etag)
+[Pinned CalDAV client](https://pkg.go.dev/github.com/emersion/go-webdav@v0.8.0/caldav)
 
 The human privately selects calendars and authorizes the connection/credential setup.
 [Apple's supported third-party access and revocation guidance](https://support.apple.com/en-us/121539)

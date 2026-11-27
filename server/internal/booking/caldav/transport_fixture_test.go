@@ -56,7 +56,7 @@ func newCalendarTransportFixture(t *testing.T, certificateHost, method, path str
 		f.record("request")
 		call := f.requests.Add(1)
 		user, password, ok := r.BasicAuth()
-		if r.Method != method || r.URL.RequestURI() != path || r.Host != selectedCalendarHost || r.TLS == nil || r.TLS.ServerName != selectedCalendarHost || !ok || user != "fictional-user" || password != f.password(call) {
+		if (method != "" && r.Method != method) || r.URL.RequestURI() != path || r.Host != selectedCalendarHost || r.TLS == nil || r.TLS.ServerName != selectedCalendarHost || !ok || user != "fictional-user" || password != f.password(call) {
 			t.Error("request escaped its selected source, TLS name or current credential")
 			w.WriteHeader(http.StatusBadRequest)
 			return
