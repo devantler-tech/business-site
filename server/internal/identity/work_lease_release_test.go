@@ -129,6 +129,7 @@ func TestWorkLeaseStorageKeepsTheFirstConcurrentRelease(t *testing.T) {
 
 func TestWorkLeaseStoragePreservesPreUpgradeRelease(t *testing.T) {
 	db, fence := activeWorkLeaseForRelease(t)
+	rewindHostingPeriodsFixture(t, db)
 	ctx := t.Context()
 	if _, err := db.Exec(ctx, `DROP TRIGGER portal_guard_work_lease_release ON portal_work_leases;
  DROP TRIGGER portal_admit_active_work_lease ON portal_work_leases;

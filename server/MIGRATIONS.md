@@ -339,6 +339,14 @@ approval. The lease and approval intervals both exclude their end, so an
 equal expiry is valid. A rejected insert consumes neither a fence nor its
 submission key. Historical lease records are preserved.
 
+v48 stores hosting entitlements, period revisions and their current pointers.
+Each revision references the accepted software proposal for the same workspace
+and request, including the confirmed version and content hash. The database
+locks and checks the current operator membership before insertion. Period
+bounds are finite and exclude the end. The runtime has no privileges on these
+tables. The portal's authorization, period locking and retention handling are
+required before a workflow begins writing real hosting periods.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

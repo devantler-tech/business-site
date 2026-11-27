@@ -71,6 +71,7 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 // runtime grants or a production rollback. Remove new dependent tables before v13.
 func rewindAppointmentReservationsFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
+	rewindHostingPeriodsFixture(t, pool)
 	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_work_leases,portal_work_lease_slot;
  DROP FUNCTION portal_assign_work_lease_fence(),portal_validate_work_lease_selection(),portal_guard_work_lease_release(),portal_require_active_work_lease(),portal_validate_work_lease_window();
  DROP TABLE portal_customer_account_closures;
@@ -106,6 +107,15 @@ func rewindAppointmentReservationsFixture(t *testing.T, pool *pgxpool.Pool) {
 		if _, err := pool.Exec(t.Context(), "CREATE OR REPLACE FUNCTION "+name+definition+"\n$$;"); err != nil {
 			t.Fatalf("restore service contract guard %s: %v", name, err)
 		}
+	}
+}
+
+func rewindHostingPeriodsFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_hosting_period_heads,portal_hosting_period_revisions,portal_hosting_entitlements;
+ DROP FUNCTION portal_guard_hosting_period_operator();
+ DELETE FROM portal_schema_version WHERE version=48`); err != nil {
+		t.Fatal("historical fixture could not remove hosting period storage", err)
 	}
 }
 
