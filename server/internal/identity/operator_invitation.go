@@ -90,24 +90,42 @@ func (b *browser) createCustomerInvitation(ctx context.Context, r *http.Request)
 	subject := customeridentity.DexSubject(userID, customeridentity.ZitadelConnectorID)
 	invitation := Invitation{b.foundation.broker.issuer, subject, input.Workspace, "client", time.Now().Add(7 * 24 * time.Hour)}
 	setOperatorTarget(ctx, input.Workspace)
-	err = b.foundation.invite(ctx, invitation, func(tx pgx.Tx) error {
-		if !b.operatorMutationAllowed(ctx, tx) {
-			return ErrDenied
-		}
-		// Provider lookup began outside the identity lock. Verify the exact
-		// account again while the invitation and identity lock are held.
-		if err := b.foundation.customers.VerifyUser(ctx, userID); err != nil {
-			return err
-		}
+	if err := b.issueDirectoryInvitation(ctx, invitation, userID); err != nil {
+		return nil, err
+	}
+	return pendingInvitation{Subject: subject, Workspace: input.Workspace, Role: "client", Expires: invitation.Expires}, nil
+}
+
+func (b *browser) issueDirectoryInvitation(ctx context.Context, invitation Invitation, userID string) error {
+	if invitation.Subject == "" || !b.foundation.canInvite(invitation.Subject, "client") {
+		return ErrDenied
+	}
+	connection, release, err := b.foundation.customerIdentityConnection(ctx, invitation.Subject)
+	if err != nil {
+		return err
+	}
+	defer release()
+	if !b.operatorMutationAllowed(ctx, connection) {
+		return ErrDenied
+	}
+	var available bool
+	if err := connection.QueryRow(ctx, `SELECT `+invitationIdentityAvailable, invitation.Issuer, invitation.Subject).Scan(&available); err != nil {
+		return err
+	}
+	if !available {
+		return ErrDenied
+	}
+	// Confirm the exact account under the lock shared with account changes.
+	// The workspace stays available during this provider call.
+	if err := b.foundation.customers.VerifyUser(ctx, userID); err != nil {
+		return err
+	}
+	return b.foundation.invite(ctx, invitation, connection.Begin, func(tx pgx.Tx) error {
 		if !b.operatorMutationAllowed(ctx, tx) {
 			return ErrDenied
 		}
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-	return pendingInvitation{Subject: subject, Workspace: input.Workspace, Role: "client", Expires: invitation.Expires}, nil
 }
 
 // operatorInvitationPage uses the API's exact authorization and audit boundary.
