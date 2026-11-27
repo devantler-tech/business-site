@@ -91,7 +91,9 @@ an explicit server-owned delivery kind bound to the approved agreement;
 The software queue revision tracks durable eligibility changes at commit.
 Request, agreement, approval, payment, membership, confirmation and closure
 writes advance it once per transaction. Software claim selection will sample
-it before scanning and compare it under lock after acquiring its evidence locks.
+it before scanning. After acquiring its evidence locks it will call
+`portal_lock_work_queue_revision` with the observed value in the same transaction.
+A changed or unavailable revision must abort the candidate selection.
 It also has to recheck the database time at the withdrawal and approval boundaries.
 The operator inventory continues to report separate observations.
 

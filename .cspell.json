@@ -584,6 +584,7 @@
     "proowner",
     "prorettype",
     "prosecdef",
+    "provolatile",
     "prosrc",
     "RELID",
     "ROWTYPE",

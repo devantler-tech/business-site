@@ -286,6 +286,11 @@ operator permanently closes their workspace. It references the recorded
 end of membership and follows its retention. The runtime can read and append
 records. Provider removal is a separate operation.
 
+v39 gives the web role a single function to hold its observed software queue
+revision until transaction end. A changed revision returns false. The function
+has no write path and its EXECUTE grant cannot be delegated. The web role keeps
+SELECT-only table access and cannot call the migration-owned revision recorder.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

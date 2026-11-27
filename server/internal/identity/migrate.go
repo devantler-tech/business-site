@@ -128,7 +128,10 @@ var appointmentCalendarObservationsSchema string
 //go:embed customer-account-closures.sql
 var customerAccountClosuresSchema string
 
-// runtimeGrants is the web role's complete table privilege set after the
+//go:embed work-queue-revision-lock.sql
+var workQueueRevisionLockSchema string
+
+// runtimeGrants is the web role's complete object privilege set after the
 // migrations above, as MIGRATIONS.md documents. A migration that adds
 // or changes runtime access updates this list in the same change; web startup's
 // CheckRuntimeRole independently refuses an incomplete or broader web role.
@@ -151,6 +154,7 @@ var runtimeGrants = []string{
 	"SELECT,INSERT ON portal_service_fulfillments,portal_service_consumers",
 	"SELECT,INSERT ON portal_appointment_reservations,portal_appointment_revisions,portal_appointment_introductions,portal_appointment_introduction_cancellations,portal_appointment_calendar_intents,portal_appointment_calendar_observations,portal_customer_account_closures",
 	"SELECT ON portal_schema_version,portal_work_queue_revision",
+	"EXECUTE ON FUNCTION public.portal_lock_work_queue_revision(bigint)",
 }
 
 // managedTables are every relation the migrations own. Granting first revokes
@@ -252,7 +256,7 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, runtimeRole string) error 
 
 // orderedMigrations lists the embedded migrations; version N is element N-1.
 func orderedMigrations() []string {
-	return []string{schema, sessionsSchema, contactsSchema, requestsSchema, triageIndexSchema, proposalsSchema, proposalVisibilitySchema, contactVerificationSchema, proposalAcceptanceSchema, invoicesSchema, creditsSchema, invoiceTaxSchema, membershipHistorySchema, workApprovalsSchema, otherRequestsSchema, ordersSchema, cardsSchema, orderEndsSchema, workFundingSchema, clientOrderEndsSchema, orderWithdrawalsSchema, earlyStartSchema, mailSchema, launchPlacesSchema, orderAddonsSchema, requestClosuresSchema, addonEndsSchema, operatorAuditSchema, workspacesSchema, originalConfirmationSchema, previewReceiptsSchema, workspaceManagementSchema, serviceContractsSchema, appointmentReservationsSchema, appointmentCalendarIntentsSchema, workQueueRevisionSchema, appointmentCalendarObservationsSchema, customerAccountClosuresSchema}
+	return []string{schema, sessionsSchema, contactsSchema, requestsSchema, triageIndexSchema, proposalsSchema, proposalVisibilitySchema, contactVerificationSchema, proposalAcceptanceSchema, invoicesSchema, creditsSchema, invoiceTaxSchema, membershipHistorySchema, workApprovalsSchema, otherRequestsSchema, ordersSchema, cardsSchema, orderEndsSchema, workFundingSchema, clientOrderEndsSchema, orderWithdrawalsSchema, earlyStartSchema, mailSchema, launchPlacesSchema, orderAddonsSchema, requestClosuresSchema, addonEndsSchema, operatorAuditSchema, workspacesSchema, originalConfirmationSchema, previewReceiptsSchema, workspaceManagementSchema, serviceContractsSchema, appointmentReservationsSchema, appointmentCalendarIntentsSchema, workQueueRevisionSchema, appointmentCalendarObservationsSchema, customerAccountClosuresSchema, workQueueRevisionLockSchema}
 }
 
 // migrationChecksum is the ledger's record of one migration's exact bytes.
@@ -295,7 +299,11 @@ func grantRuntime(ctx context.Context, tx pgx.Tx, role string) error {
 		return errRuntimeRole
 	}
 	grantee := pgx.Identifier{role}.Sanitize()
-	statements := []string{"REVOKE ALL ON " + managedTables + " FROM " + grantee, "GRANT USAGE ON SCHEMA public TO " + grantee}
+	statements := []string{
+		"REVOKE ALL ON " + managedTables + " FROM " + grantee,
+		"REVOKE ALL ON FUNCTION public.portal_lock_work_queue_revision(bigint) FROM " + grantee,
+		"GRANT USAGE ON SCHEMA public TO " + grantee,
+	}
 	for _, grant := range runtimeGrants {
 		statements = append(statements, "GRANT "+grant+" TO "+grantee)
 	}
