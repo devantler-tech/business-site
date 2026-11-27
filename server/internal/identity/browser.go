@@ -721,17 +721,17 @@ func (b *browser) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 type pageData struct {
-	BrokerURL                                                                                                                                  string
-	LanguageURL                                                                                                                                string
-	InviteWorkspace                                                                                                                            string
-	Lang, Kind, Client, CSRF, Title, Intro, Action, SignedIn, Logout, Error, Unavailable, Back, Theme, System, Light, Dark, Operator, Boundary string
-	RequestsEnabled                                                                                                                            bool
-	AppointmentsEnabled, AppointmentsLimited                                                                                                   bool
-	Appointments                                                                                                                               []appointmentHistoryItem
-	CalendarConflictsEnabled                                                                                                                   bool
-	TriageEnabled                                                                                                                              bool
-	ClientPreview, PreviewAvailable                                                                                                            bool
-	Audit                                                                                                                                      []auditEntry
+	BrokerURL                                                                                                                        string
+	LanguageURL                                                                                                                      string
+	InviteWorkspace                                                                                                                  string
+	Lang, Kind, Client, CSRF, Title, Intro, Action, Logout, Error, Unavailable, Back, Theme, System, Light, Dark, Operator, Boundary string
+	RequestsEnabled                                                                                                                  bool
+	AppointmentsEnabled, AppointmentsLimited                                                                                         bool
+	Appointments                                                                                                                     []appointmentHistoryItem
+	CalendarConflictsEnabled                                                                                                         bool
+	TriageEnabled                                                                                                                    bool
+	ClientPreview, PreviewAvailable                                                                                                  bool
+	Audit                                                                                                                            []auditEntry
 }
 
 // render escapes all page data and exposes no broker tokens or raw store errors.
@@ -744,7 +744,7 @@ func (b *browser) render(w http.ResponseWriter, r *http.Request, status int, kin
 
 // data shares the same localized, escaped layout with the private contact form.
 func (b *browser) data(r *http.Request, kind, client, token string) pageData {
-	d := pageData{Lang: language(r), Kind: kind, Client: client, CSRF: token, Title: "Your client portal", Intro: "A private space for your work with Devantler Tech.", Action: "Sign in", SignedIn: "You are signed in", Logout: "Sign out", Error: "Sign-in could not be completed. The portal is invitation-only: try again with the account from your invitation, or contact Devantler Tech.", Unavailable: "The portal is unavailable. Please try again later.", Back: "Back to the website", Theme: "Appearance", System: "System", Light: "Light", Dark: "Dark", Operator: "Operator", Boundary: "Ordering and payments are not available yet."}
+	d := pageData{Lang: language(r), Kind: kind, Client: client, CSRF: token, Title: "Your client portal", Intro: "A private space for your work with Devantler Tech.", Action: "Sign in", Logout: "Sign out", Error: "Sign-in could not be completed. The portal is invitation-only: try again with the account from your invitation, or contact Devantler Tech.", Unavailable: "The portal is unavailable. Please try again later.", Back: "Back to the website", Theme: "Appearance", System: "System", Light: "Light", Dark: "Dark", Operator: "Operator", Boundary: "Ordering and payments are not available yet."}
 	if b.foundation.canLeaveClientPreview() && b.principal(r.Context()).isClientPreview() {
 		if d.CSRF == "" {
 			d.CSRF = nosurf.Token(r)
@@ -782,7 +782,6 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 		d.Title = "Din kundeportal"
 		d.Intro = "Et privat sted for dit samarbejde med Devantler Tech."
 		d.Action = "Log ind"
-		d.SignedIn = "Du er logget ind"
 		d.Logout = "Log ud"
 		d.Error = "Login kunne ikke gennemføres. Portalen kræver en invitation: prøv igen med kontoen fra din invitation, eller kontakt Devantler Tech."
 		d.Unavailable = "Portalen er ikke tilgængelig. Prøv igen senere."
