@@ -29,8 +29,9 @@ inside the request transaction:
   VAT, and never refunded or disputed, is funding. Anything else, or a failed
   read, is unavailable, never a zero or success.
 - When work may start: the client asked for an early start when ordering, or the
-  14-day withdrawal period has ended (Consumer Contracts Act, section 18). A
-  withdrawn order never funds work.
+  14-day withdrawal period has ended (Consumer Contracts Act, section 18).
+  PostgreSQL supplies the time for this check. If the time cannot be read,
+  eligibility is unavailable. A withdrawn order never funds work.
 - Exact client acceptor and original operator identities, workspaces and
   database-owned membership incarnations. The current viewing operator is
   independently authorized; a different authorized operator may review a
