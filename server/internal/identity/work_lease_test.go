@@ -68,6 +68,35 @@ func TestWorkLeaseStorageRefusesExpiredApproval(t *testing.T) {
 	requireLeaseDatabaseError(t, err, "55000")
 }
 
+func TestWorkLeaseStorageBoundsTheWindowByTheApproval(t *testing.T) {
+	b, operator := approvalFixture(t)
+	savedApproval(t, b, operator)
+	db := migrationDB(t)
+	ctx := t.Context()
+	var priorFence int64
+	if err := db.QueryRow(ctx, `SELECT issued_fence FROM portal_work_lease_slot WHERE singleton`).Scan(&priorFence); err != nil {
+		t.Fatal("read fence before trying the approval boundary", err)
+	}
+	key := secret()
+	claim := func(offset string) (int64, error) {
+		var fence int64
+		err := db.QueryRow(ctx, `INSERT INTO portal_work_leases
+ (request_id,client_id,approval_id,approval_generation,queue_revision,actor_key,submission_key,expires_at)
+ SELECT c.request_id,c.client_id,c.approval_id,c.generation,revision,
+ repeat('a',64),$1,a.expires_at+$2::interval
+ FROM portal_work_current c JOIN portal_work_approvals a ON a.id=c.approval_id
+ CROSS JOIN portal_work_queue_revision WHERE c.request_id=$3 RETURNING fence`,
+			key, offset, proposalRequestID).Scan(&fence)
+		return fence, err
+	}
+	_, err := claim("1 microsecond")
+	requireLeaseDatabaseError(t, err, "55000")
+	fence, err := claim("0 seconds")
+	if err != nil || fence != priorFence+1 {
+		t.Fatalf("the exact approval deadline should use the next fence and the original key: fence=%d, previous=%d, error=%v", fence, priorFence, err)
+	}
+}
+
 func TestWorkLeaseStorageRefusesRevisionChangedWhileWaitingForSlot(t *testing.T) {
 	b, operator := approvalFixture(t)
 	savedApproval(t, b, operator)
@@ -221,7 +250,8 @@ func TestWorkLeaseStorageRefusesWebRolePrivileges(t *testing.T) {
 	_, err = runtime.Exec(ctx, `SELECT fence FROM portal_work_leases`)
 	requireLeaseDatabaseError(t, err, "42501")
 	var canRunCreationGuard bool
-	err = runtime.QueryRow(ctx, `SELECT has_function_privilege('public.portal_require_active_work_lease()','EXECUTE')`).Scan(&canRunCreationGuard)
+	err = runtime.QueryRow(ctx, `SELECT has_function_privilege('public.portal_require_active_work_lease()','EXECUTE')
+ OR has_function_privilege('public.portal_validate_work_lease_window()','EXECUTE')`).Scan(&canRunCreationGuard)
 	if err != nil || canRunCreationGuard {
 		t.Fatal("the web role has unexpected access to the lease creation guard", err)
 	}

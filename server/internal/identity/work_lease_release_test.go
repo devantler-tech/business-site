@@ -132,8 +132,9 @@ func TestWorkLeaseStoragePreservesPreUpgradeRelease(t *testing.T) {
 	ctx := t.Context()
 	if _, err := db.Exec(ctx, `DROP TRIGGER portal_guard_work_lease_release ON portal_work_leases;
  DROP TRIGGER portal_admit_active_work_lease ON portal_work_leases;
- DROP FUNCTION portal_guard_work_lease_release(),portal_require_active_work_lease();
- DELETE FROM portal_schema_version WHERE version IN (45,46)`); err != nil {
+ DROP TRIGGER portal_validate_work_lease_window ON portal_work_leases;
+ DROP FUNCTION portal_guard_work_lease_release(),portal_require_active_work_lease(),portal_validate_work_lease_window();
+ DELETE FROM portal_schema_version WHERE version IN (45,46,47)`); err != nil {
 		t.Fatal("prepare the disposable pre-guard lease schema", err)
 	}
 	var priorRelease time.Time
@@ -141,9 +142,13 @@ func TestWorkLeaseStoragePreservesPreUpgradeRelease(t *testing.T) {
  WHERE fence=$1 RETURNING released_at`, fence).Scan(&priorRelease); err != nil {
 		t.Fatal("record release with the old schema", err)
 	}
-	next, err := insertFixtureWorkLease(ctx, db, "fictional-work-successor", secret(), time.Minute)
+	next, err := insertFixtureWorkLease(ctx, db, "fictional-work-successor", secret(), 169*time.Hour)
 	if err != nil {
-		t.Fatal("record the successor before migration", err)
+		t.Fatal("record the historical successor extending past its approval", err)
+	}
+	var priorExpiry time.Time
+	if err := db.QueryRow(ctx, `SELECT expires_at FROM portal_work_leases WHERE fence=$1`, next).Scan(&priorExpiry); err != nil {
+		t.Fatal("read the historical successor window", err)
 	}
 	if err := Migrate(ctx, db); err != nil {
 		t.Fatal("upgrade existing lease records", err)
@@ -151,11 +156,11 @@ func TestWorkLeaseStoragePreservesPreUpgradeRelease(t *testing.T) {
 	_, err = db.Exec(ctx, `UPDATE portal_work_leases SET released_at=NULL WHERE fence=$1`, fence)
 	requireLeaseDatabaseError(t, err, "55000")
 	var recorded time.Time
-	var successorActive bool
+	var successorUnchanged bool
 	err = db.QueryRow(ctx, `SELECT released_at,EXISTS(SELECT 1 FROM portal_work_leases
- WHERE fence=$2 AND released_at IS NULL) FROM portal_work_leases WHERE fence=$1`, fence, next).
-		Scan(&recorded, &successorActive)
-	if err != nil || !recorded.Equal(priorRelease) || !successorActive {
+ WHERE fence=$2 AND released_at IS NULL AND expires_at=$3) FROM portal_work_leases WHERE fence=$1`, fence, next, priorExpiry).
+		Scan(&recorded, &successorUnchanged)
+	if err != nil || !recorded.Equal(priorRelease) || !successorUnchanged {
 		t.Fatalf("the upgrade changed the original release or its successor: %v", err)
 	}
 }
