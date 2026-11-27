@@ -57,7 +57,7 @@ test('the glossary retains default checking and only three exact adversarial URL
     words: ['caldav', 'ical', 'DisableKeepAlives', 'DTEND', 'DTSTAMP', 'DTSTART', 'EXDATE', 'EXRULE',
       'FBTYPE', 'FREEBUSY', 'PRODID', 'RDATE', 'RRULE', 'VCALENDAR', 'VFREEBUSY'],
   }, {
-    filename: 'server/internal/identity/appointment_calendar_{observation.go,observation_test.go}',
+    filename: 'server/internal/identity/appointment_calendar_{observation.go,observation_test.go,removal.go,removal_test.go}',
     words: ['caldav'],
   }, {
     filename: 'server/DEPENDENCIES.md',
@@ -68,7 +68,9 @@ test('the glossary retains default checking and only three exact adversarial URL
 test('calendar protocol terms are accepted in the adapter and typos remain visible', () => {
   const protocol = check('package caldav\n// VFREEBUSY has a DTSTART and a DTEND. DisableKeepAlives is set.', calendarFile);
   assert.equal(protocol.status, 0, protocol.output);
-  for (const [word, file] of [['VFREEBUSY', scopedFile], ['VFREEBYSU', calendarFile]]) {
+  const removal = check('caldav', join(root, 'server/internal/identity/appointment_calendar_removal.go'));
+  assert.equal(removal.status, 0, removal.output);
+  for (const [word, file] of [['caldav', scopedFile], ['VFREEBUSY', scopedFile], ['VFREEBYSU', calendarFile]]) {
     const result = check(word, file);
     assert.equal(result.status, 1, result.output);
     assert.match(result.output, /Unknown word/);
