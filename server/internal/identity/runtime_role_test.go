@@ -172,6 +172,13 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 		{"assumable service consumer deletion", "CREATE ROLE portal_fixture_service_mutator NOLOGIN; GRANT DELETE ON portal_service_consumers TO portal_fixture_service_mutator; GRANT portal_fixture_service_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"appointment revision missing read", "REVOKE SELECT ON portal_appointment_revisions FROM portal_runtime; SET ROLE portal_runtime", false},
 		{"assumable appointment revision update", "CREATE ROLE portal_fixture_appointment_mutator NOLOGIN; GRANT UPDATE(starts_at) ON portal_appointment_revisions TO portal_fixture_appointment_mutator; GRANT portal_fixture_appointment_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"hosting entitlement column read", "GRANT SELECT(client_id) ON portal_hosting_entitlements TO portal_runtime; SET ROLE portal_runtime", false},
+		{"hosting revision insert", "GRANT INSERT ON portal_hosting_period_revisions TO portal_runtime; SET ROLE portal_runtime", false},
+		{"hosting period head delete", "GRANT DELETE ON portal_hosting_period_heads TO portal_runtime; SET ROLE portal_runtime", false},
+		{"public hosting entitlement read", "GRANT SELECT ON portal_hosting_entitlements TO PUBLIC; SET ROLE portal_runtime", false},
+		{"inherited hosting period head update", "CREATE ROLE portal_fixture_hosting_reader NOLOGIN; GRANT UPDATE(revision) ON portal_hosting_period_heads TO portal_fixture_hosting_reader; GRANT portal_fixture_hosting_reader TO portal_runtime WITH INHERIT TRUE; SET ROLE portal_runtime", false},
+		{"assumable hosting revision update", "CREATE ROLE portal_fixture_hosting_writer NOLOGIN; GRANT UPDATE(scope) ON portal_hosting_period_revisions TO portal_fixture_hosting_writer; GRANT portal_fixture_hosting_writer TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"assumable hosting operator guard execute", "CREATE ROLE portal_fixture_hosting_guard NOLOGIN; GRANT EXECUTE ON FUNCTION portal_guard_hosting_period_operator() TO portal_fixture_hosting_guard; GRANT portal_fixture_hosting_guard TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 	}
 	for _, history := range []struct{ table, column string }{
 		{"portal_requests", "brief"}, {"portal_proposals", "scope"},

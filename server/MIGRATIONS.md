@@ -343,8 +343,9 @@ v48 stores hosting entitlements, period revisions and their current pointers.
 Each revision references the accepted software proposal for the same workspace
 and request, including the confirmed version and content hash. The database
 locks and checks the current operator membership before insertion. Period
-bounds are finite and exclude the end. The runtime has no privileges on these
-tables. The existing retention purge removes a former workspace's hosting records
+bounds are finite and exclude the end. Web startup refuses any privileges on
+these tables or their operator guard, including grants through another role.
+The existing retention purge removes a former workspace's hosting records
 before deleting its agreements and preserves operator history referenced by
 remaining hosting periods. The portal's authorization and period locking are
 required before a workflow begins writing real hosting periods.
