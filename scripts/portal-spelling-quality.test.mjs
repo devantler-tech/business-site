@@ -56,6 +56,9 @@ test('the glossary retains default checking and only three exact adversarial URL
     filename: 'server/internal/booking/caldav/*.go',
     words: ['caldav', 'ical', 'DisableKeepAlives', 'DTEND', 'DTSTAMP', 'DTSTART', 'EXDATE', 'EXRULE',
       'FBTYPE', 'FREEBUSY', 'PRODID', 'RDATE', 'RRULE', 'VCALENDAR', 'VFREEBUSY'],
+  }, {
+    filename: 'server/internal/identity/appointment_calendar_{observation.go,observation_test.go}',
+    words: ['caldav'],
   }]);
 });
 

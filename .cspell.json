@@ -1025,6 +1025,10 @@
         "VCALENDAR",
         "VFREEBUSY"
       ]
+    },
+    {
+      "filename": "server/internal/identity/appointment_calendar_{observation.go,observation_test.go}",
+      "words": ["caldav"]
     }
   ]
 }
