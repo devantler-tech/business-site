@@ -427,7 +427,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: devantler-tech/platform
-          ref: 3d2fbff64da74fb4cc6f15c8414dcdecad99b630
+          ref: 7376af26b89cea8d41d9d4d11562823a0fd4d866 # Platform #6706
           path: .tenant-policy-source
           persist-credentials: false
           sparse-checkout-cone-mode: false
