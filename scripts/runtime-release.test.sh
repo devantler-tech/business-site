@@ -134,7 +134,7 @@ admit() (
     GITHUB_EVENT_PATH="$scratch/event.json" GITHUB_OUTPUT="$scratch/output" \
     GITHUB_REPOSITORY=devantler-tech/business-site GITHUB_SHA="$source" \
     GITHUB_REF=refs/heads/main GITHUB_EVENT_NAME=workflow_dispatch \
-    RELEASE_MODE=release EXPECTED_SOURCE="$source" \
+    RELEASE_MODE=release RUNTIME_PUBLICATION_ENABLED=true EXPECTED_SOURCE="$source" \
     "$@" bash "$root/scripts/admit-runtime-release.sh" >"$scratch/stdout" 2>"$scratch/stderr"
 )
 # A rejected context must fail and leave no outputs consumable by a privileged downstream job.
@@ -165,8 +165,17 @@ reset_fixture
 refused RUNTIME_PUBLICATION_ENABLED=true
 [[ ! -s "$scratch/calls" ]] || fail 'different checkout made an API request'
 git -C "$scratch/source" checkout -q --detach "$approved_source"
+for setting in '' false TRUE 1; do
+  reset_fixture
+  refused RUNTIME_PUBLICATION_ENABLED="$setting"
+  [[ ! -s "$scratch/calls" ]] || fail 'repository switch did not stop the approved manual source'
+  reset_fixture
+  published_event
+  refused "${release_context[@]}" RUNTIME_PUBLICATION_ENABLED="$setting"
+  [[ ! -s "$scratch/calls" ]] || fail 'repository switch did not stop the approved App source'
+done
 reset_fixture
-admit RUNTIME_PUBLICATION_ENABLED=false || fail 'approved source must admit the confirmed and verified release'
+admit || fail 'approved source and repository switch must admit the confirmed and verified release'
 printf 'source=%s\nci-run-id=123\nci-run-attempt=2\nimage-digest=%s\npublic-digest=%s\nversion=\n' "$source" "$image" "$public" >"$scratch/expected"
 cmp "$scratch/expected" "$scratch/output" || fail 'real admitted receipt outputs changed'
 [[ "$(grep -c '/zip$' "$scratch/calls")" == 1 ]] || fail 'valid input must download exactly one archive'
@@ -244,7 +253,7 @@ source=$disabled_source
 build_original_ci_fixture
 reset_fixture
 printf '{"inputs":{"mode":"dry-run"}}\n' >"$scratch/event.json"
-admit RELEASE_MODE=dry-run || fail 'nonpublishing preflight must work while publication is disabled'
+admit RELEASE_MODE=dry-run RUNTIME_PUBLICATION_ENABLED=false || fail 'nonpublishing preflight must work while publication is disabled'
 git -C "$scratch/source" checkout -q --detach "$approved_source"
 source=$approved_source
 build_original_ci_fixture

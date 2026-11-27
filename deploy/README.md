@@ -404,10 +404,13 @@ creating a tag, release or registry publication. Require it to pass for the
 reviewed source before dispatching a release.
 
 Pass the full verified commit as `expected_source` to release the same source.
-Both release dispatch and stable-tag publication require `.github/runtime-publication`
-to contain the single line `enabled` in the frozen signed source. It ships with
-`disabled`. Enable it through reviewed source delivery after the rollout
-prerequisites pass. Ordinary releases then use the policy in their own source.
+Both release dispatch and stable-tag publication require the repository setting
+`RUNTIME_PUBLICATION_ENABLED` to be `true` and `.github/runtime-publication` to
+contain the single line `enabled` in the frozen signed source. The source policy
+ships with `disabled`. Enable it through reviewed source delivery after the
+rollout prerequisites pass. After production activation, leave the repository
+setting enabled between ordinary releases. Setting it to `false` stops new
+publication admissions, including those for a source already marked `enabled`.
 
 ```sh
 gh workflow run release-runtime.yaml --ref main -f mode=release -f expected_source="$source"

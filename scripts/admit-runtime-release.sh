@@ -19,6 +19,7 @@ event=${GITHUB_EVENT_NAME:-}
 mode=${RELEASE_MODE:-}
 [[ "$mode" == release || "$mode" == dry-run ]] || fail 'release mode'
 if [[ "$mode" == release ]]; then
+  [[ "${RUNTIME_PUBLICATION_ENABLED:-}" == true ]] || fail 'runtime publication disabled in repository'
   readonly policy=.github/runtime-publication
   entry="$(git ls-tree "$source" -- "$policy" 2>/dev/null)" || fail 'runtime publication policy'
   [[ "$entry" == '100644 blob '* ]] || fail 'runtime publication policy'
