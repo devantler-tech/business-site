@@ -532,6 +532,77 @@ func TestBrowserRefusalsCannotLoop(t *testing.T) {
 			t.Fatalf("%s restarted a login after the refusal limit: %d %s", path, s, h.Get("Location"))
 		}
 	}
+
+	status, body, headers := b.request("GET", "/portal/sign-in?lang=da", nil, "")
+	if status != http.StatusForbidden || !strings.Contains(headers.Get("Cache-Control"), "no-store") ||
+		!strings.Contains(body, `action="/portal/sign-in/retry?lang=da"`) || !strings.Contains(body, "Log ind med en anden konto") {
+		t.Fatal("exhausted sign-in does not offer private, localized recovery")
+	}
+	token := csrfInput.FindStringSubmatch(body)
+	if len(token) != 2 {
+		t.Fatal("refusal recovery has no CSRF token")
+	}
+	retry := url.Values{"csrf_token": {html.UnescapeString(token[1])}}
+	if s, _, _ := b.request("POST", "/portal/sign-in/retry?lang=da", retry, "https://unrelated.example.invalid"); s != http.StatusForbidden {
+		t.Fatalf("cross-site recovery returned %d", s)
+	}
+	if s, _, _ := b.request("GET", "/portal/sign-in?lang=da", nil, ""); s != http.StatusForbidden {
+		t.Fatalf("cross-site recovery reset refused attempts: %d", s)
+	}
+	status, body, _ = b.request("POST", "/portal/sign-in/retry?lang=da", retry, b.site.URL)
+	if status != http.StatusOK || brokerHandoffAddress(t, body) != b.site.URL+"/portal/signed-out" {
+		t.Fatalf("explicit recovery did not return through the configured sign-out path: %d", status)
+	}
+
+	b.invite("retry-client", "retry-workspace", "client")
+	b.as("retry-client")
+	b.finish(b.startAt("/portal/signed-out"))
+	if s, page, _ := b.request("GET", "/portal/?lang=da", nil, ""); s != http.StatusOK || !strings.Contains(page, "retry-workspace") {
+		t.Fatalf("the invited account did not enter its own workspace after retry: %d", s)
+	}
+	exchanges := b.exchanges.Load()
+	if s, _, h := b.request("GET", "/portal/sign-in?lang=da", nil, ""); s != http.StatusSeeOther || h.Get("Location") != "/portal/?lang=da" {
+		t.Fatalf("valid session did not return directly to the portal: %d %s", s, h.Get("Location"))
+	}
+	status, body, headers = b.request("POST", "/portal/sign-in/retry?lang=da",
+		url.Values{"csrf_token": {b.csrf("/portal/?lang=da")}}, b.site.URL)
+	if status != http.StatusOK || headers.Get("Location") != "" || brokerHandoffAddress(t, body) != "/portal/sign-in?lang=da" {
+		t.Fatalf("recovery signed out a current member: %d", status)
+	}
+	if b.exchanges.Load() != exchanges {
+		t.Fatal("returning with a valid portal session contacted the identity provider")
+	}
+}
+
+func TestBrowserExpiredRefusalStartsWithNativeNavigation(t *testing.T) {
+	b := newBrowserFixture(t)
+	var refusalPage string
+	for range refusalLimit {
+		_, refusalPage, _ = b.request("GET", b.start(), nil, "")
+	}
+	csrf := csrfInput.FindStringSubmatch(refusalPage)
+	if len(csrf) != 2 {
+		t.Fatal("the open refusal page did not have a recovery form token")
+	}
+	if _, err := b.pool.Exec(t.Context(), "UPDATE portal_sessions SET expiry=now()-interval '1 minute'"); err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{"csrf_token": {html.UnescapeString(csrf[1])}}
+	status, body, headers := b.request("POST", "/portal/sign-in/retry?lang=da", form, b.site.URL)
+	if status != http.StatusOK || headers.Get("Location") != "" {
+		t.Fatalf("expired refusal redirected the form POST: %d", status)
+	}
+	target := brokerHandoffAddress(t, body)
+	if target != "/portal/sign-in?lang=da" || brokerHandoffRefreshAddress(t, body) != target {
+		t.Fatal("expired refusal did not offer the same automatic and accessible sign-in navigation")
+	}
+	if !strings.Contains(body, `href="/portal/sign-in?lang=en"`) {
+		t.Fatal("the handoff's language link points outside the safe sign-in entry")
+	}
+	status, _, headers = b.request("GET", target, nil, "")
+	if status != http.StatusSeeOther || !strings.HasPrefix(headers.Get("Location"), b.broker.URL+"/authorize?") {
+		t.Fatalf("the separate navigation did not start a fresh sign-in: %d", status)
+	}
 }
 
 // TestBrowserUpstreamLogout: with the upstream logout configured, a refusal ends

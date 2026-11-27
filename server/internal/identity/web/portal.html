@@ -33,6 +33,14 @@
 <p role="alert">{{if eq .Lang `da`}}Aftalen kan ikke aflyses her. Gå tilbage til dine aftaler for at se den aktuelle status.{{else}}This appointment cannot be cancelled here. Return to your appointments to check its current status.{{end}}</p>
 <p><a href="{{root}}/appointments?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til dine aftaler{{else}}Back to your appointments{{end}}</a></p>
 {{else if eq .Kind `no-access`}}<p role="alert">{{if eq .Lang `da`}}Portalen kræver en invitation, og den konto, du loggede ind med, er ikke inviteret. Kontakt Devantler Tech, hvis du havde ventet adgang.{{else}}The portal is invitation-only, and the account you signed in with has not been invited. Contact Devantler Tech if you expected access.{{end}}</p>
+{{if .CSRF}}<form method="post" action="{{root}}/sign-in/retry?lang={{.Lang}}">
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <button class="button" type="submit">{{if eq .Lang `da`}}Log ind med en anden konto{{else}}Sign in with another account{{end}}</button>
+</form>{{end}}
+{{with .IdentityHost}}<details>
+  <summary>{{if eq $.Lang `da`}}Fjern konti fra denne browser{{else}}Remove remembered accounts{{end}}</summary>
+  <p>{{if eq $.Lang `da`}}Slet cookies for <strong>{{.}}</strong> i din browsers indstillinger. Log ind igen.{{else}}Clear site data for <strong>{{.}}</strong> in your browser settings to remove the remembered accounts on this browser.{{end}}</p>
+</details>{{end}}
 {{else if or (eq .Kind `sign-out-handoff`) (eq .Kind `broker-handoff`)}}<p>{{if eq .Kind `sign-out-handoff`}}{{if eq .Lang `da`}}Du bliver logget ud.{{else}}Signing you out.{{end}}{{else if eq .Lang `da`}}Du bliver sendt videre til dit login.{{else}}Continuing to your sign-in.{{end}}</p><a id="broker-continue" href="{{.BrokerURL}}">{{if ne .Kind `sign-out-handoff`}}{{.Action}}{{else if eq .Lang `da`}}Fortsæt{{else}}Continue{{end}}</a>
 {{else if eq .Kind `operator`}}<h2>{{.Operator}}</h2>
 <p>{{if eq .Lang `da`}}Dit arbejdsområde{{else}}Your workspace{{end}}: <strong>{{.Client}}</strong></p><p><a href="{{root}}/operator/invitations/new?lang={{.Lang}}">{{if eq .Lang `da`}}Inviter en kunde{{else}}Invite a customer{{end}}</a></p><p><a href="{{root}}/operator/customers?lang={{.Lang}}">{{if eq .Lang `da`}}Kunder og arbejdsområder{{else}}Customers and workspaces{{end}}</a></p><p><a href="{{root}}/operator/audit?lang={{.Lang}}">{{if eq .Lang `da`}}Revisionslog{{else}}Audit log{{end}}</a></p><p>{{.Boundary}}</p><form method="post" action="{{root}}/logout?lang={{.Lang}}"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><button type="submit">{{.Logout}}</button></form>

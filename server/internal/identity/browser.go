@@ -314,6 +314,7 @@ func (w rootRedirects) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 func (b *browser) routes() (*http.ServeMux, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /portal/sign-in", b.signIn)
+	mux.HandleFunc("POST /portal/sign-in/retry", b.retrySignIn)
 	mux.HandleFunc("GET /portal/operator/sign-in", b.operatorSignIn)
 	mux.HandleFunc("GET /portal/signed-out", b.signedOut)
 	mux.HandleFunc("GET /portal/callback", b.callback)
@@ -446,12 +447,8 @@ func (b *browser) startSignIn(w http.ResponseWriter, r *http.Request, connector 
 		b.render(w, r, 503, "unavailable", "", "")
 		return
 	}
-	if err = b.sessions.RenewToken(r.Context()); err != nil {
-		b.render(w, r, 503, "unavailable", "", "")
-		return
-	}
 	// Starting a new sign-in intentionally removes any old authenticated identity.
-	if err = b.sessions.Clear(r.Context()); err != nil {
+	if err = b.renewEmptySession(r.Context()); err != nil {
 		b.render(w, r, 503, "unavailable", "", "")
 		return
 	}
@@ -475,6 +472,13 @@ func (b *browser) startSignIn(w http.ResponseWriter, r *http.Request, connector 
 	http.Redirect(w, r, address, http.StatusSeeOther)
 }
 
+func (b *browser) renewEmptySession(ctx context.Context) error {
+	if err := b.sessions.RenewToken(ctx); err != nil {
+		return err
+	}
+	return b.sessions.Clear(ctx)
+}
+
 // refuse ends a sign-in that authenticated but has no membership. It shows no
 // error page and keeps no identity: the portal and upstream sessions end and the
 // browser returns to a fresh login. The reason is never revealed, so every
@@ -487,11 +491,7 @@ func (b *browser) refuse(w http.ResponseWriter, r *http.Request) {
 	}
 	refused++
 	lang := b.sessions.GetString(ctx, "lang")
-	if err := b.sessions.RenewToken(ctx); err != nil {
-		b.render(w, r, 503, "unavailable", "", "")
-		return
-	}
-	if err := b.sessions.Clear(ctx); err != nil {
+	if err := b.renewEmptySession(ctx); err != nil {
 		b.render(w, r, 503, "unavailable", "", "")
 		return
 	}
@@ -526,6 +526,24 @@ func (b *browser) signedOut(w http.ResponseWriter, r *http.Request) {
 	b.signIn(w, r)
 }
 
+// retrySignIn lets the browser explicitly restart after the automatic loop
+// stops. An active session has no refusal marker and follows normal sign-in.
+func (b *browser) retrySignIn(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	lang := language(r)
+	if refused, _ := b.refusals(ctx); refused < refusalLimit {
+		b.brokerHandoff(w, r, b.visible("/portal/sign-in")+"?lang="+lang)
+		return
+	}
+	if err := b.renewEmptySession(ctx); err != nil {
+		b.render(w, r, 503, "unavailable", "", "")
+		return
+	}
+	b.sessions.Put(ctx, "lang", lang)
+	b.sessions.SetDeadline(ctx, time.Now().Add(refusalWindow))
+	b.signOutHandoff(w, r, b.origin+b.visible("/portal/signed-out"))
+}
+
 // withLanguage returns a copy of r presenting lang, without granting anything.
 func withLanguage(r *http.Request, lang string) *http.Request {
 	urlCopy := *r.URL
@@ -537,7 +555,8 @@ func withLanguage(r *http.Request, lang string) *http.Request {
 	return r
 }
 
-// brokerHandoff starts native navigation for an internally constructed broker URL.
+// brokerHandoff starts native navigation to the configured broker or the
+// portal's own sign-in route.
 // Both ordinary sign-in and purpose-bound contact proof retain the same strict CSP.
 func (b *browser) brokerHandoff(w http.ResponseWriter, r *http.Request, address string) {
 	// Finish the form POST in a fresh portal document. Chromium applies the
@@ -546,9 +565,7 @@ func (b *browser) brokerHandoff(w http.ResponseWriter, r *http.Request, address 
 	// Ordinary navigation keeps this boundary confined to the configured broker.
 	d := b.data(r, "broker-handoff", "", "")
 	d.BrokerURL = address
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_ = b.templates().ExecuteTemplate(w, "portal.html", d)
+	b.renderPortalPage(w, http.StatusOK, d)
 }
 
 // callback consumes the attempt before exchange, verifies broker proof and
@@ -611,11 +628,7 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lang := b.sessions.GetString(r.Context(), "lang")
-	if err = b.sessions.RenewToken(r.Context()); err != nil {
-		b.render(w, r, 503, "unavailable", "", "")
-		return
-	}
-	if err = b.sessions.Clear(r.Context()); err != nil {
+	if err = b.renewEmptySession(r.Context()); err != nil {
 		b.render(w, r, 503, "unavailable", "", "")
 		return
 	}
@@ -732,16 +745,19 @@ func (b *browser) logout(w http.ResponseWriter, r *http.Request) {
 	if site == "" {
 		site = b.origin
 	}
+	b.signOutHandoff(w, r, site+"/")
+}
+
+func (b *browser) signOutHandoff(w http.ResponseWriter, r *http.Request, target string) {
 	d := b.data(r, "sign-out-handoff", "", "")
-	d.BrokerURL = b.endSessionAddress(site + "/")
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_ = b.templates().ExecuteTemplate(w, "portal.html", d)
+	d.BrokerURL = b.endSessionAddress(target)
+	b.renderPortalPage(w, http.StatusOK, d)
 }
 
 type pageData struct {
 	BrokerURL                                                                                                                        string
 	LanguageURL                                                                                                                      string
+	IdentityHost                                                                                                                     string
 	InviteWorkspace                                                                                                                  string
 	Lang, Kind, Client, CSRF, Title, Intro, Action, Logout, Error, Unavailable, Back, Theme, System, Light, Dark, Operator, Boundary string
 	RequestsEnabled                                                                                                                  bool
@@ -784,6 +800,16 @@ func (b *browser) renderPortalPage(w http.ResponseWriter, status int, page pageD
 // data shares the same localized, escaped layout with the private contact form.
 func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	d := pageData{Lang: language(r), Kind: kind, Client: client, CSRF: token, Title: "Your client portal", Intro: "A private space for your work with Devantler Tech.", Action: "Sign in", Logout: "Sign out", Error: "Sign-in could not be completed. The portal is invitation-only: try again with the account from your invitation, or contact Devantler Tech.", Unavailable: "The portal is unavailable. Please try again later.", Back: "Back to the website", Theme: "Appearance", System: "System", Light: "Light", Dark: "Dark", Operator: "Operator", Boundary: "Ordering and payments are not available yet."}
+	if kind == "no-access" {
+		if d.CSRF == "" {
+			d.CSRF = nosurf.Token(r)
+		}
+		if b.foundation != nil {
+			if endpoint, err := url.Parse(b.foundation.endSession); err == nil {
+				d.IdentityHost = endpoint.Hostname()
+			}
+		}
+	}
 	if b.foundation.canLeaveClientPreview() && b.principal(r.Context()).isClientPreview() {
 		if d.CSRF == "" {
 			d.CSRF = nosurf.Token(r)
@@ -803,6 +829,9 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	}
 	if path == "/portal/contact/verify" {
 		path = "/portal/contact"
+	}
+	if path == "/portal/sign-in/retry" {
+		path = "/portal/sign-in"
 	}
 	if kind == "appointment-cancellation-error" {
 		path = "/portal/appointments"
