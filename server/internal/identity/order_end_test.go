@@ -1,12 +1,17 @@
 package identity
 
 import (
+	"context"
 	"html"
 	"net/url"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const orderEndPath = "/portal/operator/requests/" + proposalRequestID + "/order-end"
@@ -260,6 +265,10 @@ func TestPrivateCardRetriesAnEndAfterItsMonthPassed(t *testing.T) {
 	// (TestPrivateCardEndWaitsForARenewalStillAhead).
 	now := time.Now().UTC()
 	past := time.Date(now.Year(), now.Month()-1, 1, 0, 0, 0, 0, time.UTC)
+	cancelled := time.Date(now.Year(), now.Month(), now.Day()-1, 23, 30, 0, 0, time.UTC)
+	fake.mu.Lock()
+	fake.cancelTime = cancelled
+	fake.mu.Unlock()
 	if _, err := migrationDB(t).Exec(t.Context(), `INSERT INTO portal_order_ends(order_id,last_month,source,operator_issuer,operator_subject) VALUES($1,$2,'operator','https://fixture.invalid','earlier-operator')`, orderID(t, b), past); err != nil {
 		t.Fatal(err)
 	}
@@ -279,9 +288,39 @@ func TestPrivateCardRetriesAnEndAfterItsMonthPassed(t *testing.T) {
 	if len(cancels) != 1 || cancels[0].Get("subscription") != "sub_1" || cancels[0].Get("immediately") != "true" {
 		t.Fatalf("a passed renewal was not ended at once: %v", cancels)
 	}
-	_, body, _ = b.request("GET", "/portal/operator/requests/"+proposalRequestID+"?lang=en", nil, "")
-	if !strings.Contains(body, "Stripe ends the subscription on "+time.Now().UTC().Format("2006-01-02")) || strings.Contains(body, "Ask Stripe again") {
-		t.Fatal("the immediate end is not shown")
+	for _, zone := range []*time.Location{time.UTC, copenhagen} {
+		t.Run(zone.String(), func(t *testing.T) {
+			cfg := b.pool.Config()
+			cfg.AfterConnect = func(_ context.Context, conn *pgx.Conn) error {
+				conn.TypeMap().RegisterType(&pgtype.Type{Name: "timestamptz", OID: pgtype.TimestamptzOID, Codec: &pgtype.TimestamptzCodec{ScanLocation: zone}})
+				return nil
+			}
+			pool, err := pgxpool.NewWithConfig(t.Context(), cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(pool.Close)
+			handler := browserHandler(t, New(pool, b.f.broker, b.flags.NewClient()), b.site.URL+"/portal/callback")
+			b.mu.Lock()
+			original := b.handler
+			b.handler = handler
+			b.mu.Unlock()
+			t.Cleanup(func() {
+				b.mu.Lock()
+				b.handler = original
+				b.mu.Unlock()
+			})
+			for _, page := range []struct{ lang, label, retry string }{
+				{"en", "Stripe ends the subscription on ", "Ask Stripe again"},
+				{"da", "Stripe afslutter abonnementet den ", "Spørg Stripe igen"},
+			} {
+				path := "/portal/operator/requests/" + proposalRequestID + "?lang=" + page.lang
+				status, body, _ := b.request("GET", path, nil, "")
+				if status != 200 || !strings.Contains(body, page.label+cancelled.Format("2006-01-02")) || strings.Contains(body, page.retry) {
+					t.Fatalf("the immediate end is not shown with its Stripe date in %s (HTTP %d)", page.lang, status)
+				}
+			}
+		})
 	}
 }
 

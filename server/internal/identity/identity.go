@@ -142,12 +142,24 @@ type Foundation struct {
 // broker's client there, so sign-out and a refused sign-in also end the upstream
 // session. Without it, the portal only ends its own session.
 func (s *Foundation) LinkUpstreamLogout(endpoint, client string) error {
+	if s == nil {
+		return ErrDenied
+	}
+	if err := ValidateUpstreamLogout(endpoint, client); err != nil {
+		return err
+	}
+	s.endSession, s.endSessionClient = endpoint, client
+	return nil
+}
+
+// ValidateUpstreamLogout verifies the destination and broker client of an
+// upstream logout.
+func ValidateUpstreamLogout(endpoint, client string) error {
 	u, err := url.Parse(endpoint)
-	if s == nil || err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.String() != endpoint ||
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.String() != endpoint ||
 		client == "" || len(client) > 256 || strings.ContainsAny(client, " \t\r\n") {
 		return ErrDenied
 	}
-	s.endSession, s.endSessionClient = endpoint, client
 	return nil
 }
 

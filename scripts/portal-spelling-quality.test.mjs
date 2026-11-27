@@ -10,6 +10,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const config = join(root, '.cspell.json');
 const glossary = JSON.parse(readFileSync(config, 'utf8'));
 const scopedFile = join(root, 'server/internal/webapp/app_test.go');
+const calendarFile = join(root, 'server/internal/booking/caldav/busy_test.go');
 
 function check(text, file = scopedFile) {
   const result = spawnSync('cspell', ['lint', '--config', config,
@@ -51,7 +52,21 @@ test('the glossary retains default checking and only three exact adversarial URL
   assert.deepEqual(glossary.overrides, [{
     filename: 'server/internal/webapp/app_test.go',
     ignoreRegExpList: ['/%70ortal/sign-in', '/portal%2fsign-in', '/%2fportal'],
+  }, {
+    filename: 'server/internal/booking/caldav/*.go',
+    words: ['caldav', 'ical', 'DisableKeepAlives', 'DTEND', 'DTSTAMP', 'DTSTART', 'EXDATE', 'EXRULE',
+      'FBTYPE', 'FREEBUSY', 'PRODID', 'RDATE', 'RRULE', 'VCALENDAR', 'VFREEBUSY'],
   }]);
+});
+
+test('calendar protocol terms are accepted in the adapter and typos remain visible', () => {
+  const protocol = check('package caldav\n// VFREEBUSY has a DTSTART and a DTEND. DisableKeepAlives is set.', calendarFile);
+  assert.equal(protocol.status, 0, protocol.output);
+  for (const [word, file] of [['VFREEBUSY', scopedFile], ['VFREEBYSU', calendarFile]]) {
+    const result = check(word, file);
+    assert.equal(result.status, 1, result.output);
+    assert.match(result.output, /Unknown word/);
+  }
 });
 
 test('the pinned checker examines the complete tracked server source', () => {

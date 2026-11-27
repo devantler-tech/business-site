@@ -8,7 +8,7 @@ permissions: {}
 
 jobs:
   admit:
-    if: ${{ github.repository == 'devantler-tech/business-site' && github.event_name == 'release' && vars.RUNTIME_PUBLICATION_ENABLED == 'true' && !github.event.release.draft && !github.event.release.prerelease && !startsWith(github.event.release.tag_name, 'identity-') }}
+    if: ${{ github.repository == 'devantler-tech/business-site' && github.event_name == 'release' && vars.RUNTIME_PUBLICATION_ENABLED == 'true' && github.event.sender.id == 185060876 && github.event.release.author.id == 185060876 && !github.event.release.draft && !github.event.release.prerelease && !startsWith(github.event.release.tag_name, 'identity-') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -40,8 +40,8 @@ jobs:
         id: admit
         env:
           GH_TOKEN: ${{ github.token }}
-          RUNTIME_PUBLICATION_ENABLED: ${{ vars.RUNTIME_PUBLICATION_ENABLED }}
           RELEASE_MODE: release
+          RUNTIME_PUBLICATION_ENABLED: ${{ vars.RUNTIME_PUBLICATION_ENABLED }}
         run: bash scripts/admit-runtime-release.sh
       - name: Setup Cosign
         uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
@@ -91,7 +91,7 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
       - name: Publish and sign the release as this repository
-        uses: devantler-tech/.github/actions/publish-app@0e02148c251bcd65cfddc1cc7bec49ccce2eea42 # v22.7.0
+        uses: devantler-tech/.github/actions/publish-app@61d8f70f25d7d5deb8bd914136b329b5a59ff43b # v22.7.4
         with:
           mode: prebuilt-webapp
           app-name: business-site

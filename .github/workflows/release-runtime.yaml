@@ -4,10 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Nonpublishing credential preflight, or an explicitly enabled release
+        description: Check credentials and provenance, or release the confirmed commit
         type: choice
         options: [dry-run, release]
         default: dry-run
+      expected_source:
+        description: Exact signed main commit for release mode
+        type: string
+        required: false
 
 permissions: {}
 
@@ -44,8 +48,8 @@ jobs:
         id: admit
         env:
           GH_TOKEN: ${{ github.token }}
-          RUNTIME_PUBLICATION_ENABLED: ${{ vars.RUNTIME_PUBLICATION_ENABLED }}
           RELEASE_MODE: ${{ inputs.mode }}
+          RUNTIME_PUBLICATION_ENABLED: ${{ vars.RUNTIME_PUBLICATION_ENABLED }}
         run: bash scripts/admit-runtime-release.sh
       - name: Setup Cosign
         uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
@@ -80,7 +84,7 @@ jobs:
     permissions:
       contents: read
       id-token: write # lets the shared release workflow prove its identity to the GitHub token broker (ADR 0020)
-    uses: devantler-tech/.github/.github/workflows/create-release.yaml@0e02148c251bcd65cfddc1cc7bec49ccce2eea42
+    uses: devantler-tech/.github/.github/workflows/create-release.yaml@61d8f70f25d7d5deb8bd914136b329b5a59ff43b
     with:
       disable-issue-side-effects: true
       warn-missing-breaking-bang: true

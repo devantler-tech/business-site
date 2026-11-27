@@ -33,6 +33,7 @@ type fakeStripe struct {
 	invoices   map[string]map[string]any // invoices by ID, for GET /v1/invoices/{id}
 	cancels    []url.Values              // subscription end requests, with "subscription" added
 	failCancel bool                      // answer the next subscription end with 500
+	cancelTime time.Time                 // Stripe clock for an immediate cancellation
 	taxRate    map[string]any            // the configured tax rate, for GET /v1/tax_rates/{id}
 	taxReads   int
 	items      map[string][]string // a subscription's portal add-ons, one item each
@@ -137,7 +138,11 @@ func (f *fakeStripe) serveLookup(w http.ResponseWriter, r *http.Request) {
 	case r.Method == "DELETE":
 		subscription := strings.TrimPrefix(r.URL.Path, "/v1/subscriptions/")
 		f.cancels = append(f.cancels, url.Values{"subscription": {subscription}, "immediately": {"true"}})
-		_ = json.NewEncoder(w).Encode(map[string]any{"id": subscription, "canceled_at": time.Now().Unix()})
+		at := f.cancelTime
+		if at.IsZero() {
+			at = time.Now()
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": subscription, "canceled_at": at.Unix()})
 	case r.Method == "POST":
 		_ = r.ParseForm()
 		form := r.PostForm
