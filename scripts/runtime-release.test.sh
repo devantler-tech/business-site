@@ -199,8 +199,7 @@ admit "${release_context[@]}" NEWER_MAIN_SOURCE="$other" || fail 'published App 
 grep -qx 'version=1.2.3' "$scratch/output" || fail 'release version output is incorrect'
 reset_fixture
 published_event
-refused "${release_context[@]}" GITHUB_ACTOR=fictional-maintainer
-[[ ! -s "$scratch/calls" ]] || fail 'unexpected event actor made network requests'
+admit "${release_context[@]}" GITHUB_ACTOR=fictional-maintainer || fail 'ambient actor name overrode the release event identity'
 for mutation in '.sender.id=9001' '.sender.login="another-app[bot]"' '.release.author.id=9001'; do
   reset_fixture
   published_event

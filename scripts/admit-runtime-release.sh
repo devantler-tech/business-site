@@ -43,7 +43,6 @@ workflow_dispatch)
   ;;
 release)
   [[ "$mode" == release ]] || fail 'release mode'
-  [[ "${GITHUB_ACTOR:-}" == "$release_publisher" ]] || fail 'release publisher'
   tag=${GITHUB_REF#refs/tags/}
   [[ "${GITHUB_REF:-}" == refs/tags/* && "$tag" =~ ^v(0|[1-9][0-9]{0,14})\.(0|[1-9][0-9]{0,14})\.(0|[1-9][0-9]{0,14})$ ]] || fail 'stable semantic-version tag'
   version=${tag#v}

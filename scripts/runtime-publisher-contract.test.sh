@@ -54,7 +54,7 @@ release_valid() {
 publish_valid() {
   jq -e '
     .on=={release:{types:["published"]}} and
-    .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027release\u0027 && github.actor == \u0027botantler-1[bot]\u0027 && !github.event.release.draft && !github.event.release.prerelease && !startsWith(github.event.release.tag_name, \u0027identity-\u0027) }}" and
+    .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027release\u0027 && github.event.sender.id == 185060876 && github.event.release.author.id == 185060876 && !github.event.release.draft && !github.event.release.prerelease && !startsWith(github.event.release.tag_name, \u0027identity-\u0027) }}" and
     all(.jobs.admit.steps[]|select(.run=="bash scripts/admit-runtime-release.sh"); .env.RELEASE_MODE=="release") and
     .jobs.publish.needs=="admit" and .jobs.publish.if==null and .jobs.publish.uses==null and .jobs.publish.secrets==null and
     .jobs.publish["runs-on"]=="ubuntu-latest" and
@@ -102,7 +102,8 @@ for mutation in '.jobs.admit.if="always()"' '.on.workflow_dispatch.inputs.mode.d
 done
 publish_valid <<<"$publish" || fail 'unsafe publisher or missing independent readback'
 for mutation in '.on.push={tags:["v*"]}' '.jobs.admit.if="always()"' '.jobs.publish.steps[1].with.mode="deployment"' \
-  '.jobs.admit.if|=sub("botantler-1";"another-app")' \
+  '.jobs.admit.if|=sub("github.event.sender.id";"github.actor_id")' \
+  '.jobs.admit.if|=sub("github.event.release.author.id";"github.actor_id")' \
   '.jobs.publish.steps[1].with["prebuilt-ci-run-id"]="1"' '.jobs.publish.steps[1].with["deploy-path"]="./"' \
   '.jobs.publish.steps[1].with["app-manifest"]="webapp.yaml"' \
   '.jobs.publish.steps[1].uses|=sub("@[0-9a-f]{40}$";"@main")' '.jobs.verify.needs=["admit"]' \
