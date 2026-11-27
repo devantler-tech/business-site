@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -324,6 +325,26 @@ type requestPageData struct {
 	OrderAddons       []orderAddon  // the chosen add-ons the order form carries
 	AddonsInvalid     bool          // the client's add-on choice is not possible; no order form
 	ThisMonth         string        // YYYY-MM: an add-on of the order ended now ends after this month (addonLastMonth)
+}
+
+// ReceiptStage describes the recorded commercial step using this page's
+// authorized records. Payment and delivery have separate evidence.
+func (p requestPageData) ReceiptStage() string {
+	en, da := "Request received", "Forespørgsel modtaget"
+	switch {
+	case p.Order != nil && p.Order.Withdrawn != nil:
+		en, da = "Order withdrawn", "Fortrydelse registreret"
+	case p.Order != nil:
+		en, da = "Order recorded", "Bestilling registreret"
+	case slices.ContainsFunc(p.Acceptances, func(a proposalAcceptance) bool { return a.Current }):
+		en, da = "Proposal accepted", "Tilbud accepteret"
+	case p.SharedProposal != nil:
+		en, da = "Proposal ready for review", "Tilbud klar til gennemgang"
+	}
+	if p.Lang == "da" {
+		return da
+	}
+	return en
 }
 
 // OrderOneTimeDKK and OrderMonthlyDKK are what the order form's order costs:

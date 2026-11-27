@@ -50,8 +50,11 @@ The non-contact oracle covers 86 documents in explicit state order. There are
 have the same portal main in each language. Controls do not claim to distinguish
 those aliases. Each draft's real random submission key must first satisfy its
 unique native input, expected state and 26-character RFC 4648 base32 shape before
-being represented by the fixed fictional key. All other values and markup remain
-exact. Missing, duplicate, malformed and misplaced keys fail.
+being represented by the fixed fictional key. Missing, duplicate, malformed and
+misplaced keys fail. The request inventory checks the exact localized headings
+for shared proposals and current acceptances before comparing the complete body
+against its frozen reference. The frozen body still checks their placement and
+all surrounding markup.
 
 Refusal controls damage full frames and each structural contact element, remove
 non-contact bodies, change headings and substitute genuinely different same-language
