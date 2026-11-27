@@ -197,6 +197,10 @@ func checkWorkApprovalRole(ctx context.Context, pool queryRower) error {
    OR has_table_privilege(role.oid,'portal_work_current','DELETE,TRUNCATE,TRIGGER,MAINTAIN')
    OR has_any_column_privilege(role.oid,'portal_work_queue_revision','INSERT,UPDATE,REFERENCES,SELECT WITH GRANT OPTION')
    OR has_table_privilege(role.oid,'portal_work_queue_revision','DELETE,TRUNCATE,TRIGGER,MAINTAIN')
+   OR EXISTS (SELECT 1 FROM unnest(ARRAY['portal_work_lease_slot','portal_work_leases']) lease(table_name)
+    WHERE has_any_column_privilege(role.oid,lease.table_name,'SELECT,INSERT,UPDATE,REFERENCES')
+       OR has_table_privilege(role.oid,lease.table_name,'DELETE,TRUNCATE,TRIGGER,MAINTAIN'))
+   OR has_function_privilege(role.oid,'public.portal_assign_work_lease_fence()','EXECUTE')
    OR has_function_privilege(role.oid,'public.portal_lock_work_queue_revision(bigint)','EXECUTE WITH GRANT OPTION')
    OR has_function_privilege(role.oid,'public.portal_record_work_queue_revision()','EXECUTE')))`).Scan(&allowed)
 	if err != nil || !allowed {

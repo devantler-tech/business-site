@@ -291,6 +291,16 @@ revision until transaction end. A changed revision returns false. The function
 has no write path and its EXECUTE grant cannot be delegated. The web role keeps
 SELECT-only table access and cannot call the migration-owned revision recorder.
 
+v40 adds the single software-work lease slot and its claim records. PostgreSQL
+assigns the next fence and acquisition time under the slot lock. An exclusive
+lease window rejects overlaps, including during a concurrent insert. The claim
+binds its request, approval, observed revisions and the actor's submission key.
+Removing a former customer's approval removes its lease records and keeps the
+global fence. The migration owner alone can access the lease storage. The
+future work service must authorize selection, renewal, release and downstream
+effects before it discloses a committed fence. Restore verification must prove
+that a fence observed before recovery cannot authorize work afterward.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

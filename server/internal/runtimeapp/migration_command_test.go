@@ -21,7 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const migrationFixtureVersionCount = 39
+const migrationFixtureVersionCount = 40
 
 // migrationCommandFixture creates only a uniquely named disposable database on
 // the already validated loopback fixture, then exercises verified PostgreSQL TLS.
@@ -582,7 +582,7 @@ func TestActualMigrationAcceptsKubeletProjection(t *testing.T) {
 func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
 	// The executable is immutable; each control still owns a new database and process.
 	binary := buildMigrationCommand(t)
-	for _, relation := range []string{"wrong credential", "missing invoices", "missing credits", "missing membership history", "missing work approvals", "missing orders", "disabled membership recorder", "missing incarnation recorder", "wrong membership recorder owner", "portal_work_approvals", "portal_work_revocations", "portal_work_current", "portal_membership_transitions", "portal_credit_transfers", "portal_credit_revisions", "portal_invoices", "portal_schema_version", "portal_login_attempts", "portal_invitations", "portal_memberships", "portal_sessions", "portal_contacts", "portal_requests", "portal_proposals", "portal_proposal_visibility", "portal_proposal_reviews", "portal_proposal_acceptances", "portal_consent_key", "portal_consent_event", "portal_consent_hash", "portal_orders", "portal_order_charges", "portal_numina_contacts", "portal_card_checkouts", "portal_stripe_events"} {
+	for _, relation := range []string{"wrong credential", "missing invoices", "missing credits", "missing membership history", "missing work approvals", "missing orders", "disabled membership recorder", "missing incarnation recorder", "wrong membership recorder owner", "portal_work_approvals", "portal_work_revocations", "portal_work_current", "portal_work_lease_slot", "portal_work_leases", "portal_membership_transitions", "portal_credit_transfers", "portal_credit_revisions", "portal_invoices", "portal_schema_version", "portal_login_attempts", "portal_invitations", "portal_memberships", "portal_sessions", "portal_contacts", "portal_requests", "portal_proposals", "portal_proposal_visibility", "portal_proposal_reviews", "portal_proposal_acceptances", "portal_consent_key", "portal_consent_event", "portal_consent_hash", "portal_orders", "portal_order_charges", "portal_numina_contacts", "portal_card_checkouts", "portal_stripe_events"} {
 		t.Run(relation, func(t *testing.T) {
 			file, pool, database := migrationCommandFixture(t)
 			if output, err := runMigrationCommand(t, binary, "--migrate", "--migration-database-file", file); err != nil || output != "portal schema migration completed\n" {
@@ -603,7 +603,7 @@ func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
 				cleanupMigrationFixtureRole(t, admin, role)
 				connection = migrationFixtureRole(database, role)
 			case "missing invoices":
-				if _, err := pool.Exec(t.Context(), `DROP TABLE portal_work_current,portal_work_revocations,portal_work_approvals,portal_credit_revisions,portal_credit_transfers,portal_invoices`); err != nil {
+				if _, err := pool.Exec(t.Context(), `DROP TABLE portal_work_leases,portal_work_current,portal_work_revocations,portal_work_approvals,portal_credit_revisions,portal_credit_transfers,portal_invoices`); err != nil {
 					t.Fatal("owned missing-table fixture failed", err)
 				}
 			case "missing credits":
@@ -615,7 +615,7 @@ func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
 					t.Fatal("owned missing-membership-history fixture failed", err)
 				}
 			case "missing work approvals":
-				if _, err := pool.Exec(t.Context(), `DROP TABLE portal_work_current,portal_work_revocations,portal_work_approvals`); err != nil {
+				if _, err := pool.Exec(t.Context(), `DROP TABLE portal_work_leases,portal_work_current,portal_work_revocations,portal_work_approvals`); err != nil {
 					t.Fatal("owned missing-work-approval fixture failed", err)
 				}
 			case "missing orders":

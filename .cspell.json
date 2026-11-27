@@ -577,6 +577,8 @@
     "atttypid",
     "NARGS",
     "plpgsql",
+    "isfinite",
+    "tstzrange",
     "functiondef",
     "proacl",
     "proconfig",

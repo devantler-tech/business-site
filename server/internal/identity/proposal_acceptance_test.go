@@ -404,7 +404,7 @@ func TestAcceptanceStorageDenialAndV9PreserveHistory(t *testing.T) {
  portal_mail_deliveries,portal_mail_outbox,portal_withdrawal_settlements,portal_order_completions,
  portal_withdrawal_cancellations,portal_order_withdrawals,portal_charge_reversals,portal_card_cancellations,
  portal_order_ends,portal_card_checkouts,portal_order_charges,portal_orders,portal_work_current,
- portal_work_revocations,portal_work_approvals,portal_proposal_acceptances,portal_invoices,
+ portal_work_leases,portal_work_revocations,portal_work_approvals,portal_proposal_acceptances,portal_invoices,
  portal_credit_transfers,portal_credit_revisions`); err != nil {
 		t.Fatal(err)
 	}
