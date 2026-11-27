@@ -40,11 +40,14 @@ function get(port, route, host) {
   });
 }
 
-// The public receipt check reports the public snapshot only and refuses portal
-// settings, so it uses the package arguments without that one input.
-const settingsFlag = spec.args.indexOf("--portal-settings-projection");
-assert.ok(settingsFlag > 0);
-const publicArgs = spec.args.filter((_, index) => index !== settingsFlag && index !== settingsFlag + 1);
+// The public receipt check reports the public snapshot only. Keep the full
+// package arguments for serving, and omit each portal input pair for the receipt.
+const portalFlags = new Set([
+  "--portal-settings-projection",
+  "--portal-upstream-logout-url",
+  "--portal-upstream-logout-client-id",
+]);
+const publicArgs = spec.args.filter((argument, index) => !portalFlags.has(argument) && !portalFlags.has(spec.args[index - 1]));
 
 /** Mount one synthetic projection at the package's fixed input directory. */
 const atInputs = (fixture) => [fixture.mount[0], fixture.mount[1].replace(",target=/projection,", ",target=/run/webapp-inputs,")];

@@ -997,6 +997,26 @@
         "/portal%2fsign-in",
         "/%2fportal"
       ]
+    },
+    {
+      "filename": "server/internal/booking/caldav/*.go",
+      "words": [
+        "caldav",
+        "ical",
+        "DisableKeepAlives",
+        "DTEND",
+        "DTSTAMP",
+        "DTSTART",
+        "EXDATE",
+        "EXRULE",
+        "FBTYPE",
+        "FREEBUSY",
+        "PRODID",
+        "RDATE",
+        "RRULE",
+        "VCALENDAR",
+        "VFREEBUSY"
+      ]
     }
   ]
 }

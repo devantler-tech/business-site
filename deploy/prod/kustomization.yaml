@@ -12,6 +12,25 @@ resources:
   - external-secret-stripe.yaml
   - job-portal-migration.yaml
   - cronjob-portal-retention.yaml
+patches:
+  - target:
+      group: kro.run
+      version: v1alpha1
+      kind: WebApp
+      name: business-site
+    patch: |-
+      - op: add
+        path: /spec/args/-
+        value: --portal-upstream-logout-url
+      - op: add
+        path: /spec/args/-
+        value: https://accounts.devantler.tech/oidc/v1/end_session
+      - op: add
+        path: /spec/args/-
+        value: --portal-upstream-logout-client-id
+      - op: add
+        path: /spec/args/-
+        value: "399712320588158469"
 # The publisher pins only the WebApp's image; the migration Job and the retention
 # CronJob run that same image.
 replacements:
