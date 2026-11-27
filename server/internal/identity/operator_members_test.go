@@ -31,6 +31,10 @@ func (*managementDirectory) EnsureUser(context.Context, string, string, func() b
 	return "", ErrDenied
 }
 
+func (*managementDirectory) VerifyUser(context.Context, string) error {
+	return ErrDenied
+}
+
 func (d *managementDirectory) DeactivateUser(ctx context.Context, user string, allowed func() bool) error {
 	if allowed == nil || !allowed() {
 		return ErrDenied

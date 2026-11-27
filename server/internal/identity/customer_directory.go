@@ -11,6 +11,7 @@ import (
 type CustomerDirectory interface {
 	Profiles(context.Context, []string) (map[string]customeridentity.Profile, error)
 	EnsureUser(context.Context, string, string, func() bool) (string, error)
+	VerifyUser(context.Context, string) error
 	DeactivateUser(context.Context, string, func() bool) error
 	ReactivateUser(context.Context, string, func() bool) error
 }

@@ -90,7 +90,20 @@ func (b *browser) createCustomerInvitation(ctx context.Context, r *http.Request)
 	subject := customeridentity.DexSubject(userID, customeridentity.ZitadelConnectorID)
 	invitation := Invitation{b.foundation.broker.issuer, subject, input.Workspace, "client", time.Now().Add(7 * 24 * time.Hour)}
 	setOperatorTarget(ctx, input.Workspace)
-	err = b.foundation.invite(ctx, invitation, func(tx pgx.Tx) bool { return b.operatorMutationAllowed(ctx, tx) })
+	err = b.foundation.invite(ctx, invitation, func(tx pgx.Tx) error {
+		if !b.operatorMutationAllowed(ctx, tx) {
+			return ErrDenied
+		}
+		// Provider lookup began outside the identity lock. Verify the exact
+		// account again while the invitation and identity lock are held.
+		if err := b.foundation.customers.VerifyUser(ctx, userID); err != nil {
+			return err
+		}
+		if !b.operatorMutationAllowed(ctx, tx) {
+			return ErrDenied
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
