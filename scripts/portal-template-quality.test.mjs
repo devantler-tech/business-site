@@ -173,7 +173,7 @@ printf '%s' "$LINK_TEST_HTTP_STATUS"
         PATH: `${directory}:${process.env.PATH}`,
         GITHUB_TOKEN: credential,
         LINK_TEST_TRACE: trace,
-        LINK_TEST_RECORD: `${record}\n${record}`,
+        LINK_TEST_RECORD: `${record}\nfile:///fixture/related.md\nhttps://example.invalid/issue/659\n${record}`,
         LINK_TEST_HTTP_STATUS: '200',
         LINK_TEST_ORDINARY_STATUS: '0',
         ...overrides,
@@ -186,7 +186,7 @@ printf '%s' "$LINK_TEST_HTTP_STATUS"
   };
   assert.deepEqual(run(), { status: 0, trace: ['discover', 'github', 'check'] });
   assert.deepEqual(run({ LINK_TEST_HTTP_STATUS: '404' }), { status: 1, trace: ['discover', 'github'] });
-  assert.deepEqual(run({ LINK_TEST_RECORD: 'https://example.invalid/issue/659' }), { status: 1, trace: ['discover'] });
+  assert.deepEqual(run({ LINK_TEST_RECORD: 'https://example.invalid/issue/659' }), { status: 0, trace: ['discover', 'check'] });
   assert.deepEqual(run({ LINK_TEST_ORDINARY_STATUS: '1' }), { status: 1, trace: ['discover', 'github', 'check'] });
   assert.deepEqual(run({ GITHUB_TOKEN: '' }), { status: 0, trace: ['anonymous'] });
 });
