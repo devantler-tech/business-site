@@ -56,7 +56,7 @@ func TestConstructorRefusesUnconfinedSources(t *testing.T) {
 	}{
 		{"no selection", Config{Origin: "https://calendar.example.test"}},
 		{"HTTP origin", Config{Origin: "http://calendar.example.test", Calendars: []string{"/selected/"}}},
-		{"origin userinfo", Config{Origin: "https://fictional:fictional@calendar.example.test", Calendars: []string{"/selected/"}}},
+		{"origin userinfo", Config{Origin: "https://fictional-user@calendar.example.test", Calendars: []string{"/selected/"}}},
 		{"origin query", Config{Origin: "https://calendar.example.test?target=other", Calendars: []string{"/selected/"}}},
 		{"origin fragment", Config{Origin: "https://calendar.example.test#other", Calendars: []string{"/selected/"}}},
 		{"origin path", Config{Origin: "https://calendar.example.test/other/", Calendars: []string{"/selected/"}}},
