@@ -12,15 +12,100 @@ import (
 // This migration fixture uses the schema owner. The deployed web role has no
 // path to start work and cannot read or write the lease records.
 func insertFixtureWorkLease(ctx context.Context, db queryRower, actor, key string, duration time.Duration) (int64, error) {
+	return insertFixtureSelectedWorkLease(ctx, db, actor, key, duration, nil, nil)
+}
+
+func insertFixtureSelectedWorkLease(ctx context.Context, db queryRower, actor, key string, duration time.Duration, generation, revision *int64) (int64, error) {
 	var fence int64
 	err := db.QueryRow(ctx, `INSERT INTO portal_work_leases
  (request_id,client_id,approval_id,approval_generation,queue_revision,actor_key,submission_key,expires_at)
- SELECT request_id,client_id,approval_id,generation,revision,
+ SELECT request_id,client_id,approval_id,COALESCE($5,generation),COALESCE($6,revision),
  encode(sha256(convert_to($1,'UTF8')),'hex'),$2,clock_timestamp()+make_interval(secs=>$3)
  FROM portal_work_current CROSS JOIN portal_work_queue_revision
  WHERE request_id=$4
- RETURNING fence`, actor, key, duration.Seconds(), proposalRequestID).Scan(&fence)
+ RETURNING fence`, actor, key, duration.Seconds(), proposalRequestID, generation, revision).Scan(&fence)
 	return fence, err
+}
+
+func TestWorkLeaseStorageRefusesStaleSelection(t *testing.T) {
+	b, operator := approvalFixture(t)
+	savedApproval(t, b, operator)
+	db := migrationDB(t)
+	ctx := t.Context()
+	var generation, revision, previousFence int64
+	err := db.QueryRow(ctx, `SELECT generation,revision,issued_fence FROM portal_work_current c
+ CROSS JOIN portal_work_queue_revision CROSS JOIN portal_work_lease_slot WHERE c.request_id=$1`,
+		proposalRequestID).Scan(&generation, &revision, &previousFence)
+	if err != nil {
+		t.Fatal("read the selected work and current fence", err)
+	}
+	if _, err := db.Exec(ctx, `UPDATE portal_requests SET submitted_at=submitted_at WHERE id=$1`, proposalRequestID); err != nil {
+		t.Fatal("commit a new eligibility revision", err)
+	}
+	_, err = insertFixtureSelectedWorkLease(ctx, db, "fictional-worker", secret(), time.Minute, &generation, &revision)
+	requireLeaseDatabaseError(t, err, "55000")
+
+	otherGeneration := generation + 1
+	_, err = insertFixtureSelectedWorkLease(ctx, db, "fictional-worker", secret(), time.Minute, &otherGeneration, nil)
+	requireLeaseDatabaseError(t, err, "55000")
+
+	nextFence, err := insertFixtureWorkLease(ctx, db, "fictional-worker", secret(), time.Minute)
+	if err != nil || nextFence != previousFence+1 {
+		t.Fatalf("fresh evidence must acquire the next fence after both refusals: previous=%d got=%d: %v", previousFence, nextFence, err)
+	}
+}
+
+func TestWorkLeaseStorageRefusesExpiredApproval(t *testing.T) {
+	b, operator := approvalFixture(t)
+	savedApproval(t, b, operator)
+	db := migrationDB(t)
+	ctx := t.Context()
+	if _, err := db.Exec(ctx, `WITH at AS MATERIALIZED(SELECT clock_timestamp() AS value)
+ UPDATE portal_work_approvals SET decided_at=at.value-interval '168 hours',expires_at=at.value FROM at`); err != nil {
+		t.Fatal("place the selected approval at its exclusive deadline", err)
+	}
+	_, err := insertFixtureWorkLease(ctx, db, "fictional-worker", secret(), time.Minute)
+	requireLeaseDatabaseError(t, err, "55000")
+}
+
+func TestWorkLeaseStorageRefusesRevisionChangedWhileWaitingForSlot(t *testing.T) {
+	b, operator := approvalFixture(t)
+	savedApproval(t, b, operator)
+	db := migrationDB(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
+	defer cancel()
+	holder := beginFixtureTransaction(ctx, t, db)
+	if _, err := holder.Exec(ctx, `SELECT issued_fence FROM portal_work_lease_slot WHERE singleton FOR UPDATE`); err != nil {
+		t.Fatal("hold the software lease slot", err)
+	}
+	claim := beginFixtureTransaction(ctx, t, db)
+	pid := claim.Conn().PgConn().PID()
+	finished := make(chan error, 1)
+	go func() {
+		defer close(finished)
+		_, err := insertFixtureWorkLease(ctx, claim, "fictional-worker", secret(), time.Minute)
+		finished <- err
+	}()
+	defer func() {
+		cancel()
+		<-finished
+	}()
+	waitForFixtureDatabaseLock(ctx, t, db, `SELECT EXISTS(
+ SELECT 1 FROM pg_locks WHERE pid=$1 AND NOT granted)`, pid)
+
+	// An evidence writer must commit while this claim waits for the slot.
+	if _, err := db.Exec(ctx, `UPDATE portal_requests SET submitted_at=submitted_at WHERE id=$1`, proposalRequestID); err != nil {
+		t.Fatal("waiting claim locked the queue revision ahead of the slot", err)
+	}
+	if err := holder.Commit(ctx); err != nil {
+		t.Fatal("release the slot after the evidence writer commits", err)
+	}
+	select {
+	case err := <-finished:
+		requireLeaseDatabaseError(t, err, "55000")
+	case <-ctx.Done():
+		t.Fatal("claim did not refuse the revision changed during its wait")
+	}
 }
 
 func TestWorkLeaseStorageSerializesCompetingClaims(t *testing.T) {
