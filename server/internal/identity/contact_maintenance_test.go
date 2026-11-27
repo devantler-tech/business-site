@@ -267,6 +267,13 @@ func checkMaintenanceInventoryPage(name string, index int, markup string, task b
 			return err
 		}
 	}
+	if name == "requests.html" {
+		state := maintenanceCases[name][index%len(maintenanceCases[name])]
+		markup, err = checkRequestReceiptStageHeading(markup, lang, state)
+		if err != nil {
+			return err
+		}
+	}
 	got, err := maintenanceMainDigest(markup, maintenanceDraftKey(name, index))
 	if err != nil {
 		return err
@@ -276,6 +283,42 @@ func checkMaintenanceInventoryPage(name string, index int, markup string, task b
 		return errors.New("maintained page state differs from frozen reference")
 	}
 	return nil
+}
+
+// Verify the exact localized heading before restoring its original reference
+// text. The complete frozen body still pins its placement and every other node.
+func checkRequestReceiptStageHeading(markup, lang, state string) (string, error) {
+	var en, da string
+	switch state {
+	case "website-shared", "app-shared", "service-shared", "review":
+		en, da = "Proposal ready for review", "Tilbud klar til gennemgang"
+	case "accepted-current":
+		en, da = "Proposal accepted", "Tilbud accepteret"
+	default:
+		return markup, nil
+	}
+	want, original := en, "Request received"
+	if lang == "da" {
+		want, original = da, "Forespørgsel modtaget"
+	}
+	heading := "<h2>" + want + "</h2>"
+	if strings.Count(markup, heading) != 1 {
+		return "", errors.New("request receipt stage heading differs from its independent reference")
+	}
+	markup = strings.Replace(markup, heading, "<h2>"+original+"</h2>", 1)
+	if state == "accepted-current" {
+		return markup, nil
+	}
+	const proposal = `<h2 id="shared-proposal">`
+	details, originalDetails := "Proposal details", "Proposal shared for review"
+	if lang == "da" {
+		details, originalDetails = "Tilbud", "Tilbud delt til gennemgang"
+	}
+	heading = proposal + details + "</h2>"
+	if strings.Count(markup, heading) != 1 {
+		return "", errors.New("request proposal details heading differs from its independent reference")
+	}
+	return strings.Replace(markup, heading, proposal+originalDetails+"</h2>", 1), nil
 }
 
 // maintenanceBodyReferences returns the frozen body oracle, except for the

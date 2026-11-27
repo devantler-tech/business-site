@@ -32,7 +32,7 @@ func TestSharingMissingWrongTypeAndFalseStayClosed(t *testing.T) {
 	saveVisibility(t, b, visibilityForm(t, b, "0", "1", "1", "share"))
 	for _, value := range []any{nil, "true", false} {
 		sharingFlags(t, b, true, true, true, true, value)
-		assertClientProposal(t, b, "", "Proposal shared for review")
+		assertClientProposal(t, b, "", `<h2 id="shared-proposal">Proposal details</h2>`)
 		status, body, _ := b.request("GET", "/portal/operator/requests/"+proposalRequestID, nil, "")
 		if status != 200 || strings.Contains(body, "Share version") || strings.Contains(body, "Withdraw shared proposal") {
 			t.Fatal("unavailable sharing flag exposed controls")
@@ -182,7 +182,7 @@ func TestSharingDraftsWithdrawalsAndRetriesNeverRepublish(t *testing.T) {
 	saveVisibility(t, b, first)
 	saveVisibility(t, b, second)
 	saveVisibility(t, b, withdraw)
-	assertClientProposal(t, b, "", "Proposal shared for review")
+	assertClientProposal(t, b, "", `<h2 id="shared-proposal">Proposal details</h2>`)
 	var count int
 	if err := b.pool.QueryRow(b.f.ctx, `SELECT count(*) FROM portal_proposal_visibility`).Scan(&count); err != nil || count != 3 {
 		t.Fatal("retry changed event history", err)
