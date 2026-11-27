@@ -40,8 +40,9 @@ type appointmentQuoteRef struct {
 // appointmentHoldPolicy uses the server's booking policy and calendar. The
 // caller supplies the authorized client, reservation and meeting duration.
 type appointmentHoldPolicy struct {
-	policy   booking.Policy
-	provider booking.BusyProvider
+	policy          booking.Policy
+	provider        booking.BusyProvider
+	calendarBinding string
 }
 
 // append compares and appends a provisional hold while serializing the

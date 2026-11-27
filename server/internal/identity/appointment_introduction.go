@@ -71,6 +71,9 @@ func (holds appointmentHoldPolicy) confirmIntroduction(ctx context.Context, tx p
 		client, sequence+1, reservation, revision, notice, holds.policy.CancellationTermsVersion).Scan(&hold.cancellableUntil); err != nil {
 		return appointmentHold{}, creditWriteError(err)
 	}
+	if err := holds.queueCalendarCreation(ctx, tx, reservation, revision); err != nil {
+		return appointmentHold{}, err
+	}
 	hold.IntroductionConfirmed = true
 	return hold, nil
 }

@@ -266,6 +266,11 @@ retention job deletes the order and its fulfillment before deleting the former
 client's reservation and revisions. The booking service checks availability,
 current funding and sender acceptance before recording the appointment consumer.
 
+v35 records the initial calendar creation intent for a confirmed appointment
+when a destination binding is supplied. The runtime can read and insert intents.
+The record keeps an independent event key and points to the confirmed revision,
+which also removes the intent during retention. Existing bookings are unchanged.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

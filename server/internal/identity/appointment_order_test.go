@@ -155,6 +155,7 @@ func TestPaidAppointmentOrderKeepsItsSelectedSlot(t *testing.T) {
 				t.Fatal(err)
 			}
 			start, policy := appointmentHoldFixture(t)
+			policy.calendarBinding = fixtureCalendarDestination
 			reservation := secret()
 			hold := func(start time.Time, prior int) {
 				t.Helper()
@@ -246,13 +247,18 @@ func TestPaidAppointmentOrderKeepsItsSelectedSlot(t *testing.T) {
 			if _, err := confirm(); !errors.Is(err, booking.ErrUnavailable) {
 				t.Fatalf("confirmation skipped the final calendar read: %v", err)
 			}
+			requireNoCalendarCreation(t, b.pool, reservation)
 			policy.provider = calendar
 			saved, err := confirm()
 			if err != nil || !saved.PaidConfirmed || !saved.Slot.Start.Equal(selectedStart) {
 				t.Fatalf("settled appointment could not be confirmed: %v", err)
 			}
+			key := requireCalendarCreation(t, b.pool, reservation, slot.Revision)
 			if _, err := confirm(); err != nil {
 				t.Fatalf("exact confirmation retry failed: %v", err)
+			}
+			if requireCalendarCreation(t, b.pool, reservation, slot.Revision) != key {
+				t.Fatal("a paid confirmation retry changed the calendar event key")
 			}
 			err = pgx.BeginFunc(ctx, b.pool, func(tx pgx.Tx) error {
 				commitments, err := readAppointmentCommitments(ctx, tx, secret(), saved.HeldUntil.Add(time.Second), saved.Slot)
@@ -269,6 +275,7 @@ func TestPaidAppointmentOrderKeepsItsSelectedSlot(t *testing.T) {
 				t.Fatalf("refunded payment was still accepted: %v", err)
 			}
 			requireAppointmentClientErasure(t, client)
+			requireNoCalendarCreation(t, b.pool, reservation)
 		})
 	}
 }

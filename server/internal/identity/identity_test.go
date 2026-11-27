@@ -179,7 +179,7 @@ GRANT SELECT,INSERT ON portal_operator_audit TO portal_runtime;
 GRANT SELECT,INSERT ON portal_workspaces TO portal_runtime;
 GRANT SELECT,INSERT,UPDATE(display_name,closed_at) ON portal_workspace_settings TO portal_runtime;
 GRANT SELECT,INSERT ON portal_service_fulfillments,portal_service_consumers TO portal_runtime;
-GRANT SELECT,INSERT ON portal_appointment_reservations,portal_appointment_revisions,portal_appointment_introductions,portal_appointment_introduction_cancellations TO portal_runtime;
+GRANT SELECT,INSERT ON portal_appointment_reservations,portal_appointment_revisions,portal_appointment_introductions,portal_appointment_introduction_cancellations,portal_appointment_calendar_intents TO portal_runtime;
 GRANT SELECT ON portal_schema_version TO portal_runtime;
 REVOKE ALL ON portal_preview_receipts FROM portal_runtime;
 DELETE FROM portal_preview_receipts;
