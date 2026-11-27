@@ -112,11 +112,9 @@ func TestBusyNeverFollowsProviderRedirect(t *testing.T) {
 		http.Redirect(w, r, other.URL+"/unselected/", http.StatusTemporaryRedirect)
 	}))
 	t.Cleanup(server.Close)
-	now := time.Date(2027, 3, 27, 21, 0, 0, 0, time.UTC)
-	client := freeBusyFixtureClient(t, server, now)
-	snapshot, err := client.Busy(t.Context(), booking.Interval{Start: now, End: now.Add(time.Hour)})
-	if !errors.Is(err, booking.ErrUnavailable) || !reflect.DeepEqual(snapshot, booking.BusySnapshot{}) || redirected.Load() != 0 {
-		t.Fatal("redirect reached an unselected calendar or returned availability")
+	requireBusyRefused(t, freeBusyFixtureClient(t, server, transportCoverage().Start))
+	if redirected.Load() != 0 {
+		t.Fatal("redirect reached an unselected calendar")
 	}
 }
 
@@ -131,13 +129,9 @@ func TestBusyRequiresEverySelectedCalendar(t *testing.T) {
 		_, _ = io.WriteString(w, "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Fictional provider//EN\r\nBEGIN:VFREEBUSY\r\nDTSTAMP:20270327T210000Z\r\nDTSTART:20270327T210000Z\r\nDTEND:20270327T220000Z\r\nFREEBUSY:20270327T211500Z/PT15M\r\nEND:VFREEBUSY\r\nEND:VCALENDAR\r\n")
 	}))
 	t.Cleanup(server.Close)
-	now := time.Date(2027, 3, 27, 21, 0, 0, 0, time.UTC)
-	client := freeBusyFixtureClient(t, server, now)
+	client := freeBusyFixtureClient(t, server, transportCoverage().Start)
 	client.calendars = append(client.calendars, "/calendars/unavailable/")
-	snapshot, err := client.Busy(t.Context(), booking.Interval{Start: now, End: now.Add(time.Hour)})
-	if !errors.Is(err, booking.ErrUnavailable) || !reflect.DeepEqual(snapshot, booking.BusySnapshot{}) {
-		t.Fatal("an incomplete calendar set released partial availability")
-	}
+	requireBusyRefused(t, client)
 }
 
 // These are provider uncertainty, not evidence that the calendar is empty.
@@ -158,14 +152,18 @@ func TestBusyRefusesUncertainCalendarSemantics(t *testing.T) {
 				_, _ = io.WriteString(w, body)
 			}))
 			t.Cleanup(server.Close)
-			now := time.Date(2027, 3, 27, 21, 0, 0, 0, time.UTC)
-			client := freeBusyFixtureClient(t, server, now)
-			snapshot, err := client.Busy(t.Context(), booking.Interval{Start: now, End: now.Add(time.Hour)})
-			if !errors.Is(err, booking.ErrUnavailable) || !reflect.DeepEqual(snapshot, booking.BusySnapshot{}) {
-				t.Fatal("uncertain provider semantics produced availability")
-			}
+			requireBusyRefused(t, freeBusyFixtureClient(t, server, transportCoverage().Start))
 		})
 	}
+}
+
+func requireBusyRefused(t *testing.T, client *Client) error {
+	t.Helper()
+	snapshot, err := client.Busy(t.Context(), transportCoverage())
+	if !errors.Is(err, booking.ErrUnavailable) || !reflect.DeepEqual(snapshot, booking.BusySnapshot{}) {
+		t.Fatal("an incomplete or refused report produced usable availability")
+	}
+	return err
 }
 
 // Only the unexported fixture construction admits this owned loopback server.

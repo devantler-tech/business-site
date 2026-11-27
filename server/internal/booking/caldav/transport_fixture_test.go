@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -156,6 +157,45 @@ func transportClient(t *testing.T, config Config, credentials func(context.Conte
 		t.Fatal("explicit transport test selection was refused", err)
 	}
 	return withSourceNetwork(client, network)
+}
+
+func selectedTransportClient(t *testing.T, fixture *transportFixture) *Client {
+	t.Helper()
+	config := Config{Origin: "https://" + selectedCalendarHost, Calendars: []string{"/calendars/selected/"}}
+	return transportClient(t, config, fixture.readCredential, fixture.network)
+}
+
+func (f *transportFixture) readCredential(context.Context) (string, string, error) {
+	f.record("credential")
+	return "fictional-user", "fictional-password", nil
+}
+
+func requireBusyCancelledDuringCredentials(t *testing.T, client *Client, entered <-chan struct{}, release chan<- struct{}) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan bool, 1)
+	go func() {
+		snapshot, err := client.Busy(ctx, transportCoverage())
+		done <- errors.Is(err, booking.ErrUnavailable) && reflect.DeepEqual(snapshot, booking.BusySnapshot{})
+	}()
+	select {
+	case <-entered:
+	case <-done:
+		t.Fatal("operation finished before reaching the credential boundary")
+	case <-time.After(2 * time.Second):
+		t.Fatal("operation never reached the credential boundary")
+	}
+	cancel()
+	close(release)
+	select {
+	case refused := <-done:
+		if !refused {
+			t.Fatal("cancelled operation returned usable availability")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("cancelled credential wait did not finish")
+	}
 }
 
 func transportCoverage() booking.Interval {
