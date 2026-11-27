@@ -145,7 +145,12 @@ test('GitHub records are authenticated once and ordinary links still use Lychee'
   writeFileSync(join(directory, 'lychee'), `#!/bin/bash
 set -euo pipefail
 case " $* " in
-  *" --dump "*) test -z "\${GITHUB_TOKEN:-}"; printf 'discover\\n' >> "$LINK_TEST_TRACE"; printf '%s\\n' "$LINK_TEST_RECORD" ;;
+  *" --dump "*)
+    test -z "\${GITHUB_TOKEN:-}"
+    printf 'discover\\n' >> "$LINK_TEST_TRACE"
+    printf '%s\\n' "$LINK_TEST_RECORD"
+    if [[ -n "$LINK_TEST_DISCOVERY_WARNING" ]]; then printf '%s\\n' "$LINK_TEST_DISCOVERY_WARNING" >&2; fi
+    ;;
   *" --exclude "*) printf 'check\\n' >> "$LINK_TEST_TRACE"; exit "$LINK_TEST_ORDINARY_STATUS" ;;
   *) printf 'anonymous\\n' >> "$LINK_TEST_TRACE" ;;
 esac
@@ -178,6 +183,7 @@ printf '%s' "$LINK_TEST_HTTP_STATUS"
         GITHUB_TOKEN: credential,
         LINK_TEST_TRACE: trace,
         LINK_TEST_RECORD: `${record}\nfile:///fixture/related.md\nhttps://example.invalid/issue/659\n${record}`,
+        LINK_TEST_DISCOVERY_WARNING: '',
         LINK_TEST_HTTP_STATUS: '200',
         LINK_TEST_ORDINARY_STATUS: '0',
         ...overrides,
@@ -189,6 +195,7 @@ printf '%s' "$LINK_TEST_HTTP_STATUS"
     return { status: result.status, trace: readFileSync(trace, 'utf8').trim().split('\n').filter(Boolean) };
   };
   assert.deepEqual(run(), { status: 0, trace: ['discover', 'github'] });
+  assert.deepEqual(run({ LINK_TEST_DISCOVERY_WARNING: 'preprocess: skipped fixture input' }), { status: 1, trace: ['discover'] });
   assert.deepEqual(run({ LINK_TEST_HTTP_STATUS: '404' }), { status: 1, trace: ['discover', 'github'] });
   assert.deepEqual(run({ LINK_TEST_RECORD: 'https://example.invalid/issue/659' }), { status: 0, trace: ['discover'] });
   assert.deepEqual(run({ GITHUB_TOKEN: '' }), { status: 1, trace: [] });

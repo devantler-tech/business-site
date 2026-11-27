@@ -36,7 +36,12 @@ NODE
   while IFS= read -r -d '' input; do set -- "$@" "$input"; done <"$work/arguments"
   while IFS= read -r -d '' input; do set -- "$@" "$input"; done <"$work/sources"
 fi
-env -u GITHUB_TOKEN lychee "$@" --no-progress --dump >"$work/discovered"
+# Lychee can warn and skip a failed input while the dump still exits successfully.
+if ! env -u GITHUB_TOKEN lychee "$@" --no-progress --dump >"$work/discovered" 2>"$work/discovery-errors" ||
+  [[ -s "$work/discovery-errors" ]]; then
+  echo 'GitHub reference discovery did not complete cleanly' >&2
+  exit 1
+fi
 sort -u "$work/discovered" >"$work/records"
 
 checked=0
