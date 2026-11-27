@@ -16,13 +16,29 @@ const insertAppointmentRevision = `INSERT INTO portal_appointment_revisions
  (reservation_id, client_id, revision, starts_at, ends_at, held_until)
  VALUES ($1,$2,$3,$4,$5,$6)`
 
+func seedAppointmentWorkspaces(t *testing.T, pool *pgxpool.Pool, clients ...string) {
+	t.Helper()
+	if _, err := pool.Exec(t.Context(), `INSERT INTO portal_workspaces(id) SELECT unnest($1::text[]) ON CONFLICT DO NOTHING`, clients); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func requireAppointmentClientErasure(t *testing.T, client string) {
+	t.Helper()
+	migrator := migrationDB(t)
+	if _, err := migrator.Exec(t.Context(), `UPDATE portal_memberships SET revoked=true WHERE client_id=$1`, client); err != nil {
+		t.Fatal(err)
+	}
+	if erased := purgeAged(t, migrator); erased != 1 {
+		t.Fatalf("retention could not erase the appointment's former client: %d", erased)
+	}
+}
+
 func TestAppointmentReservationsKeepClientBoundRevisions(t *testing.T) {
 	pool := fixtureDB(t)
 	ctx := t.Context()
 	root := secret()
-	if _, err := pool.Exec(ctx, `INSERT INTO portal_workspaces(id) VALUES('fictional-booking-client'),('fictional-other-client')`); err != nil {
-		t.Fatal(err)
-	}
+	seedAppointmentWorkspaces(t, pool, "fictional-booking-client", "fictional-other-client")
 	migrator := migrationDB(t)
 	rewindAppointmentReservationsFixture(t, migrator)
 	if err := MigrateWithRuntimeRole(ctx, migrator, "portal_runtime"); err != nil {
@@ -81,9 +97,7 @@ func TestAppointmentHoldsSerializeCompetingClients(t *testing.T) {
 	pool := fixtureDB(t)
 	ctx, cancel := approvalWaitContext(t)
 	defer cancel()
-	if _, err := pool.Exec(ctx, `INSERT INTO portal_workspaces(id) VALUES('fictional-first-hold'),('fictional-second-hold')`); err != nil {
-		t.Fatal(err)
-	}
+	seedAppointmentWorkspaces(t, pool, "fictional-first-hold", "fictional-second-hold")
 	first, second := beginFixtureTransaction(ctx, t, pool), beginFixtureTransaction(ctx, t, pool)
 	start, policy := appointmentHoldFixture(t)
 	policy.policy.WeeklyCapacity = 30 * time.Minute
@@ -142,9 +156,7 @@ func TestAppointmentHoldsSerializeCompetingClients(t *testing.T) {
 func TestAppointmentHoldRetriesPreserveTheSelectedRevision(t *testing.T) {
 	pool := fixtureDB(t)
 	ctx := t.Context()
-	if _, err := pool.Exec(ctx, `INSERT INTO portal_workspaces(id) VALUES('fictional-booking-client'),('fictional-other-client')`); err != nil {
-		t.Fatal(err)
-	}
+	seedAppointmentWorkspaces(t, pool, "fictional-booking-client", "fictional-other-client")
 	root := secret()
 	start, policy := appointmentHoldFixture(t)
 	policy.policy.WeeklyCapacity = 60 * time.Minute
@@ -188,9 +200,7 @@ func TestAppointmentHoldRetriesPreserveTheSelectedRevision(t *testing.T) {
 func TestAppointmentHoldRefusesAStaleTransactionSnapshot(t *testing.T) {
 	pool := fixtureDB(t)
 	ctx := t.Context()
-	if _, err := pool.Exec(ctx, `INSERT INTO portal_workspaces(id) VALUES('fictional-booking-client')`); err != nil {
-		t.Fatal(err)
-	}
+	seedAppointmentWorkspaces(t, pool, "fictional-booking-client")
 	start, policy := appointmentHoldFixture(t)
 	slot := booking.Interval{Start: start, End: start.Add(30 * time.Minute)}
 	err := pgx.BeginTxFunc(ctx, pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
@@ -209,9 +219,7 @@ func TestAppointmentHoldRefusesAStaleTransactionSnapshot(t *testing.T) {
 func TestAppointmentHoldRequiresCurrentCalendarAndBuffers(t *testing.T) {
 	pool := fixtureDB(t)
 	ctx := t.Context()
-	if _, err := pool.Exec(ctx, `INSERT INTO portal_workspaces(id) VALUES('fictional-booking-client')`); err != nil {
-		t.Fatal(err)
-	}
+	seedAppointmentWorkspaces(t, pool, "fictional-booking-client")
 	start, policy := appointmentHoldFixture(t)
 	buffer := 15 * time.Minute
 	policy.policy.BufferBefore = &buffer
@@ -274,9 +282,7 @@ func TestAppointmentHoldBindsThePersistedQuote(t *testing.T) {
 	b := proposalFixture(t)
 	ctx := t.Context()
 	const client = "private-client-key"
-	if _, err := b.pool.Exec(ctx, `INSERT INTO portal_workspaces(id) VALUES($1) ON CONFLICT DO NOTHING`, client); err != nil {
-		t.Fatal(err)
-	}
+	seedAppointmentWorkspaces(t, b.pool, client)
 	for _, description := range []string{"First appointment scope", "Revised appointment scope"} {
 		form := serviceProposalForm(t, b, proposalServiceAppointment)
 		form.Set("scope", description)
@@ -358,13 +364,7 @@ func TestAppointmentHoldBindsThePersistedQuote(t *testing.T) {
 		t.Fatalf("PostgreSQL accepted a quoted reservation as a free introduction: %v", err)
 	}
 	enroll(t, b.svc, b.f, "quoted-appointment-client", client, "client")
-	migrator := migrationDB(t)
-	if _, err := migrator.Exec(ctx, `UPDATE portal_memberships SET revoked=true WHERE client_id=$1`, client); err != nil {
-		t.Fatal(err)
-	}
-	if erased := purgeAged(t, migrator); erased != 1 {
-		t.Fatalf("retention could not erase the bound appointment's former client: %d", erased)
-	}
+	requireAppointmentClientErasure(t, client)
 }
 
 type appointmentBusyFunc func(context.Context, booking.Interval) (booking.BusySnapshot, error)

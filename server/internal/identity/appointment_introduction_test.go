@@ -15,9 +15,7 @@ func TestAppointmentIntroductionCommitsOneFreshHoldPerClient(t *testing.T) {
 	pool := fixtureDB(t)
 	ctx := t.Context()
 	const client, other = "fictional-intro-client", "fictional-other-client"
-	if _, err := pool.Exec(ctx, `INSERT INTO portal_workspaces(id) VALUES($1),($2)`, client, other); err != nil {
-		t.Fatal(err)
-	}
+	seedAppointmentWorkspaces(t, pool, client, other)
 	start, policy := appointmentHoldFixture(t)
 	slot := booking.Interval{Start: start, End: start.Add(30 * time.Minute)}
 	next := booking.Interval{Start: start.Add(2 * time.Hour), End: start.Add(150 * time.Minute)}
@@ -117,9 +115,7 @@ func TestAppointmentIntroductionCancellationReleasesSlotAndAllowsAnotherBooking(
 	pool := fixtureDB(t)
 	ctx := t.Context()
 	const client, other = "fictional-cancel-client", "fictional-other-client"
-	if _, err := pool.Exec(ctx, `INSERT INTO portal_workspaces(id) VALUES($1),($2)`, client, other); err != nil {
-		t.Fatal(err)
-	}
+	seedAppointmentWorkspaces(t, pool, client, other)
 	start, policy := appointmentHoldFixture(t)
 	slot := booking.Interval{Start: start, End: start.Add(introductionDuration)}
 	next := booking.Interval{Start: start.Add(time.Hour), End: start.Add(time.Hour + introductionDuration)}

@@ -10,21 +10,32 @@ import (
 
 const introductionDuration = 30 * time.Minute
 
-// confirmIntroduction commits the exact held revision for the authorized
-// client. The caller owns the transaction and the client membership check.
-func (holds appointmentHoldPolicy) confirmIntroduction(ctx context.Context, tx pgx.Tx, reservation, client string, revision int) (appointmentHold, error) {
+func lockAppointmentHoldRevision(ctx context.Context, tx pgx.Tx, reservation, client string, revision int) (appointmentHold, time.Time, error) {
 	if !opaqueRequestID.MatchString(reservation) || client == "" || revision < 1 {
-		return appointmentHold{}, errProposalConflict
+		return appointmentHold{}, time.Time{}, errProposalConflict
 	}
 	now, err := lockAppointmentCalendarTx(ctx, tx)
 	if err != nil {
-		return appointmentHold{}, err
+		return appointmentHold{}, time.Time{}, err
 	}
 	hold, err := readLatestAppointmentHold(ctx, tx, reservation, client)
 	if err != nil {
+		return appointmentHold{}, time.Time{}, err
+	}
+	if hold.Revision != revision {
+		return appointmentHold{}, time.Time{}, errProposalConflict
+	}
+	return hold, now, nil
+}
+
+// confirmIntroduction commits the exact held revision for the authorized
+// client. The caller owns the transaction and the client membership check.
+func (holds appointmentHoldPolicy) confirmIntroduction(ctx context.Context, tx pgx.Tx, reservation, client string, revision int) (appointmentHold, error) {
+	hold, now, err := lockAppointmentHoldRevision(ctx, tx, reservation, client, revision)
+	if err != nil {
 		return appointmentHold{}, err
 	}
-	if hold.Revision != revision || hold.Quote != (appointmentQuoteRef{}) || hold.Slot.End.Sub(hold.Slot.Start) != introductionDuration {
+	if hold.Quote != (appointmentQuoteRef{}) || hold.Slot.End.Sub(hold.Slot.Start) != introductionDuration {
 		return appointmentHold{}, errProposalConflict
 	}
 	if hold.IntroductionCancelled {
@@ -67,18 +78,11 @@ func (holds appointmentHoldPolicy) confirmIntroduction(ctx context.Context, tx p
 // cancelIntroduction releases a confirmed slot within the deadline recorded
 // at confirmation. The original slot remains part of the client's history.
 func cancelIntroduction(ctx context.Context, tx pgx.Tx, reservation, client string, revision int) (appointmentHold, error) {
-	if !opaqueRequestID.MatchString(reservation) || client == "" || revision < 1 {
-		return appointmentHold{}, errProposalConflict
-	}
-	now, err := lockAppointmentCalendarTx(ctx, tx)
+	hold, now, err := lockAppointmentHoldRevision(ctx, tx, reservation, client, revision)
 	if err != nil {
-		return appointmentHold{}, err
+		return hold, err
 	}
-	hold, err := readLatestAppointmentHold(ctx, tx, reservation, client)
-	if err != nil {
-		return appointmentHold{}, err
-	}
-	if hold.Revision != revision || !hold.IntroductionConfirmed || hold.cancellableUntil == nil {
+	if !hold.IntroductionConfirmed || hold.cancellableUntil == nil {
 		return appointmentHold{}, errProposalConflict
 	}
 	if hold.IntroductionCancelled {

@@ -49,11 +49,7 @@ func acceptedAppointmentQuoteFixture(t *testing.T) *browserFixture {
 	if status != 303 {
 		t.Fatalf("client could not accept the appointment quote: %d", status)
 	}
-	confirmationFixture(t, b)
-	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_contacts(client_id,name,email,company,revision)
- VALUES('private-client-key','Fictional Client','client@example.invalid','Fictional Bakery ApS',1)`); err != nil {
-		t.Fatal(err)
-	}
+	prepareServiceOrderConfirmation(t, b)
 	return b
 }
 
@@ -71,9 +67,7 @@ func TestPaidAppointmentOrderRollsBackWhenHoldExpiresDuringFinalEvaluation(t *te
 	}
 	start, policy := appointmentHoldFixture(t)
 	selection := appointmentOrderSelection{Reservation: secret(), Revision: 1}
-	if _, err := b.pool.Exec(ctx, `INSERT INTO portal_workspaces(id) VALUES('private-client-key') ON CONFLICT DO NOTHING`); err != nil {
-		t.Fatal(err)
-	}
+	seedAppointmentWorkspaces(t, b.pool, "private-client-key")
 	if err := pgx.BeginFunc(ctx, b.pool, func(tx pgx.Tx) error {
 		_, err := policy.append(ctx, tx, selection.Reservation, "private-client-key", 0, booking.Interval{Start: start, End: start.Add(30 * time.Minute)}, ref)
 		return err
@@ -151,9 +145,7 @@ func TestPaidAppointmentOrderKeepsItsSelectedSlot(t *testing.T) {
 			p := authenticateExistingMember(t, b, "consent-client")
 			ctx := t.Context()
 			const client = "private-client-key"
-			if _, err := b.pool.Exec(ctx, `INSERT INTO portal_workspaces(id) VALUES($1) ON CONFLICT DO NOTHING`, client); err != nil {
-				t.Fatal(err)
-			}
+			seedAppointmentWorkspaces(t, b.pool, client)
 			ref := appointmentQuoteRef{Request: proposalRequestID}
 			var acceptance, termsText string
 			if err := b.pool.QueryRow(ctx, `SELECT a.id,p.version,p.content_sha256,CASE WHEN $2='da'
@@ -276,13 +268,7 @@ func TestPaidAppointmentOrderKeepsItsSelectedSlot(t *testing.T) {
 			if _, err := confirm(); !errors.Is(err, errProposalConflict) {
 				t.Fatalf("refunded payment was still accepted: %v", err)
 			}
-			migrator := migrationDB(t)
-			if _, err := migrator.Exec(ctx, `UPDATE portal_memberships SET revoked=true WHERE client_id=$1`, client); err != nil {
-				t.Fatal(err)
-			}
-			if erased := purgeAged(t, migrator); erased != 1 {
-				t.Fatalf("retention could not erase the paid appointment's former client: %d", erased)
-			}
+			requireAppointmentClientErasure(t, client)
 		})
 	}
 }

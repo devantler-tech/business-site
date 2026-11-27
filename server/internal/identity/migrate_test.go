@@ -100,6 +100,41 @@ func rewindAppointmentReservationsFixture(t *testing.T, pool *pgxpool.Pool) {
 	}
 }
 
+func TestAppointmentMigrationRefusesChangedServiceGuard(t *testing.T) {
+	fixtureDB(t)
+	migrator := migrationDB(t)
+	rewindAppointmentReservationsFixture(t, migrator)
+	ctx := t.Context()
+	var original string
+	if err := migrator.QueryRow(ctx, `SELECT pg_get_functiondef('public.portal_guard_service_order()'::regprocedure)`).Scan(&original); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := migrator.Exec(context.Background(), original); err != nil {
+			t.Error("restore the fixture guard", err)
+			return
+		}
+		if err := Migrate(context.Background(), migrator); err != nil {
+			t.Error("restore the fixture migration", err)
+		}
+	})
+	if _, err := migrator.Exec(ctx, `CREATE OR REPLACE FUNCTION public.portal_guard_service_order()
+ RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp
+ AS $$ BEGIN RAISE EXCEPTION 'fixture service guard drift'; END; $$`); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(ctx, migrator); err == nil || !strings.Contains(err.Error(), "unexpected source service guard") {
+		t.Fatalf("appointment migration did not refuse unexpected guard source: %v", err)
+	}
+	var tablesPresent bool
+	var version int
+	if err := migrator.QueryRow(ctx, `SELECT to_regclass('public.portal_appointment_reservations') IS NOT NULL,
+ (SELECT max(version) FROM public.portal_schema_version)`).Scan(&tablesPresent, &version); err != nil ||
+		tablesPresent || version != 33 {
+		t.Fatalf("refused migration did not roll back: tables=%t version=%d err=%v", tablesPresent, version, err)
+	}
+}
+
 // rewindServiceContractsFixture removes v33 and later migrations while retaining
 // the published v32 state.
 func rewindServiceContractsFixture(t *testing.T, pool *pgxpool.Pool) {
