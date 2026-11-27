@@ -519,6 +519,11 @@ footer .trustpilot-link {
   justify-self: start;
 }
 
+.operator-directory-search input {
+  width: 100%;
+  max-width: none;
+}
+
 .operator-form input:not([type="hidden"]) {
   max-width: none;
 }
@@ -532,11 +537,6 @@ footer .trustpilot-link {
   display: grid;
   gap: 0.35rem;
   margin-block-end: 0.9rem;
-}
-
-.operator-directory-search input {
-  width: 100%;
-  max-width: none;
 }
 
 .operator-directory-status {
