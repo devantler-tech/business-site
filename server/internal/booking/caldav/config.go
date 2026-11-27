@@ -5,6 +5,7 @@ import (
 	"net/netip"
 	"net/url"
 	"path"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -17,6 +18,8 @@ import (
 type Config struct {
 	Origin    string
 	Calendars []string
+	// OwnedCalendar is the dedicated collection selected for portal events.
+	OwnedCalendar string
 }
 
 // New admits an explicit selection without reading credentials or connecting.
@@ -26,6 +29,9 @@ func New(config Config, credentials func(context.Context) (string, string, error
 	if err != nil || len(config.Origin) > 2048 || strings.ContainsAny(config.Origin, "?#") || origin.Scheme != "https" || origin.User != nil || origin.Opaque != "" || origin.RawPath != "" || (origin.Path != "" && origin.Path != "/") || (origin.Port() != "" && origin.Port() != "443") || credentials == nil || !validCollections(config.Calendars) {
 		return nil, booking.ErrUnavailable
 	}
+	if config.OwnedCalendar != "" && !slices.Contains(config.Calendars, config.OwnedCalendar) {
+		return nil, booking.ErrUnavailable
+	}
 	host := strings.ToLower(origin.Hostname())
 	_, addressErr := netip.ParseAddr(host)
 	localName := strings.TrimSuffix(host, ".")
@@ -33,10 +39,11 @@ func New(config Config, credentials func(context.Context) (string, string, error
 		return nil, booking.ErrUnavailable
 	}
 	return &Client{
-		origin:      &url.URL{Scheme: "https", Host: host},
-		calendars:   append([]string(nil), config.Calendars...),
-		credentials: credentials,
-		now:         time.Now,
+		origin:        &url.URL{Scheme: "https", Host: host},
+		calendars:     append([]string(nil), config.Calendars...),
+		ownedCalendar: config.OwnedCalendar,
+		credentials:   credentials,
+		now:           time.Now,
 	}, nil
 }
 

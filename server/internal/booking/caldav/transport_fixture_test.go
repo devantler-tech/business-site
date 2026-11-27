@@ -43,6 +43,10 @@ type transportFixture struct {
 }
 
 func newTransportFixture(t *testing.T, certificateHost string) *transportFixture {
+	return newCalendarTransportFixture(t, certificateHost, "REPORT", "/calendars/selected/")
+}
+
+func newCalendarTransportFixture(t *testing.T, certificateHost, method, path string) *transportFixture {
 	t.Helper()
 	f := &transportFixture{}
 	f.answer = func(context.Context) ([]netip.Addr, error) { return []netip.Addr{fixturePublicAddress}, nil }
@@ -51,7 +55,7 @@ func newTransportFixture(t *testing.T, certificateHost string) *transportFixture
 		f.record("request")
 		call := f.requests.Add(1)
 		user, password, ok := r.BasicAuth()
-		if r.Method != "REPORT" || r.URL.Path != "/calendars/selected/" || r.Host != selectedCalendarHost || r.TLS == nil || r.TLS.ServerName != selectedCalendarHost || !ok || user != "fictional-user" || password != f.password(call) {
+		if r.Method != method || r.URL.RequestURI() != path || r.Host != selectedCalendarHost || r.TLS == nil || r.TLS.ServerName != selectedCalendarHost || !ok || user != "fictional-user" || password != f.password(call) {
 			t.Error("request escaped its selected source, TLS name or current credential")
 			w.WriteHeader(http.StatusBadRequest)
 			return

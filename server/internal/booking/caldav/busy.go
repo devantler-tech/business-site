@@ -6,9 +6,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"io"
-	"mime"
 	"net/http"
-	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -22,10 +20,11 @@ import (
 var periodDuration = regexp.MustCompile(`^P(?:[0-9]{1,3}W|(?:[0-9]{1,3}D)?(?:T(?:[0-9]{1,4}H)?(?:[0-9]{1,6}M)?(?:[0-9]{1,8}S)?)?)$`)
 
 const (
-	maxReportBytes = 4 << 20
-	maxBusyPeriods = 4096
-	maxCalendars   = 8
-	maxCoverage    = 31 * 24 * time.Hour
+	maxReportBytes    = 4 << 20
+	maxBusyPeriods    = 4096
+	maxCalendars      = 8
+	maxCoverage       = 31 * 24 * time.Hour
+	calendarUTCLayout = "20060102T150405Z"
 )
 
 type freeBusyQuery struct {
@@ -50,11 +49,11 @@ func (c *Client) Busy(ctx context.Context, coverage booking.Interval) (booking.B
 	if observed.IsZero() || ctx.Err() != nil {
 		return booking.BusySnapshot{}, booking.ErrUnavailable
 	}
-	data, err := xml.Marshal(freeBusyQuery{Range: reportRange{Start: coverage.Start.UTC().Format("20060102T150405Z"), End: coverage.End.UTC().Format("20060102T150405Z")}})
+	data, err := xml.Marshal(freeBusyQuery{Range: reportRange{Start: coverage.Start.UTC().Format(calendarUTCLayout), End: coverage.End.UTC().Format(calendarUTCLayout)}})
 	if err != nil {
 		return booking.BusySnapshot{}, booking.ErrUnavailable
 	}
-	client, cleanup, err := c.reportClient(ctx)
+	client, cleanup, err := c.sourceClient(ctx)
 	if err != nil {
 		return booking.BusySnapshot{}, booking.ErrUnavailable
 	}
@@ -79,34 +78,20 @@ func (c *Client) validSources() bool {
 }
 
 func (c *Client) report(ctx context.Context, client *http.Client, collection string, data []byte, coverage booking.Interval) ([]booking.Interval, error) {
-	address := url.URL{Scheme: "https", Host: c.origin.Host, Path: collection}
-	req, err := http.NewRequestWithContext(ctx, "REPORT", address.String(), bytes.NewReader(data))
+	req, err := c.sourceRequest(ctx, "REPORT", collection, bytes.NewReader(data))
 	if err != nil {
-		return nil, booking.ErrUnavailable
+		return nil, err
 	}
-	if ctx.Err() != nil {
-		return nil, booking.ErrUnavailable
-	}
-	user, password, err := c.credentials(ctx)
-	if err != nil || user == "" || password == "" || ctx.Err() != nil {
-		return nil, booking.ErrUnavailable
-	}
-	req.SetBasicAuth(user, password)
 	req.Header.Set("Content-Type", "application/xml; charset=utf-8")
-	req.Header.Set("Accept", ical.MIMEType)
 	req.Header.Set("Depth", "1")
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, booking.ErrUnavailable
 	}
 	defer func() { _ = resp.Body.Close() }()
-	mediaType, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
-	if err != nil || mediaType != ical.MIMEType || resp.StatusCode != http.StatusOK || resp.ContentLength > maxReportBytes {
-		return nil, booking.ErrUnavailable
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxReportBytes+1))
-	if err != nil || len(body) > maxReportBytes || ctx.Err() != nil {
-		return nil, booking.ErrUnavailable
+	body, err := readCalendarBody(ctx, resp, maxReportBytes)
+	if err != nil {
+		return nil, err
 	}
 	return readFreeBusy(body, coverage)
 }
