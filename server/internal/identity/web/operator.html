@@ -34,7 +34,7 @@
     <li><a href="{{root}}/operator?lang={{.Lang}}" aria-current="{{if eq .Kind `operator`}}page{{else}}false{{end}}">{{if eq .Lang "da"}}Oversigt{{else}}Overview{{end}}</a></li>
     <li><a href="{{root}}/operator/customers?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-customers`}}page{{else if or (eq .Kind `operator-invite`) (eq .Kind `operator-support`)}}location{{else}}false{{end}}">{{if eq .Lang "da"}}Kunder{{else}}Customers{{end}}</a></li>
     {{if .TriageEnabled}}<li><a href="{{root}}/operator/requests?lang={{.Lang}}" aria-current="{{if or (eq .Kind `triage`) (eq .Kind `work-review`)}}location{{else}}false{{end}}">{{template "operator-requests-label" .}}</a></li>{{end}}
-    {{if .CalendarConflictsEnabled}}<li><a href="{{root}}/operator/calendar-conflicts?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-calendar-conflicts`}}page{{else}}false{{end}}">{{if eq .Lang "da"}}Kalenderkonflikter{{else}}Calendar conflicts{{end}}</a></li>
+    {{if .CalendarConflictsEnabled}}<li><a href="{{root}}/operator/calendar-conflicts?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-calendar-conflicts`}}page{{else}}false{{end}}">{{if eq .Lang "da"}}Kalenderstatus{{else}}Calendar review{{end}}</a></li>
     {{end}}<li><a href="{{root}}/operator/audit?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-audit`}}page{{else}}false{{end}}">{{if eq .Lang "da"}}Revisionslog{{else}}Audit log{{end}}</a></li>
   </ul>
   {{if .CSRF}}
@@ -51,17 +51,26 @@
 
 {{define "operator-calendar-conflicts"}}
 <section class="operator-panel" aria-label="{{.Title}}">
-  {{if .CalendarConflicts}}
+  {{if .CalendarReviewItems}}
   <ul class="request-list" role="list">
-    {{range .CalendarConflicts}}<li>
+    {{range .CalendarReviewItems}}<li>
       <div><strong>{{.Workspace}}</strong>
         <span class="appointment-times">{{.Date}} · <time datetime="{{.Start}}">{{.StartTime}}</time>–<time datetime="{{.End}}">{{.EndTime}}</time></span>
       </div>
-      <span>{{.Service}}</span>
+      <div>
+        <span class="appointment-times">{{.Service}}</span>
+        <span class="operator-status">
+          {{if .AwaitingConfirmation}}
+            {{if eq $.Lang "da"}}Afventer kalenderbekræftelse{{else}}Awaiting calendar confirmation{{end}}
+          {{else}}
+            {{if eq $.Lang "da"}}Kalenderkonflikt{{else}}Calendar conflict{{end}}
+          {{end}}
+        </span>
+      </div>
     </li>{{end}}
   </ul>
-  {{if .CalendarConflictsLimited}}<p>{{if eq .Lang "da"}}Viser de 20 nyeste konflikter.{{else}}Showing the 20 most recent conflicts.{{end}}</p>{{end}}
-  {{else}}<p>{{if eq .Lang "da"}}Ingen kalenderkonflikter.{{else}}No calendar conflicts.{{end}}</p>{{end}}
+  {{if .CalendarReviewLimited}}<p>{{if eq .Lang "da"}}Viser de 20 nyeste poster.{{else}}Showing the 20 most recent items.{{end}}</p>{{end}}
+  {{else}}<p>{{if eq .Lang "da"}}Ingen kalenderposter kræver gennemgang.{{else}}No calendar items need review.{{end}}</p>{{end}}
 </section>
 {{end}}
 

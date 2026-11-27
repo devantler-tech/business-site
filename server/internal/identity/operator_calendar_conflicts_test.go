@@ -21,14 +21,14 @@ func TestOperatorCalendarConflictsReflectRecordedEvidence(t *testing.T) {
 		!strings.Contains(home, calendarConflictPath+"?lang=en") {
 		t.Fatalf("calendar conflicts are missing from operator navigation: %d", status)
 	}
-	for _, tc := range []struct{ lang, heading, service string }{
-		{"en", "Calendar conflicts", "Introductory call"},
-		{"da", "Kalenderkonflikter", "Indledende samtale"},
+	for _, tc := range []struct{ lang, heading, service, state string }{
+		{"en", "Calendar review", "Introductory call", "Calendar conflict"},
+		{"da", "Kalenderstatus", "Indledende samtale", "Kalenderkonflikt"},
 	} {
 		status, body, headers := b.request("GET", calendarConflictPath+"?lang="+tc.lang, nil, "")
 		body = html.UnescapeString(body)
 		if status != http.StatusOK || !strings.Contains(headers.Get("Cache-Control"), "no-store") ||
-			!strings.Contains(body, tc.heading) || !strings.Contains(body, tc.service) || !strings.Contains(body, workspace) ||
+			!strings.Contains(body, tc.heading) || !strings.Contains(body, tc.service) || !strings.Contains(body, tc.state) || !strings.Contains(body, workspace) ||
 			strings.Contains(body, reservation) || strings.Contains(body, fixtureCalendarDestination) {
 			t.Fatalf("calendar conflict details were missing, cacheable or overexposed: %d", status)
 		}
@@ -38,7 +38,7 @@ func TestOperatorCalendarConflictsReflectRecordedEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	if status, page, _ := b.request("GET", calendarConflictPath+"?lang=en", nil, ""); status != http.StatusOK ||
-		!strings.Contains(page, "No calendar conflicts.") || strings.Contains(page, "private-fixture-validator") {
+		!strings.Contains(page, "No calendar items need review.") || strings.Contains(page, "private-fixture-validator") {
 		t.Fatalf("a successful observation appeared as a conflict or disclosed a validator: %d", status)
 	}
 	if got := b.auditRows(); len(got) != 3 || got[2] != "operator calendar.conflicts.view allowed" {
@@ -66,9 +66,42 @@ func TestOperatorCalendarConflictsWithholdARevokedSession(t *testing.T) {
 	b := newOperatorBrowserFixture(t)
 	enableCalendarConflictFixture(t, b)
 	seedCalendarConflict(t, b)
-	status, body := requestAfterReadRevocation(t, b, "FROM portal_appointment_calendar_observations observation", calendarConflictPath, operatorSubject)
+	status, body := requestAfterReadRevocation(t, b, "FROM portal_appointment_calendar_intents intent", calendarConflictPath, operatorSubject)
 	if status != http.StatusServiceUnavailable || strings.Contains(html.UnescapeString(body), "Northern & Digital") {
 		t.Fatalf("a revoked operator received calendar conflicts: status=%d", status)
+	}
+}
+
+func TestOperatorCalendarReviewShowsAnUnconfirmedAttemptUntilObserved(t *testing.T) {
+	b := newOperatorBrowserFixture(t)
+	enableCalendarConflictFixture(t, b)
+	reservation, workspace := confirmedCalendarIntroduction(t, b.pool)
+	const name = "Harbour Workshop"
+	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_workspace_settings(workspace_id,display_name) VALUES($1,$2)`, workspace, name); err != nil {
+		t.Fatal("name the synthetic workspace", err)
+	}
+	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_appointment_calendar_attempts(reservation_id) VALUES($1)`, reservation); err != nil {
+		t.Fatal("record a pending calendar write", err)
+	}
+	for _, tc := range []struct{ lang, status string }{
+		{"en", "Awaiting calendar confirmation"},
+		{"da", "Afventer kalenderbekræftelse"},
+	} {
+		status, page, headers := b.request("GET", calendarConflictPath+"?lang="+tc.lang, nil, "")
+		body := html.UnescapeString(page)
+		if status != http.StatusOK || !strings.Contains(body, tc.status) || !strings.Contains(body, name) ||
+			!strings.Contains(headers.Get("Cache-Control"), "no-store") || strings.Contains(body, reservation) {
+			t.Fatalf("pending calendar write was missing or overexposed in %s: %d", tc.lang, status)
+		}
+	}
+	const providerTag = `"private-fixture-validator"`
+	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_appointment_calendar_observations(reservation_id,outcome,provider_tag)
+ VALUES($1,'created',$2)`, reservation, providerTag); err != nil {
+		t.Fatal("record successful calendar verification", err)
+	}
+	if status, page, _ := b.request("GET", calendarConflictPath+"?lang=en", nil, ""); status != http.StatusOK ||
+		strings.Contains(page, name) || strings.Contains(page, "private-fixture-validator") {
+		t.Fatalf("a confirmed event remained in review or exposed provider data: %d", status)
 	}
 }
 
