@@ -378,7 +378,7 @@ footer .trustpilot-link {
 }
 
 .operator-page,
-[data-portal-view="home"] {
+.client-home {
   --operator-surface: light-dark(#fff, #17251d);
   --operator-subtle: light-dark(#eff6f1, #1c3024);
   --operator-rule: light-dark(#d9e6db, #365241);
@@ -426,7 +426,7 @@ footer .trustpilot-link {
 }
 
 .operator-secondary,
-.client-account-actions button {
+.portal-account-actions button {
   padding: 0.55rem 0.8rem;
   border: 1px solid var(--line);
   background: var(--operator-surface, var(--bg));
@@ -510,12 +510,12 @@ footer .trustpilot-link {
   color: var(--muted);
 }
 
-[data-portal-view="home"] {
+main:has(> .client-home) {
   max-width: 64rem;
   margin-block: clamp(1.5rem, 5vw, 3.5rem) 3rem;
 }
 
-[data-portal-view="home"] h1 {
+.client-home h1 {
   margin-block-end: 0.45rem;
   font-size: clamp(1.9rem, 4vw, 3rem);
 }
@@ -530,15 +530,15 @@ footer .trustpilot-link {
   color: var(--ink);
 }
 
-[data-portal-view="home"] .workspace-actions li {
+:where(.client-home) .workspace-actions li {
   max-width: 23rem;
 }
 
-[data-portal-view="home"] .workspace-actions a {
+:where(.client-home) .workspace-actions a {
   min-height: 5.5rem;
 }
 
-.client-account-actions {
+.portal-account-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -549,10 +549,11 @@ footer .trustpilot-link {
   border-block-start: 1px solid var(--line);
 }
 
-.client-account-actions a {
+.portal-account-actions .back {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
+  margin: 0;
 }
 
 .operator-directory,

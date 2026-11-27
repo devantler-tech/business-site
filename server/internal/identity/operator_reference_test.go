@@ -44,6 +44,13 @@ func ordinaryPortalReferences() []string {
 	}
 	result := slices.Clone(original)
 	for i, lang := range []string{"en", "da"} {
+		for _, state := range []int{1, 6} {
+			digest, err := maintenanceMainDigest(ordinaryClientHomeExpectation(lang, state == 6), false)
+			if err != nil {
+				return nil
+			}
+			result[i*12+state] = digest
+		}
 		for _, state := range []int{2, 7} {
 			digest, err := maintenanceMainDigest(ordinaryOperatorExpectation(lang, state == 7), false)
 			if err != nil {
