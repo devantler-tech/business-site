@@ -177,6 +177,15 @@ func checkWorkApprovalRole(ctx context.Context, pool queryRower) error {
  AND has_column_privilege(current_user,'portal_work_current','approval_id','UPDATE')
  AND has_column_privilege(current_user,'portal_work_current','generation','UPDATE')
  AND has_table_privilege(current_user,'portal_work_queue_revision','SELECT')
+ AND has_function_privilege(current_user,'public.portal_lock_work_queue_revision(bigint)','EXECUTE')
+ AND EXISTS (
+  SELECT 1 FROM pg_proc p JOIN pg_class revision ON revision.oid='public.portal_work_queue_revision'::regclass
+  WHERE p.oid='public.portal_lock_work_queue_revision(bigint)'::regprocedure
+   AND p.proowner=revision.relowner AND p.prorettype='boolean'::regtype
+   AND p.prokind='f' AND p.prosecdef AND p.provolatile='v'
+   AND p.proconfig=ARRAY['search_path=pg_catalog, pg_temp']
+   AND NOT EXISTS (SELECT 1 FROM aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) acl
+                   WHERE acl.grantee=0 AND acl.privilege_type='EXECUTE'))
  AND NOT EXISTS (
   SELECT 1 FROM pg_roles role WHERE (role.rolname=current_user OR pg_has_role(current_user,role.oid,'MEMBER')) AND (
    EXISTS (SELECT 1 FROM unnest(ARRAY['portal_work_approvals','portal_work_revocations']) immutable(table_name)
@@ -188,6 +197,7 @@ func checkWorkApprovalRole(ctx context.Context, pool queryRower) error {
    OR has_table_privilege(role.oid,'portal_work_current','DELETE,TRUNCATE,TRIGGER,MAINTAIN')
    OR has_any_column_privilege(role.oid,'portal_work_queue_revision','INSERT,UPDATE,REFERENCES,SELECT WITH GRANT OPTION')
    OR has_table_privilege(role.oid,'portal_work_queue_revision','DELETE,TRUNCATE,TRIGGER,MAINTAIN')
+   OR has_function_privilege(role.oid,'public.portal_lock_work_queue_revision(bigint)','EXECUTE WITH GRANT OPTION')
    OR has_function_privilege(role.oid,'public.portal_record_work_queue_revision()','EXECUTE')))`).Scan(&allowed)
 	if err != nil || !allowed {
 		return ErrDenied

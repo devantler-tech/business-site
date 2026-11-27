@@ -44,6 +44,9 @@ func TestWorkQueueRevisionTracksCommittedChanges(t *testing.T) {
 	if !errors.As(err, &databaseError) || databaseError.Code != "42501" {
 		t.Fatalf("the runtime role could reset the software queue revision: %v", err)
 	}
+	if err := pool.QueryRow(ctx, `SELECT revision FROM portal_work_queue_revision WHERE singleton FOR SHARE`).Scan(new(int64)); !errors.As(err, &databaseError) || databaseError.Code != "42501" {
+		t.Fatalf("the runtime role acquired a row lock outside the restricted function: %v", err)
+	}
 }
 
 func TestDistinctWorkQueueWritersWaitOnlyAtCommit(t *testing.T) {
@@ -51,10 +54,11 @@ func TestDistinctWorkQueueWritersWaitOnlyAtCommit(t *testing.T) {
 	migrator := migrationDB(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	holder := beginFixtureTransaction(ctx, t, migrator)
-	var firstRevision int64
-	if err := holder.QueryRow(ctx, `SELECT revision FROM portal_work_queue_revision WHERE singleton FOR SHARE`).Scan(&firstRevision); err != nil {
-		t.Fatal("hold the current queue revision", err)
+	holder := beginFixtureTransaction(ctx, t, pool)
+	firstRevision := fixtureQueueRevision(ctx, t, holder)
+	var locked bool
+	if err := holder.QueryRow(ctx, `SELECT public.portal_lock_work_queue_revision($1)`, firstRevision).Scan(&locked); err != nil || !locked {
+		t.Fatal("runtime could not hold the current queue revision", err)
 	}
 
 	first := beginFixtureTransaction(ctx, t, pool)
@@ -88,6 +92,9 @@ func TestDistinctWorkQueueWritersWaitOnlyAtCommit(t *testing.T) {
 	if got := fixtureQueueRevision(ctx, t, pool); got != firstRevision+2 {
 		t.Fatalf("two committed writers left revision %d, expected %d", got, firstRevision+2)
 	}
+	if err := pool.QueryRow(ctx, `SELECT public.portal_lock_work_queue_revision($1)`, firstRevision).Scan(&locked); err != nil || locked {
+		t.Fatalf("an old queue revision was accepted: locked=%t error=%v", locked, err)
+	}
 }
 
 func TestWorkQueueRevisionCoversEligibilityWriters(t *testing.T) {
@@ -111,6 +118,46 @@ func TestWorkQueueRevisionCoversEligibilityWriters(t *testing.T) {
 	}
 	if err != nil || !slices.Equal(required, installed) {
 		t.Fatalf("the software queue revision missed an eligibility writer: installed=%v error=%v", installed, err)
+	}
+}
+
+func TestWorkQueueRevisionLockRejectsAnOverlappingCommit(t *testing.T) {
+	pool := fixtureDB(t)
+	migrator := migrationDB(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	previous := fixtureQueueRevision(ctx, t, pool)
+	writer := beginFixtureTransaction(ctx, t, pool)
+	if _, err := writer.Exec(ctx, `SET CONSTRAINTS ALL IMMEDIATE;
+ INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES
+ ('https://broker.example.test','newer-committed-client','revision-workspace','client')`); err != nil {
+		t.Fatal("hold an uncommitted evidence write", err)
+	}
+
+	reader := beginFixtureTransaction(ctx, t, pool)
+	pid := reader.Conn().PgConn().PID()
+	type result struct {
+		locked bool
+		err    error
+	}
+	done := make(chan result, 1)
+	go func() {
+		var got result
+		got.err = reader.QueryRow(ctx, `SELECT public.portal_lock_work_queue_revision($1)`, previous).Scan(&got.locked)
+		done <- got
+	}()
+	waitForFixtureDatabaseLock(ctx, t, migrator,
+		`SELECT EXISTS(SELECT 1 FROM pg_locks WHERE pid=$1 AND NOT granted)`, pid)
+	if err := writer.Commit(ctx); err != nil {
+		t.Fatal("commit the overlapping evidence write", err)
+	}
+	select {
+	case got := <-done:
+		if got.err != nil || got.locked {
+			t.Fatalf("the lookup accepted an obsolete revision after waiting: %+v", got)
+		}
+	case <-ctx.Done():
+		t.Fatal("the revision lookup did not finish after the writer committed")
 	}
 }
 

@@ -24,7 +24,7 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer migrator.Close()
-	if err := Migrate(ctx, migrator); err != nil {
+	if err := MigrateWithRuntimeRole(ctx, migrator, "portal_runtime"); err != nil {
 		t.Fatal(err)
 	}
 	ownerCfg := cfg.ConnConfig.Copy()
@@ -44,6 +44,10 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 	}
 	cases := []privilegeCase{
 		{"restricted", "SET ROLE portal_runtime", true},
+		{"missing revision lock", "REVOKE EXECUTE ON FUNCTION public.portal_lock_work_queue_revision(bigint) FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"public revision lock", "GRANT EXECUTE ON FUNCTION public.portal_lock_work_queue_revision(bigint) TO PUBLIC; SET ROLE portal_runtime", false},
+		{"delegated revision lock", "GRANT EXECUTE ON FUNCTION public.portal_lock_work_queue_revision(bigint) TO portal_runtime WITH GRANT OPTION; SET ROLE portal_runtime", false},
+		{"revision lock search path", "ALTER FUNCTION public.portal_lock_work_queue_revision(bigint) SET search_path=public,pg_temp; SET ROLE portal_runtime", false},
 		{"missing workspace INSERT", "REVOKE INSERT ON portal_workspaces FROM portal_runtime; SET ROLE portal_runtime", false},
 		{"editable workspace", "GRANT UPDATE ON portal_workspaces TO portal_runtime; SET ROLE portal_runtime", false},
 		{"deletable workspace", "GRANT DELETE ON portal_workspaces TO portal_runtime; SET ROLE portal_runtime", false},
