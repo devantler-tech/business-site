@@ -3,6 +3,7 @@ package identity
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/devantler-tech/business-site/server/internal/booking"
 	"github.com/devantler-tech/business-site/server/internal/booking/caldav"
@@ -29,7 +30,7 @@ func TestCalendarCreationRecoversAfterProviderAccepts(t *testing.T) {
 		}
 		return caldav.OwnedEventObservation{Exists: true, ETag: tag}, nil
 	}
-	if err := reconcileIntroCalendarCreation(interrupted, pool, reservation, create); err == nil || accepted.Key == "" {
+	if err := reconcileAppointmentCalendarCreation(interrupted, pool, reservation, create); err == nil || accepted.Key == "" {
 		t.Fatalf("the interrupted run did not leave a recoverable calendar write: %v", err)
 	}
 	fresh, err := pgxpool.NewWithConfig(t.Context(), pool.Config())
@@ -38,7 +39,7 @@ func TestCalendarCreationRecoversAfterProviderAccepts(t *testing.T) {
 	}
 	defer fresh.Close()
 	for range 2 {
-		if err := reconcileIntroCalendarCreation(t.Context(), fresh, reservation, create); err != nil {
+		if err := reconcileAppointmentCalendarCreation(t.Context(), fresh, reservation, create); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -63,7 +64,7 @@ func TestCalendarCreationDiscardsObservationAfterCancellation(t *testing.T) {
 		return caldav.OwnedEventObservation{Exists: true, ETag: `"stale-version"`}, err
 	}
 	for range 2 {
-		if err := reconcileIntroCalendarCreation(t.Context(), pool, reservation, create); err != nil {
+		if err := reconcileAppointmentCalendarCreation(t.Context(), pool, reservation, create); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -86,7 +87,7 @@ func TestCalendarCreationHoldsVerifiedProviderConflict(t *testing.T) {
 		return caldav.OwnedEventObservation{}, caldav.ErrOwnedEventConflict
 	}
 	for range 2 {
-		if err := reconcileIntroCalendarCreation(t.Context(), pool, reservation, create); err != nil {
+		if err := reconcileAppointmentCalendarCreation(t.Context(), pool, reservation, create); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -96,6 +97,99 @@ func TestCalendarCreationHoldsVerifiedProviderConflict(t *testing.T) {
 	if err != nil || !conflict || calls != 1 {
 		t.Fatalf("a provider conflict did not hold creation for operator review: calls=%d error=%v", calls, err)
 	}
+}
+
+func TestPaidCalendarCreationFollowsCommittedFunding(t *testing.T) {
+	for _, scenario := range []struct {
+		name                         string
+		reverseBefore, reverseDuring bool
+		wantCalls                    int
+		wantObservation              bool
+	}{
+		{name: "settled", wantCalls: 1, wantObservation: true},
+		{name: "reversed before creation", reverseBefore: true},
+		{name: "reversed during creation", reverseDuring: true, wantCalls: 1},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			b, reservation, slot := confirmedCalendarConsultation(t)
+			key := requireCalendarCreation(t, b.pool, reservation, 1)
+			if scenario.reverseBefore {
+				changeFixtureFunding(t, "refunded")
+			}
+			const tag = `"consultation-version"`
+			calls := 0
+			create := func(_ context.Context, event caldav.OwnedEvent) (caldav.OwnedEventObservation, error) {
+				calls++
+				if event.Key != key || event.CalendarBinding != fixtureCalendarDestination || event.Revision != 1 ||
+					!event.Slot.Start.Equal(slot.Start) || !event.Slot.End.Equal(slot.End) {
+					t.Fatal("calendar operation used a different resource or consultation slot")
+				}
+				if scenario.reverseDuring {
+					changeFixtureFunding(t, "refunded")
+				}
+				return caldav.OwnedEventObservation{Exists: true, ETag: tag}, nil
+			}
+			for range 2 {
+				if err := reconcileAppointmentCalendarCreation(t.Context(), b.pool, reservation, create); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var observations int
+			var retainedTag string
+			err := b.pool.QueryRow(t.Context(), `SELECT count(*), COALESCE(max(provider_tag),'')
+ FROM portal_appointment_calendar_observations WHERE reservation_id=$1`, reservation).Scan(&observations, &retainedTag)
+			if err != nil || calls != scenario.wantCalls {
+				t.Fatalf("unexpected provider calls: %d error=%v", calls, err)
+			}
+			if scenario.wantObservation && (observations != 1 || retainedTag != tag) ||
+				!scenario.wantObservation && (observations != 0 || retainedTag != "") {
+				t.Fatal("calendar reconciliation retained the wrong observation")
+			}
+			if requireCalendarCreation(t, b.pool, reservation, 1) != key {
+				t.Fatal("funding changes altered the reserved calendar identity")
+			}
+		})
+	}
+}
+
+func confirmedCalendarConsultation(t *testing.T) (*browserFixture, string, booking.Interval) {
+	t.Helper()
+	b := acceptedAppointmentQuoteFixture(t)
+	ctx := t.Context()
+	principal := authenticateExistingMember(t, b, "consent-client")
+	const client = "private-client-key"
+	seedAppointmentWorkspaces(t, b.pool, client)
+	ref := appointmentQuoteRef{Request: proposalRequestID}
+	var acceptance string
+	if err := b.pool.QueryRow(ctx, `SELECT id,proposal_version,content_hash FROM portal_proposal_acceptances
+ WHERE request_id=$1 AND client_id=$2`, ref.Request, client).Scan(&acceptance, &ref.Version, &ref.Hash); err != nil {
+		t.Fatal(err)
+	}
+	start, policy := appointmentHoldFixture(t)
+	policy.calendarBinding = fixtureCalendarDestination
+	slot := booking.Interval{Start: start, End: start.Add(30 * time.Minute)}
+	reservation := secret()
+	if err := pgx.BeginFunc(ctx, b.pool, func(tx pgx.Tx) error {
+		_, err := policy.append(ctx, tx, reservation, client, 0, slot, ref)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	selection := appointmentOrderSelection{Reservation: reservation, Revision: 1}
+	_, terms := b.svc.termsFor("en")
+	if _, err := b.svc.placeOrder(ctx, principal, ref.Request, acceptance, "invoice", true, false, nil,
+		mailContext{Lang: "en", TermsHash: terms}, selection); err != nil {
+		t.Fatal(err)
+	}
+	provider, billing := newFakeNumina(t)
+	paidInvoiceOrder(t, b, provider, billing)
+	if err := b.svc.SendQueuedMail(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.svc.confirmPaidAppointment(ctx, principal, ref.Request, selection, policy); err != nil {
+		t.Fatal(err)
+	}
+	return b, reservation, slot
 }
 
 func confirmedCalendarIntroduction(t *testing.T, pool *pgxpool.Pool) (string, string) {

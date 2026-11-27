@@ -92,11 +92,12 @@ one calendar creation intent in the same database transaction. The record keeps
 an independent event key, the confirmed slot revision and a binding captured
 from the normalized HTTPS host, selected collection and configured credential
 account. Recording an intent makes no provider request.
-A reconciler reads a pending confirmed introduction and submits its saved event
-identity to the adapter. When it receives a matching event or a verified
-conflict, it saves the result under the cancellation lock and checks that the
-same introduction can still be reconciled. An interrupted readback can use the
-original identity again. Cancellation keeps that identity for event cleanup.
+A reconciler submits the saved event identity for a confirmed introduction or
+fixed-quote consultation. It checks the exact reservation again before
+recording a match or conflict. For a consultation it also verifies settled
+funding before and after the provider call. A cancellation, withdrawal or
+funding reversal stops new creation attempts and leaves the identity available
+for event cleanup. An interrupted readback can use the original identity again.
 Retries carry that same binding across restarts and later revisions. Moving the
 calendar or changing accounts requires operator resolution. Rotating the same
 account's password preserves the binding, and each request still uses the
