@@ -69,6 +69,15 @@ test('package grouping retains selected-file analysis and every HTML rule', () =
       '--remap',
       '^https://github\\.com/bufbuild/buf/blob/v1\\.72\\.0/private/bufpkg/bufmodule/digest\\.go$ ' +
         'https://raw.githubusercontent.com/bufbuild/buf/v1.72.0/private/bufpkg/bufmodule/digest.go',
+      '--remap',
+      '^https://github\\.com/devantler-tech/(business-site|monorepo)/issues/([1-9][0-9]*)$ ' +
+        'https://api.github.com/repos/devantler-tech/$1/issues/$2',
+      '--remap',
+      '^https://github\\.com/devantler-tech/(business-site|monorepo)/pull/([1-9][0-9]*)$ ' +
+        'https://api.github.com/repos/devantler-tech/$1/pulls/$2',
+      '--remap',
+      '^https://github\\.com/justinas/nosurf/security/advisories/(GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})$ ' +
+        'https://api.github.com/repos/justinas/nosurf/security-advisories/$1',
       '--exclude', '^https://www\\.retsinformation\\.dk/',
     ],
   });
@@ -97,6 +106,29 @@ test('package grouping retains selected-file analysis and every HTML rule', () =
     'attr-unsafe-chars': true,
     'head-script-disabled': true,
   });
+});
+
+test('plain GitHub references keep the same record in the API checker', () => {
+  const args = mega.SPELL_LYCHEE_ARGUMENTS;
+  const remaps = args.flatMap((flag, index) => {
+    if (flag !== '--remap') return [];
+    const [pattern, target] = args[index + 1].split(' ');
+    return [{ pattern: new RegExp(pattern), target }];
+  });
+  for (const [url, expected] of [
+    ['https://github.com/devantler-tech/business-site/issues/659', 'https://api.github.com/repos/devantler-tech/business-site/issues/659'],
+    ['https://github.com/devantler-tech/monorepo/issues/3981', 'https://api.github.com/repos/devantler-tech/monorepo/issues/3981'],
+    ['https://github.com/devantler-tech/business-site/pull/621', 'https://api.github.com/repos/devantler-tech/business-site/pulls/621'],
+    ['https://github.com/justinas/nosurf/security/advisories/GHSA-w9hf-35q4-vcjw',
+      'https://api.github.com/repos/justinas/nosurf/security-advisories/GHSA-w9hf-35q4-vcjw'],
+    ['https://github.com/devantler-tech/business-site/issues/659#issuecomment-1'],
+    ['https://github.com/devantler-tech/business-site/pull/621?diff=split'],
+    ['https://github.com/example/business-site/issues/659'],
+    ['https://github.com/devantler-tech/business-site/issues/0'],
+  ]) {
+    const remap = remaps.find(({ pattern }) => pattern.test(url));
+    assert.equal(remap ? url.replace(remap.pattern, remap.target) : url, expected ?? url);
+  }
 });
 
 function lint(files) {
