@@ -260,9 +260,11 @@ Appointment sharing and prepayment remain held pending the booking workflow.
 
 v34 adds client-bound appointment reservation IDs and append-only slot revisions.
 Each revision records its interval and hold expiry. The runtime can read and
-append both records. The retention job deletes a former client's reservation
-and its revisions together. The booking service still owns slot availability,
-the selected revision, and confirmation authority.
+append both records. A paid appointment order references the selected revision.
+The original confirmation uses producer format 3 for this order type. The
+retention job deletes the order and its fulfillment before deleting the former
+client's reservation and revisions. The booking service checks availability,
+current funding and sender acceptance before recording the appointment consumer.
 
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event

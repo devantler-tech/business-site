@@ -95,8 +95,10 @@ describes authorization and the app-specific-password alternative. An agent must
 events or request credentials in chat. Real connection, revocation and calendar effects are held
 acceptance gates. No calendar credential is created or rotated by this implementation.
 
-Paid confirmation must consume the shared exact-quote acceptance, current verified full funding
-and durable confirmation sender-acceptance evidence. Prepared mail, sender acceptance and actual
-inbox receipt remain distinct. This work neither implements another sender/funding policy nor
-advances the software FIFO queue. Unknown business settings, private calendar authorization,
-real payment evidence and deployed user-path proof remain gates on the parent and public activation.
+The internal paid appointment order binds the original client, accepted fixed quote and exact held
+revision. Its English or Danish agreement email includes the requested interval and the quoted
+appointment terms. Confirmation requires the current acceptance, full settled funding, sender
+acceptance of that agreement and a fresh calendar check. A committed appointment still counts
+toward capacity after the provisional hold expires. A refund or dispute blocks another confirmation
+attempt. The paid appointment flag defaults off. The customer journey, provider reconciliation and
+recovery for an expired hold with a payment remain part of the activation work.

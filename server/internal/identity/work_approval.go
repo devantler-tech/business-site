@@ -208,7 +208,10 @@ func (s *Foundation) persistWorkApprovalChecked(ctx context.Context, p Principal
 		return workApprovalReceipt{}, creditWriteError(err)
 	}
 	if evidence.Proposal.ContentFormat == 2 {
-		if err := bindSoftwareFulfillment(ctx, tx, evidence); err != nil {
+		if err := bindServiceFulfillment(ctx, tx, serviceFulfillment{
+			request: evidence.Request, client: evidence.Client, order: evidence.Order.ID, acceptance: evidence.Acceptance,
+			quoteHash: evidence.Hash, quoteVersion: evidence.Proposal.Version, kind: proposalServiceSoftware, consumer: evidence.Order.ID,
+		}); err != nil {
 			return workApprovalReceipt{}, err
 		}
 	}

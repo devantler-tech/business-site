@@ -2,6 +2,7 @@ package identity
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 
@@ -70,10 +71,32 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 // runtime grants or a production rollback. Remove new dependent tables before v13.
 func rewindAppointmentReservationsFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_appointment_introduction_cancellations,portal_appointment_introductions,portal_appointment_revisions,portal_appointment_reservations;
+	if _, err := pool.Exec(t.Context(), `DROP TRIGGER portal_paid_appointment_consumer ON portal_service_consumers;
+ DROP FUNCTION portal_guard_paid_appointment_consumer();
+ ALTER TABLE portal_orders DROP COLUMN appointment_reservation_id,DROP COLUMN appointment_revision;
+ ALTER TABLE portal_mail_outbox
+  DROP CONSTRAINT portal_mail_outbox_producer_format_check,
+  DROP CONSTRAINT portal_mail_complete_producer,
+  ADD CONSTRAINT portal_mail_outbox_producer_format_check CHECK(producer_format IN (1,2)),
+  ADD CONSTRAINT portal_mail_complete_producer CHECK(
+    num_nonnulls(producer_format,acceptance_id,proposal_version,proposal_sha256,terms_sha256,body_sha256)=0 OR
+    (num_nonnulls(producer_format,acceptance_id,proposal_version,proposal_sha256,terms_sha256,body_sha256)=6
+      AND producer_format IN (1,2) AND kind='order-confirmation'));
+ DROP TABLE portal_appointment_introduction_cancellations,portal_appointment_introductions,portal_appointment_revisions,portal_appointment_reservations;
  DROP FUNCTION portal_guard_appointment_introduction_cancellation(),portal_guard_appointment_introduction(),portal_guard_appointment_revision();
  DELETE FROM portal_schema_version WHERE version=34`); err != nil {
 		t.Fatal("historical fixture could not reconstruct the pre-reservation schema", err)
+	}
+	for _, guard := range []string{"visibility", "order", "confirmation"} {
+		name := "public.portal_guard_service_" + guard
+		_, remainder, found := strings.Cut(serviceContractsSchema, "CREATE FUNCTION "+name)
+		definition, _, terminated := strings.Cut(remainder, "\n$$;")
+		if !found || !terminated {
+			t.Fatalf("missing service contract guard %s", name)
+		}
+		if _, err := pool.Exec(t.Context(), "CREATE OR REPLACE FUNCTION "+name+definition+"\n$$;"); err != nil {
+			t.Fatalf("restore service contract guard %s: %v", name, err)
+		}
 	}
 }
 

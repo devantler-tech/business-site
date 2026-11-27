@@ -22,6 +22,7 @@ type appointmentHold struct {
 	Quote                 appointmentQuoteRef
 	IntroductionConfirmed bool
 	IntroductionCancelled bool
+	PaidConfirmed         bool
 	cancellableUntil      *time.Time
 	recordedAt            time.Time
 }
@@ -58,7 +59,7 @@ func (holds appointmentHoldPolicy) append(ctx context.Context, tx pgx.Tx, reserv
 	if err != nil {
 		return appointmentHold{}, err
 	}
-	if prior.IntroductionConfirmed || (prior.Revision > 0 && prior.Quote != quote) {
+	if prior.IntroductionConfirmed || prior.PaidConfirmed || (prior.Revision > 0 && prior.Quote != quote) {
 		return appointmentHold{}, errProposalConflict
 	}
 	if prior.Revision == expected+1 && prior.HeldUntil.After(now) && prior.Slot.Start.Equal(slot.Start) && prior.Slot.End.Equal(slot.End) &&
@@ -175,7 +176,12 @@ func readAppointmentCommitments(ctx context.Context, tx pgx.Tx, reservation stri
      AND NOT EXISTS(SELECT 1 FROM portal_appointment_introductions i WHERE i.reservation_id=r.reservation_id))
    OR EXISTS(SELECT 1 FROM portal_appointment_introductions i
      WHERE i.reservation_id=r.reservation_id AND i.revision=r.revision
-       AND NOT EXISTS(SELECT 1 FROM portal_appointment_introduction_cancellations c WHERE c.reservation_id=i.reservation_id)))
+       AND NOT EXISTS(SELECT 1 FROM portal_appointment_introduction_cancellations c WHERE c.reservation_id=i.reservation_id))
+   OR EXISTS(SELECT 1 FROM portal_orders o
+     JOIN portal_service_fulfillments f ON f.order_id=o.id
+     JOIN portal_service_consumers c ON c.fulfillment_id=f.id AND c.service_kind='appointment'
+     WHERE o.appointment_reservation_id=r.reservation_id AND o.appointment_revision=r.revision
+       AND c.aggregate_id=r.reservation_id::text))
  LIMIT $5`, reservation, now, coverage.Start, coverage.End, booking.MaxIntervals+1)
 	if err != nil {
 		return nil, errTriageStorage
@@ -197,7 +203,11 @@ func readLatestAppointmentHold(ctx context.Context, tx pgx.Tx, reservation, clie
 	var hold appointmentHold
 	err := tx.QueryRow(ctx, `SELECT v.revision,v.starts_at,v.ends_at,v.held_until,v.recorded_at,
  COALESCE(r.quote_request_id,''),COALESCE(r.quote_version,0),COALESCE(r.quote_sha256::text,''),
- i.reservation_id IS NOT NULL,c.reservation_id IS NOT NULL,i.cancellable_until
+ i.reservation_id IS NOT NULL,c.reservation_id IS NOT NULL,i.cancellable_until,
+ EXISTS(SELECT 1 FROM portal_orders o
+   JOIN portal_service_fulfillments f ON f.order_id=o.id
+   JOIN portal_service_consumers c ON c.fulfillment_id=f.id AND c.service_kind='appointment'
+   WHERE o.appointment_reservation_id=r.id AND o.appointment_revision=v.revision AND c.aggregate_id=r.id::text)
  FROM portal_appointment_revisions v JOIN portal_appointment_reservations r
  ON r.id=v.reservation_id AND r.client_id=v.client_id
  LEFT JOIN portal_appointment_introductions i ON i.reservation_id=r.id AND i.revision=v.revision
@@ -206,7 +216,7 @@ func readLatestAppointmentHold(ctx context.Context, tx pgx.Tx, reservation, clie
  ORDER BY v.revision DESC LIMIT 1`, reservation, client).
 		Scan(&hold.Revision, &hold.Slot.Start, &hold.Slot.End, &hold.HeldUntil, &hold.recordedAt,
 			&hold.Quote.Request, &hold.Quote.Version, &hold.Quote.Hash,
-			&hold.IntroductionConfirmed, &hold.IntroductionCancelled, &hold.cancellableUntil)
+			&hold.IntroductionConfirmed, &hold.IntroductionCancelled, &hold.cancellableUntil, &hold.PaidConfirmed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return appointmentHold{}, nil
 	}

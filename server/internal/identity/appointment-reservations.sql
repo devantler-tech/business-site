@@ -57,6 +57,10 @@ LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
 BEGIN
   IF EXISTS (
     SELECT 1 FROM public.portal_appointment_introductions i WHERE i.reservation_id=NEW.reservation_id
+  ) OR EXISTS (
+    SELECT 1 FROM public.portal_orders o JOIN public.portal_service_fulfillments f ON f.order_id=o.id
+    JOIN public.portal_service_consumers c ON c.fulfillment_id=f.id AND c.service_kind='appointment'
+    WHERE o.appointment_reservation_id=NEW.reservation_id AND c.aggregate_id=NEW.reservation_id::text
   ) THEN
     RAISE EXCEPTION 'confirmed appointment revision refused' USING ERRCODE='23514';
   END IF;
@@ -72,6 +76,29 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+CREATE FUNCTION public.portal_guard_paid_appointment_consumer() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+BEGIN
+  IF NEW.service_kind='appointment' AND NOT EXISTS(
+    SELECT 1 FROM public.portal_service_fulfillments f
+    JOIN public.portal_orders o ON o.id=f.order_id
+    JOIN public.portal_appointment_revisions v ON v.reservation_id=o.appointment_reservation_id
+      AND v.revision=o.appointment_revision AND v.client_id=o.client_id
+    JOIN public.portal_mail_outbox m ON m.order_id=o.id AND m.kind='order-confirmation' AND m.producer_format=3
+    JOIN public.portal_mail_deliveries d ON d.outbox_id=m.id
+    WHERE f.id=NEW.fulfillment_id AND NEW.aggregate_id=v.reservation_id::text
+      AND v.held_until>clock_timestamp()
+      AND NOT EXISTS(SELECT 1 FROM public.portal_appointment_revisions later
+        WHERE later.reservation_id=v.reservation_id AND later.revision>v.revision)) THEN
+    RAISE EXCEPTION 'paid appointment consumer refused' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.portal_guard_paid_appointment_consumer() FROM PUBLIC;
+CREATE TRIGGER portal_paid_appointment_consumer BEFORE INSERT ON public.portal_service_consumers
+  FOR EACH ROW EXECUTE FUNCTION public.portal_guard_paid_appointment_consumer();
 REVOKE ALL ON FUNCTION public.portal_guard_appointment_revision() FROM PUBLIC;
 CREATE TRIGGER portal_appointment_revision BEFORE INSERT ON public.portal_appointment_revisions
   FOR EACH ROW EXECUTE FUNCTION public.portal_guard_appointment_revision();
@@ -119,3 +146,146 @@ $$;
 REVOKE ALL ON FUNCTION public.portal_guard_appointment_introduction_cancellation() FROM PUBLIC;
 CREATE TRIGGER portal_appointment_introduction_cancellation BEFORE INSERT ON public.portal_appointment_introduction_cancellations
   FOR EACH ROW EXECUTE FUNCTION public.portal_guard_appointment_introduction_cancellation();
+
+-- Appointment offers use the same current human issuance evidence as software.
+-- An appointment is a fixed, positive one-time quote.
+CREATE OR REPLACE FUNCTION public.portal_guard_service_visibility() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+DECLARE proposal public.portal_proposals%ROWTYPE;
+BEGIN
+  IF TG_RELID<>'public.portal_proposal_visibility'::regclass OR TG_OP<>'INSERT' THEN
+    RAISE EXCEPTION 'invalid service visibility invocation';
+  END IF;
+  SELECT * INTO proposal FROM public.portal_proposals
+    WHERE request_id=NEW.request_id AND client_id=NEW.client_id AND version=NEW.proposal_version;
+  IF NOT FOUND THEN RAISE EXCEPTION 'service proposal binding refused' USING ERRCODE='23514'; END IF;
+  IF proposal.content_format=2 AND NEW.action='share' THEN
+    IF proposal.service_kind='appointment' AND (proposal.one_time_minor<=0 OR proposal.monthly_minor<>0) THEN
+      RAISE EXCEPTION 'appointment price refused' USING ERRCODE='23514';
+    END IF;
+    IF NEW.operator_client IS NULL OR NEW.operator_incarnation IS NULL
+      OR NEW.content_hash IS DISTINCT FROM proposal.content_sha256 THEN
+      RAISE EXCEPTION 'service issuer provenance refused' USING ERRCODE='23514';
+    END IF;
+    PERFORM 1 FROM public.portal_memberships m
+      WHERE m.issuer=NEW.operator_issuer AND m.subject=NEW.operator_subject FOR SHARE OF m;
+    IF NOT EXISTS(SELECT 1 FROM public.portal_memberships m
+      JOIN public.portal_membership_transitions h ON h.incarnation=m.incarnation
+      WHERE m.issuer=NEW.operator_issuer AND m.subject=NEW.operator_subject
+      AND m.client_id=NEW.operator_client AND m.role='operator' AND NOT m.revoked
+      AND m.incarnation=NEW.operator_incarnation AND h.issuer=m.issuer AND h.subject=m.subject
+      AND h.client_id=m.client_id AND h.role=m.role AND NOT h.revoked
+      AND h.kind IN ('baseline','insert','update')) THEN
+      RAISE EXCEPTION 'service issuer membership refused' USING ERRCODE='23514';
+    END IF;
+  ELSIF num_nonnulls(NEW.operator_client,NEW.operator_incarnation,NEW.content_hash)<>0 THEN
+    RAISE EXCEPTION 'legacy or withdrawal provenance refused' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+ALTER TABLE public.portal_orders
+  ADD COLUMN appointment_reservation_id public.portal_consent_key,
+  ADD COLUMN appointment_revision integer,
+  ADD CONSTRAINT portal_order_appointment_slot FOREIGN KEY (appointment_reservation_id,appointment_revision)
+    REFERENCES public.portal_appointment_revisions(reservation_id,revision) MATCH FULL,
+  ADD CONSTRAINT portal_order_appointment_reservation UNIQUE(appointment_reservation_id);
+
+CREATE OR REPLACE FUNCTION public.portal_guard_service_order() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+DECLARE
+  proposal public.portal_proposals%ROWTYPE;
+  agreement public.portal_proposal_acceptances%ROWTYPE;
+BEGIN
+  SELECT * INTO agreement FROM public.portal_proposal_acceptances
+    WHERE id=NEW.acceptance_id AND request_id=NEW.request_id AND client_id=NEW.client_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'service order acceptance refused' USING ERRCODE='23514'; END IF;
+  SELECT * INTO proposal FROM public.portal_proposals WHERE request_id=NEW.request_id
+    AND client_id=NEW.client_id AND version=agreement.proposal_version;
+  IF NOT FOUND THEN RAISE EXCEPTION 'service order parent refused' USING ERRCODE='23514'; END IF;
+  IF proposal.content_format=2 THEN
+    IF NEW.service_content_format IS DISTINCT FROM 2 OR agreement.client_incarnation IS NULL
+      OR agreement.content_hash IS DISTINCT FROM proposal.content_sha256 THEN
+      RAISE EXCEPTION 'old or mismatched service order writer refused' USING ERRCODE='23514';
+    END IF;
+  ELSIF NEW.service_content_format IS NOT NULL THEN
+    RAISE EXCEPTION 'legacy service order relabel refused' USING ERRCODE='23514';
+  END IF;
+  IF proposal.service_kind='appointment' THEN
+    IF NEW.one_time_minor<=0 OR NEW.one_time_minor<>proposal.one_time_minor OR NEW.monthly_minor<>0
+      OR proposal.monthly_minor<>0 OR NOT EXISTS(
+        SELECT 1 FROM public.portal_appointment_reservations r
+        JOIN public.portal_appointment_revisions v ON v.reservation_id=r.id AND v.client_id=r.client_id
+        WHERE r.id=NEW.appointment_reservation_id AND r.client_id=NEW.client_id
+          AND r.quote_request_id=NEW.request_id AND r.quote_version=proposal.version
+          AND r.quote_sha256=proposal.content_sha256 AND v.revision=NEW.appointment_revision
+          AND v.held_until>clock_timestamp()
+          AND NOT EXISTS(SELECT 1 FROM public.portal_appointment_revisions later
+            WHERE later.reservation_id=r.id AND later.revision>v.revision)) THEN
+      RAISE EXCEPTION 'appointment order slot refused' USING ERRCODE='23514';
+    END IF;
+  ELSIF num_nonnulls(NEW.appointment_reservation_id,NEW.appointment_revision)<>0 THEN
+    RAISE EXCEPTION 'non-appointment order slot refused' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+ALTER TABLE public.portal_mail_outbox
+  DROP CONSTRAINT portal_mail_outbox_producer_format_check,
+  DROP CONSTRAINT portal_mail_complete_producer,
+  ADD CONSTRAINT portal_mail_outbox_producer_format_check CHECK(producer_format IN (1,2,3)),
+  ADD CONSTRAINT portal_mail_complete_producer CHECK(
+    num_nonnulls(producer_format,acceptance_id,proposal_version,proposal_sha256,terms_sha256,body_sha256)=0
+    OR (num_nonnulls(producer_format,acceptance_id,proposal_version,proposal_sha256,terms_sha256,body_sha256)=6
+      AND producer_format IN (1,2,3) AND kind='order-confirmation'));
+
+CREATE OR REPLACE FUNCTION public.portal_guard_service_confirmation() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+DECLARE
+  proposal public.portal_proposals%ROWTYPE;
+  agreement public.portal_proposal_acceptances%ROWTYPE;
+  placed public.portal_orders%ROWTYPE;
+  issuance public.portal_proposal_visibility%ROWTYPE;
+  expected_producer integer;
+BEGIN
+  IF NEW.kind<>'order-confirmation' THEN RETURN NEW; END IF;
+  SELECT * INTO placed FROM public.portal_orders WHERE id=NEW.order_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'confirmation order binding refused' USING ERRCODE='23514'; END IF;
+  SELECT * INTO agreement FROM public.portal_proposal_acceptances WHERE id=placed.acceptance_id
+    AND request_id=placed.request_id AND client_id=placed.client_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'confirmation acceptance binding refused' USING ERRCODE='23514'; END IF;
+  SELECT * INTO proposal FROM public.portal_proposals WHERE request_id=placed.request_id
+    AND client_id=placed.client_id AND version=agreement.proposal_version;
+  IF NOT FOUND THEN RAISE EXCEPTION 'confirmation parent binding refused' USING ERRCODE='23514'; END IF;
+  IF proposal.content_format=1 THEN
+    IF NEW.producer_format IS NOT NULL AND NEW.producer_format<>1 THEN
+      RAISE EXCEPTION 'legacy producer relabel refused' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+  END IF;
+  expected_producer := 2;
+  IF proposal.service_kind='appointment' THEN
+    IF placed.appointment_reservation_id IS NULL OR placed.appointment_revision IS NULL THEN
+      RAISE EXCEPTION 'confirmation appointment slot refused' USING ERRCODE='23514';
+    END IF;
+    expected_producer := 3;
+  END IF;
+  SELECT * INTO issuance FROM public.portal_proposal_visibility WHERE request_id=placed.request_id
+    AND client_id=placed.client_id AND event=agreement.visibility_event
+    AND proposal_version=agreement.proposal_version AND action='share';
+  IF NOT FOUND THEN RAISE EXCEPTION 'confirmation issuance binding refused' USING ERRCODE='23514'; END IF;
+  IF NEW.producer_format IS DISTINCT FROM expected_producer OR placed.service_content_format IS DISTINCT FROM 2
+    OR NEW.acceptance_id IS DISTINCT FROM agreement.id
+    OR NEW.proposal_version IS DISTINCT FROM proposal.version
+    OR NEW.proposal_sha256 IS DISTINCT FROM proposal.content_sha256
+    OR agreement.content_hash IS DISTINCT FROM proposal.content_sha256
+    OR issuance.content_hash IS DISTINCT FROM proposal.content_sha256
+    OR agreement.client_incarnation IS NULL OR issuance.operator_client IS NULL
+    OR issuance.operator_incarnation IS NULL THEN
+    RAISE EXCEPTION 'complete typed confirmation evidence refused' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END;
+$$;

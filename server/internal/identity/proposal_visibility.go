@@ -28,6 +28,11 @@ func (s *Foundation) sharingReady(ctx context.Context) bool {
 	return err == nil && enabled
 }
 
+func (s *Foundation) paidAppointmentsReady(ctx context.Context) bool {
+	enabled, err := s.flags.BooleanValue(ctx, "portal-paid-appointments", false, openfeature.NewEvaluationContext("", nil))
+	return err == nil && enabled
+}
+
 func (s *Foundation) sharingOperator(ctx context.Context, p Principal) error {
 	if !s.sharingReady(ctx) {
 		return ErrDenied
@@ -129,6 +134,7 @@ func (s *Foundation) persistVisibilityChecked(ctx context.Context, p Principal, 
 	}
 	var saved visibilityDecision
 	var issuer, subject string
+	ready := s.sharingReady
 	err = tx.QueryRow(ctx, `SELECT expected_event,expected_proposal,proposal_version,action,operator_issuer,operator_subject FROM portal_proposal_visibility WHERE request_id=$1 AND submission_key=$2`, id, d.Key).Scan(&saved.ExpectedEvent, &saved.ExpectedProposal, &saved.Proposal, &saved.Action, &issuer, &subject)
 	if err == nil {
 		if saved.ExpectedEvent != d.ExpectedEvent || saved.ExpectedProposal != d.ExpectedProposal || saved.Proposal != d.Proposal || saved.Action != d.Action || issuer != p.issuer || subject != p.subject {
@@ -155,11 +161,16 @@ func (s *Foundation) persistVisibilityChecked(ctx context.Context, p Principal, 
 		}
 		var operatorClient, operatorIncarnation, contentHash any
 		if d.Action == "share" && proposal.ContentFormat == 2 {
-			// The complete confirmed/paid appointment commitment store is not
-			// available yet. A policy or calendar snapshot alone cannot issue an
-			// appointment offer; keep this path closed until that real layer lands.
 			if proposal.Service.Kind == proposalServiceAppointment {
-				return ErrDenied
+				ready = func(ctx context.Context) bool {
+					return s.sharingReady(ctx) && s.paidAppointmentsReady(ctx)
+				}
+				if !s.paidAppointmentsReady(ctx) {
+					return ErrDenied
+				}
+				if proposal.OneTimeMinor <= 0 || proposal.MonthlyMinor != 0 {
+					return errProposalConflict
+				}
 			}
 			hash, err := proposalContentHash(proposal)
 			if err != nil || hash != proposal.ContentSHA256 {
@@ -171,7 +182,7 @@ func (s *Foundation) persistVisibilityChecked(ctx context.Context, p Principal, 
 			return errTriageStorage
 		}
 	}
-	return s.finishProposalResponse(ctx, p, tx, s.sharingReady, time.Time{}, viewer.Client, check)
+	return s.finishProposalResponse(ctx, p, tx, ready, time.Time{}, viewer.Client, check)
 }
 
 // readSharedProposal selects only the latest explicit decision for this client's

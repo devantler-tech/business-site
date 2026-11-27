@@ -106,15 +106,20 @@ func readWorkFunding(ctx context.Context, tx pgx.Tx, id, client, acceptance stri
 
 type fundingOrder struct {
 	workOrder
-	placed     time.Time
-	earlyStart *time.Time
+	placed      time.Time
+	earlyStart  *time.Time
+	appointment appointmentOrderSelection
 }
 
 // readFundingOrder binds the order to the exact acceptance under the caller's
 // request lock. Its timestamps are facts for the caller's service policy.
 func readFundingOrder(ctx context.Context, tx pgx.Tx, id, client, acceptance string) (fundingOrder, error) {
 	var o fundingOrder
-	err := tx.QueryRow(ctx, `SELECT id,collection,one_time_minor,monthly_minor,monthly_from,placed_at,early_start_at FROM portal_orders WHERE request_id=$1 AND client_id=$2 AND acceptance_id=$3`, id, client, acceptance).Scan(&o.ID, &o.Collection, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &o.placed, &o.earlyStart)
+	err := tx.QueryRow(ctx, `SELECT id,collection,one_time_minor,monthly_minor,monthly_from,placed_at,early_start_at,
+ coalesce(appointment_reservation_id::text,''),coalesce(appointment_revision,0)
+ FROM portal_orders WHERE request_id=$1 AND client_id=$2 AND acceptance_id=$3`, id, client, acceptance).
+		Scan(&o.ID, &o.Collection, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &o.placed, &o.earlyStart,
+			&o.appointment.Reservation, &o.appointment.Revision)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return fundingOrder{}, errProposalConflict
 	}

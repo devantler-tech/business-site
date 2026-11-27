@@ -53,6 +53,7 @@ type orderMail struct {
 	Portal, Terms                                                        string
 	Acceptance, ProposalHash, TermsText, TermsHash                       string
 	ProposalVersion, ProducerFormat                                      int
+	AppointmentStart, AppointmentEnd, AppointmentTerms                   string
 }
 
 var mailTemplates = template.Must(template.New("mail").Parse(`
@@ -65,6 +66,10 @@ Tilbudsversion: {{.ProposalVersion}}
 Tilbuddets SHA256: {{.ProposalHash}}
 Betingelsernes SHA256: {{.TermsHash}}
 {{if eq .ProducerFormat 2}}Ydelse: Softwareudvikling
+{{else if eq .ProducerFormat 3}}Ydelse: Rådgivning
+Ønsket start: {{.AppointmentStart}}
+Ønsket slut: {{.AppointmentEnd}}
+Vilkår for aftalen: {{.AppointmentTerms}}
 {{end}}
 Omfang:
 {{.Scope}}
@@ -96,6 +101,10 @@ Proposal version: {{.ProposalVersion}}
 Proposal SHA256: {{.ProposalHash}}
 Agreement terms SHA256: {{.TermsHash}}
 {{if eq .ProducerFormat 2}}Service: Software development
+{{else if eq .ProducerFormat 3}}Service: Consultancy
+Requested start: {{.AppointmentStart}}
+Requested end: {{.AppointmentEnd}}
+Appointment terms: {{.AppointmentTerms}}
 {{end}}
 Scope:
 {{.Scope}}
@@ -165,7 +174,10 @@ func (s *Foundation) queueOrderMail(ctx context.Context, tx pgx.Tx, client, kind
 	var format, acceptance, version, proposalHash, termsHash, bodyHash any
 	if kind == "order-confirmation" {
 		termsDigest := sha256.Sum256([]byte(data.TermsText))
-		if (data.ProducerFormat != 1 && data.ProducerFormat != 2) || data.TermsHash != hex.EncodeToString(termsDigest[:]) {
+		if data.ProducerFormat < 1 || data.ProducerFormat > 3 || data.TermsHash != hex.EncodeToString(termsDigest[:]) {
+			return errOrderConfirmation
+		}
+		if data.ProducerFormat == 3 && (data.AppointmentStart == "" || data.AppointmentEnd == "" || data.AppointmentTerms == "") {
 			return errOrderConfirmation
 		}
 		digest := sha256.Sum256([]byte(body.String()))
