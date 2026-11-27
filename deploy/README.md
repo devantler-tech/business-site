@@ -369,9 +369,9 @@ verifier and independent paired-artifact readback remain mandatory under #276.
 
 ## Source-owned runtime release
 
-The release and runtime-publisher callers remain **off** unless the repository variable
-`RUNTIME_PUBLICATION_ENABLED` is exactly `true`. They do not select a platform
-tenant, move the public hostname, enable portal identity or accept customer orders.
+Release initiation requires a manual dispatch from `main` that confirms the full
+signed source commit. The publisher accepts stable releases created and published
+by the configured GitHub release App.
 
 `release-runtime.yaml` admits a complete successful original main-push CI attempt whose source
 equals its frozen caller commit. It independently reads current API metadata, downloads only the
@@ -388,16 +388,19 @@ After the source has merged and its main CI has succeeded, the explicit nonpubli
 gh workflow run release-runtime.yaml --ref main -f mode=dry-run
 ```
 
-That path is allowed while publication is off. It uses the real workflow-context App credentials
-and release decision, but creates no tag, release or registry publication. An offline fixture or
-repository-secret inventory is not evidence that effective inherited credentials work. Keep
-publication off until the current-source preflight and review have succeeded.
+The dry run exercises the effective App credentials and release decision without
+creating a tag, release or registry publication. Require it to pass for the
+reviewed source before dispatching a release.
 
-An explicit enabled `mode=release` dispatch on main can create a genuine semantic-version release
-through the accepted shared release tool. Release initiation is manual: no privileged completion
-trigger or release dispatch is added to source CI. Both admission jobs disable Go-cache reuse.
-One `release: published`
-caller then rebinds the actual stable tag to its source and current original CI receipt. Its
+Pass the full verified commit as `expected_source` to release the same source:
+
+```sh
+gh workflow run release-runtime.yaml --ref main -f mode=release -f expected_source="$source"
+```
+
+If `main` advances before GitHub binds the dispatch, repeat the preflight for the new
+signed commit. Both admission jobs disable Go-cache reuse. The `release: published`
+caller follows the actual stable tag and its original CI receipt as `main` advances. Its
 `publish` job runs the commit-pinned `devantler-tech/.github/actions/publish-app` action in
 `prebuilt-webapp` mode, directly in this workflow, so the image and the manifests are signed as
 `publish-runtime.yaml` on the release tag: this repository signs its own releases

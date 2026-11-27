@@ -4,16 +4,20 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Nonpublishing credential preflight, or an explicitly enabled release
+        description: Check credentials and provenance, or release the confirmed commit
         type: choice
         options: [dry-run, release]
         default: dry-run
+      expected_source:
+        description: Exact signed main commit for release mode
+        type: string
+        required: false
 
 permissions: {}
 
 jobs:
   admit:
-    if: ${{ github.repository == 'devantler-tech/business-site' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.mode == 'dry-run' || (inputs.mode == 'release' && vars.RUNTIME_PUBLICATION_ENABLED == 'true')) }}
+    if: ${{ github.repository == 'devantler-tech/business-site' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.mode == 'dry-run' || inputs.mode == 'release') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -44,7 +48,6 @@ jobs:
         id: admit
         env:
           GH_TOKEN: ${{ github.token }}
-          RUNTIME_PUBLICATION_ENABLED: ${{ vars.RUNTIME_PUBLICATION_ENABLED }}
           RELEASE_MODE: ${{ inputs.mode }}
         run: bash scripts/admit-runtime-release.sh
       - name: Setup Cosign

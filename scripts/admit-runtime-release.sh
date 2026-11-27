@@ -3,6 +3,8 @@
 set -euo pipefail
 export LC_ALL=C
 readonly repo=devantler-tech/business-site
+readonly release_publisher='botantler-1[bot]'
+readonly release_publisher_id=185060876
 # Refuse admission without writing reusable-job outputs or disclosing untrusted payloads.
 fail() {
   printf 'runtime release: refused %s\n' "$1" >&2
@@ -15,9 +17,6 @@ readonly source=$GITHUB_SHA
 event=${GITHUB_EVENT_NAME:-}
 mode=${RELEASE_MODE:-}
 [[ "$mode" == release || "$mode" == dry-run ]] || fail 'release mode'
-if [[ "$event" != workflow_dispatch || "$mode" != dry-run ]]; then
-  [[ "${RUNTIME_PUBLICATION_ENABLED:-}" == true ]] || fail 'publication is off'
-fi
 work="$(mktemp -d "$RUNNER_TEMP/runtime-admission.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 jq -se 'length==1 and (.[0]|type)=="object"' "$GITHUB_EVENT_PATH" >/dev/null || fail 'event document'
@@ -37,20 +36,36 @@ release_id=''
 case "$event" in
 workflow_dispatch)
   [[ "${GITHUB_REF:-}" == refs/heads/main ]] || fail 'manual main context'
+  if [[ "$mode" == release ]]; then
+    jq -e --arg source "$source" '.inputs.mode=="release" and .inputs.expected_source==$source' \
+      "$GITHUB_EVENT_PATH" >/dev/null || fail 'exact release source confirmation'
+  fi
   ;;
 release)
   [[ "$mode" == release ]] || fail 'release mode'
+  [[ "${GITHUB_ACTOR:-}" == "$release_publisher" ]] || fail 'release publisher'
   tag=${GITHUB_REF#refs/tags/}
   [[ "${GITHUB_REF:-}" == refs/tags/* && "$tag" =~ ^v(0|[1-9][0-9]{0,14})\.(0|[1-9][0-9]{0,14})\.(0|[1-9][0-9]{0,14})$ ]] || fail 'stable semantic-version tag'
   version=${tag#v}
-  jq -e --arg tag "$tag" '.action=="published" and .release.tag_name==$tag and .release.draft==false and .release.prerelease==false and (.release.published_at|type)=="string"' "$GITHUB_EVENT_PATH" >/dev/null || fail 'published stable release'
+  jq -e --arg tag "$tag" --arg publisher "$release_publisher" --argjson publisher_id "$release_publisher_id" '
+    .action=="published" and .release.tag_name==$tag and .release.draft==false and
+    .release.prerelease==false and (.release.published_at|type)=="string" and
+    all([.sender,.release.author][]; .id==$publisher_id and .login==$publisher and .type=="Bot")
+  ' "$GITHUB_EVENT_PATH" >/dev/null || fail 'published stable App release'
   release_id="$(jq -er '.release.id|tostring' "$GITHUB_EVENT_PATH")"
   positive_id "$release_id" || fail 'release identity'
   read_json "releases/$release_id" "$work/release-before.json"
-  jq -e --arg tag "$tag" --argjson id "$release_id" '.id==$id and .tag_name==$tag and .draft==false and .prerelease==false and (.published_at|type)=="string"' "$work/release-before.json" >/dev/null || fail 'current release identity'
+  jq -e --arg tag "$tag" --argjson id "$release_id" --arg publisher "$release_publisher" --argjson publisher_id "$release_publisher_id" '
+    .id==$id and .tag_name==$tag and .draft==false and .prerelease==false and (.published_at|type)=="string" and
+    .author.id==$publisher_id and .author.login==$publisher and .author.type=="Bot"
+  ' "$work/release-before.json" >/dev/null || fail 'current release identity'
   ;;
 *) fail 'event is not admitted' ;;
 esac
+
+read_json "commits/$source" "$work/source.json"
+jq -e --arg source "$source" '.sha==$source and .commit.verification.verified==true' \
+  "$work/source.json" >/dev/null || fail 'signed source'
 
 # Resolve the current tag through at most five annotated objects to the exact caller source.
 check_tag() {
@@ -121,7 +136,8 @@ if [[ -n "$tag" ]]; then
   cmp -s "$work/tag-before.json" "$work/tag-after.json" || fail 'tag changed during admission'
   read_json "releases/$release_id" "$work/release-after.json"
   jq -e --slurpfile before "$work/release-before.json" '
-    [.id,.tag_name,.draft,.prerelease,.published_at]==[$before[0].id,$before[0].tag_name,$before[0].draft,$before[0].prerelease,$before[0].published_at]
+    [.id,.tag_name,.draft,.prerelease,.published_at,.author.id,.author.login,.author.type]==
+      ($before[0]|[.id,.tag_name,.draft,.prerelease,.published_at,.author.id,.author.login,.author.type])
   ' "$work/release-after.json" >/dev/null || fail 'release changed during admission'
 fi
 {
