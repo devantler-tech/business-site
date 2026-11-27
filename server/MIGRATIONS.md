@@ -323,6 +323,12 @@ references both the cancellation and the original creation observation. One
 verified absence or conflict is retained per reservation. Retention of either
 source removes the result with it.
 
+v45 preserves the original software lease and allows one release only while
+its window is open. PostgreSQL timestamps that release after acquiring the
+row lock. An unchanged repeat preserves the original release. Existing lease
+records and the retention deletion path are unchanged. The migration adds no
+runtime grant or worker authority.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

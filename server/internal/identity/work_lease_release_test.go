@@ -1,0 +1,134 @@
+package identity
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+func TestWorkLeaseStorageKeepsReleaseAndIdentityImmutable(t *testing.T) {
+	db, fence := activeWorkLeaseForRelease(t)
+	ctx := t.Context()
+	for _, assignment := range []string{
+		"actor_key=repeat('a',64)",
+		"submission_key=repeat('A',26)",
+		"fence=fence+1",
+		"approval_generation=approval_generation+1",
+		"queue_revision=queue_revision+1",
+		"expires_at=expires_at+interval '1 minute'",
+	} {
+		t.Run(assignment, func(t *testing.T) {
+			_, err := db.Exec(t.Context(), `UPDATE portal_work_leases SET `+assignment+` WHERE fence=$1`, fence)
+			requireLeaseDatabaseError(t, err, "55000")
+		})
+	}
+
+	var earliest, releasedAt time.Time
+	if err := db.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&earliest); err != nil {
+		t.Fatal("read the database release clock", err)
+	}
+	err := db.QueryRow(ctx, `UPDATE portal_work_leases SET released_at=acquired_at
+ WHERE fence=$1 RETURNING released_at`, fence).Scan(&releasedAt)
+	if err != nil || releasedAt.Before(earliest) {
+		t.Fatalf("a live release did not use the database clock: %v", err)
+	}
+	_, err = db.Exec(ctx, `UPDATE portal_work_leases SET released_at=NULL WHERE fence=$1`, fence)
+	requireLeaseDatabaseError(t, err, "55000")
+	_, err = db.Exec(ctx, `UPDATE portal_work_leases SET released_at=acquired_at WHERE fence=$1`, fence)
+	requireLeaseDatabaseError(t, err, "55000")
+
+	var replayAt time.Time
+	err = db.QueryRow(ctx, `UPDATE portal_work_leases SET released_at=released_at
+ WHERE fence=$1 RETURNING released_at`, fence).Scan(&replayAt)
+	if err != nil || !replayAt.Equal(releasedAt) {
+		t.Fatalf("the repeated release changed its recorded end: %v", err)
+	}
+	next, err := insertFixtureWorkLease(ctx, db, "next-fictional-worker", secret(), time.Minute)
+	if err != nil || next != fence+1 {
+		t.Fatalf("release did not make the next fence available: next=%d prior=%d: %v", next, fence, err)
+	}
+}
+
+func TestWorkLeaseStorageKeepsTheFirstConcurrentRelease(t *testing.T) {
+	db, fence := activeWorkLeaseForRelease(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
+	defer cancel()
+	first := beginFixtureTransaction(ctx, t, db)
+	second := beginFixtureTransaction(ctx, t, db)
+	var firstRelease time.Time
+	if err := first.QueryRow(ctx, `UPDATE portal_work_leases SET released_at=clock_timestamp()
+ WHERE fence=$1 RETURNING released_at`, fence).Scan(&firstRelease); err != nil {
+		t.Fatal("hold the first release", err)
+	}
+	pid := second.Conn().PgConn().PID()
+	done := make(chan error, 1)
+	go func() {
+		defer close(done)
+		_, err := second.Exec(ctx, `UPDATE portal_work_leases SET released_at=acquired_at WHERE fence=$1`, fence)
+		done <- err
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+	waitForFixtureDatabaseLock(ctx, t, db, `SELECT EXISTS(SELECT 1 FROM pg_locks WHERE pid=$1 AND NOT granted)`, pid)
+	if err := first.Commit(ctx); err != nil {
+		t.Fatal("commit the first release", err)
+	}
+	select {
+	case err := <-done:
+		requireLeaseDatabaseError(t, err, "55000")
+	case <-ctx.Done():
+		t.Fatal("the competing release did not complete")
+	}
+	var recorded time.Time
+	if err := db.QueryRow(ctx, `SELECT released_at FROM portal_work_leases WHERE fence=$1`, fence).Scan(&recorded); err != nil || !recorded.Equal(firstRelease) {
+		t.Fatalf("the waiting update changed the first release: %v", err)
+	}
+}
+
+func TestWorkLeaseStoragePreservesPreUpgradeRelease(t *testing.T) {
+	db, fence := activeWorkLeaseForRelease(t)
+	ctx := t.Context()
+	if _, err := db.Exec(ctx, `DROP TRIGGER portal_guard_work_lease_release ON portal_work_leases;
+ DROP FUNCTION portal_guard_work_lease_release();
+ DELETE FROM portal_schema_version WHERE version=45`); err != nil {
+		t.Fatal("prepare the disposable pre-guard lease schema", err)
+	}
+	var priorRelease time.Time
+	if err := db.QueryRow(ctx, `UPDATE portal_work_leases SET released_at=acquired_at
+ WHERE fence=$1 RETURNING released_at`, fence).Scan(&priorRelease); err != nil {
+		t.Fatal("record release with the old schema", err)
+	}
+	next, err := insertFixtureWorkLease(ctx, db, "fictional-work-successor", secret(), time.Minute)
+	if err != nil {
+		t.Fatal("record the successor before migration", err)
+	}
+	if err := Migrate(ctx, db); err != nil {
+		t.Fatal("upgrade existing lease records", err)
+	}
+	_, err = db.Exec(ctx, `UPDATE portal_work_leases SET released_at=NULL WHERE fence=$1`, fence)
+	requireLeaseDatabaseError(t, err, "55000")
+	var recorded time.Time
+	var successorActive bool
+	err = db.QueryRow(ctx, `SELECT released_at,EXISTS(SELECT 1 FROM portal_work_leases
+ WHERE fence=$2 AND released_at IS NULL) FROM portal_work_leases WHERE fence=$1`, fence, next).
+		Scan(&recorded, &successorActive)
+	if err != nil || !recorded.Equal(priorRelease) || !successorActive {
+		t.Fatalf("the upgrade changed the original release or its successor: %v", err)
+	}
+}
+
+func activeWorkLeaseForRelease(t *testing.T) (*pgxpool.Pool, int64) {
+	t.Helper()
+	b, operator := approvalFixture(t)
+	savedApproval(t, b, operator)
+	db := migrationDB(t)
+	fence, err := insertFixtureWorkLease(t.Context(), db, "fictional-work-owner", secret(), time.Minute)
+	if err != nil {
+		t.Fatal("record a releasable work lease", err)
+	}
+	return db, fence
+}

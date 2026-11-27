@@ -175,6 +175,8 @@ func TestWorkLeaseStorageReassignsAnExpiredWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitForFixtureExpiry(ctx, t, expires)
+	_, err = db.Exec(ctx, `UPDATE portal_work_leases SET released_at=acquired_at WHERE fence=$1`, fence)
+	requireLeaseDatabaseError(t, err, "55000")
 	next, err := insertFixtureWorkLease(ctx, db, "fictional-worker-two", secret(), time.Minute)
 	if err != nil || next != fence+1 {
 		t.Fatalf("expiry blocked the next lease or reused its fence: next=%d previous=%d: %v", next, fence, err)
