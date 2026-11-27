@@ -120,6 +120,49 @@ func TestAppointmentCancellationRefusesSessionDeletedWhileWaiting(t *testing.T) 
 	if _, err = lockAppointmentCalendarTx(ctx, blocker); err != nil {
 		t.Fatal(err)
 	}
+	response := submitAppointmentCancellation(ctx, t, b, form)
+	waitForFixtureDatabaseLock(ctx, t, b.pool, `SELECT EXISTS(SELECT 1 FROM pg_locks
+ WHERE locktype='advisory' AND database=(SELECT oid FROM pg_database WHERE datname=current_database())
+ AND objsubid=1 AND objid=($1::bigint & 4294967295)::oid AND NOT granted)`, appointmentCalendarLock)
+	if _, err = migrator.Exec(ctx, `DELETE FROM portal_sessions`); err != nil {
+		t.Fatal(err)
+	}
+	if err = blocker.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if status := <-response; status != http.StatusForbidden {
+		t.Fatalf("a session deleted before the database lock cleared got status=%d", status)
+	}
+	assertNoIntroductionCancellation(t, b)
+}
+
+func TestAppointmentCancellationRefusesGateClosedWhileWaitingForSession(t *testing.T) {
+	b, form := bookedCancellationFixture(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 6*time.Second)
+	defer cancel()
+	blocker, err := migrationDB(t).Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rollbackProposalWrite(ctx, blocker)
+	if _, err = blocker.Exec(ctx, `SELECT token FROM portal_sessions FOR UPDATE`); err != nil {
+		t.Fatal(err)
+	}
+	response := submitAppointmentCancellation(ctx, t, b, form)
+	waitForFixtureDatabaseLock(ctx, t, b.pool, `SELECT EXISTS(SELECT 1 FROM pg_locks
+ WHERE NOT granted AND locktype='transactionid')`)
+	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-appointment-history", "portal-appointment-cancellation"}, []any{true, true, false})
+	if err = blocker.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if status := <-response; status != http.StatusForbidden {
+		t.Fatalf("a cancellation committed after its gate closed: status=%d", status)
+	}
+	assertNoIntroductionCancellation(t, b)
+}
+
+func submitAppointmentCancellation(ctx context.Context, t *testing.T, b *browserFixture, form url.Values) <-chan int {
+	t.Helper()
 	request, err := http.NewRequestWithContext(ctx, "POST", b.site.URL+introductionCancellationPath, strings.NewReader(form.Encode()))
 	if err != nil {
 		t.Fatal(err)
@@ -137,19 +180,7 @@ func TestAppointmentCancellationRefusesSessionDeletedWhileWaiting(t *testing.T) 
 		_ = res.Body.Close()
 		response <- res.StatusCode
 	}()
-	waitForFixtureDatabaseLock(ctx, t, b.pool, `SELECT EXISTS(SELECT 1 FROM pg_locks
- WHERE locktype='advisory' AND database=(SELECT oid FROM pg_database WHERE datname=current_database())
- AND objsubid=1 AND objid=($1::bigint & 4294967295)::oid AND NOT granted)`, appointmentCalendarLock)
-	if _, err = migrator.Exec(ctx, `DELETE FROM portal_sessions`); err != nil {
-		t.Fatal(err)
-	}
-	if err = blocker.Commit(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if status := <-response; status != http.StatusForbidden {
-		t.Fatalf("a session deleted before the database lock cleared got status=%d", status)
-	}
-	assertNoIntroductionCancellation(t, b)
+	return response
 }
 
 func TestAppointmentCancellationNeverCancelsPaidConsultations(t *testing.T) {

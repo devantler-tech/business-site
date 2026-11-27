@@ -87,9 +87,7 @@ func (b *browser) cancelAppointmentWithAuthority(ctx context.Context, snapshot d
 	s := b.foundation
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		_, err := cancelIntroductionGuarded(ctx, tx, reservation, client, revision, func() error {
-			// The reservation lock can wait. Decide policy and durable authority
-			// again before writing under the same transaction.
-			if !s.appointmentCancellationReady(ctx) || p.membershipIncarnation == "" {
+			if p.membershipIncarnation == "" {
 				return ErrDenied
 			}
 			if err := s.checkPreviewWrite(ctx, tx, p, client); err != nil {
@@ -100,8 +98,12 @@ func (b *browser) cancelAppointmentWithAuthority(ctx context.Context, snapshot d
 			if err != nil {
 				return err
 			}
-			if !matches[0] || (s.previewAuthority == nil && !lockBrowserSession(ctx, tx, snapshot)) ||
-				!b.durableSnapshotAllowed(ctx, snapshot, client, "client", tx) {
+			if !matches[0] || (s.previewAuthority == nil && !lockBrowserSession(ctx, tx, snapshot)) {
+				return ErrDenied
+			}
+			// The reservation and authority locks can wait. Recheck all gates
+			// before the final durable read and the cancellation write.
+			if !s.appointmentCancellationReady(ctx) || !b.durableSnapshotAllowed(ctx, snapshot, client, "client", tx) {
 				return ErrDenied
 			}
 			return nil
