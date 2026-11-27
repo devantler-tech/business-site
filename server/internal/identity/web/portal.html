@@ -91,7 +91,12 @@
     <button class="operator-secondary" type="submit">{{if eq .Lang `da`}}Tilbage til din operatørportal{{else}}Return to operator workspace{{end}}</button>
   </form>
 </div>
-{{end}}{{end}}
+{{end}}{{template "client-task-navigation" .}}{{end}}{{define "client-task-navigation"}}{{if .ClientTasks.Area}}<nav class="client-task-navigation" aria-label="{{if eq .Lang `da`}}Arbejdsområde{{else}}Workspace{{end}}">
+  <a class="client-task-link" href="{{root}}/?lang={{.Lang}}">{{if eq .Lang `da`}}Oversigt{{else}}Overview{{end}}</a>
+  {{if .ClientTasks.Requests}}<a class="client-task-link" href="{{root}}/requests?lang={{.Lang}}" aria-current="{{if eq .ClientTasks.Area `requests`}}{{.ClientTasks.Current}}{{else}}false{{end}}">{{if eq .Lang `da`}}Forespørgsler{{else}}Requests{{end}}</a>{{end}}
+  {{if .ClientTasks.Appointments}}<a class="client-task-link" href="{{root}}/appointments?lang={{.Lang}}" aria-current="{{if eq .ClientTasks.Area `appointments`}}page{{else}}false{{end}}">{{if eq .Lang `da`}}Aftaler{{else}}Appointments{{end}}</a>{{end}}
+  <a class="client-task-link" href="{{root}}/contact?lang={{.Lang}}" aria-current="{{if eq .ClientTasks.Area `contact`}}page{{else}}false{{end}}">{{if eq .Lang `da`}}Kontaktoplysninger{{else}}Contact details{{end}}</a>
+</nav>{{end}}{{end}}
 
 {{define "invoice-tax"}}{{if .Recorded}}<dl class="request-receipt"><dt>{{if eq .Lang `da`}}Nettobeløb{{else}}Net amount{{end}}</dt><dd>{{.Net}} DKK</dd><dt>{{if eq .Lang `da`}}Moms på fakturaen{{else}}VAT on invoice{{end}}</dt><dd>{{.VAT}} DKK</dd></dl>{{else}}<p>{{if eq .Lang `da`}}Momsopdeling er ikke registreret.{{else}}Tax breakdown not recorded.{{end}}</p>{{end}}{{end}}{{define "portal-footer"}}<footer>Devantler Tech{{if eq .Kind `home`}}{{template "trustpilot-link" .}}{{end}}</footer>
 <script src="{{root}}/assets/portal.js" defer></script>

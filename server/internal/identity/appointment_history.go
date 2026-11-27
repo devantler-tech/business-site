@@ -50,6 +50,7 @@ func (b *browser) appointmentHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	page := b.data(r, "appointments", "", nosurf.Token(r))
+	page.ClientTasks = b.clientTasks(ctx, "appointments")
 	page.Title, page.Intro = "Your appointments", "Your introductory calls and consultations with Devantler Tech."
 	if page.Lang == "da" {
 		page.Title, page.Intro = "Dine aftaler", "Dine indledende samtaler og rådgivning med Devantler Tech."

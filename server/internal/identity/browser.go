@@ -731,7 +731,24 @@ type pageData struct {
 	CalendarConflictsEnabled                                                                                                         bool
 	TriageEnabled                                                                                                                    bool
 	ClientPreview, PreviewAvailable                                                                                                  bool
+	ClientTasks                                                                                                                      clientTaskNavigation
 	Audit                                                                                                                            []auditEntry
+}
+
+type clientTaskNavigation struct {
+	Area, Current          string
+	Requests, Appointments bool
+}
+
+// clientTasks describes destinations on an authorized customer page. Every
+// destination still performs its own capability and membership checks.
+func (b *browser) clientTasks(ctx context.Context, area string) clientTaskNavigation {
+	return clientTaskNavigation{
+		Area:         area,
+		Current:      "page",
+		Requests:     area == "requests" || b.foundation.requestsReady(ctx),
+		Appointments: area == "appointments" || b.foundation.appointmentHistoryReady(ctx),
+	}
 }
 
 // render escapes all page data and exposes no broker tokens or raw store errors.

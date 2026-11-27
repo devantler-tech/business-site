@@ -515,9 +515,48 @@ main:has(> .client-home) {
   margin-block: clamp(1.5rem, 5vw, 3.5rem) 3rem;
 }
 
-.client-home h1 {
+.client-task-navigation {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 0.25rem;
+  width: 100%;
+  max-width: 48rem;
+  margin: 1rem auto 0;
+  padding-inline: clamp(1.25rem, 4vw, 2rem);
+}
+
+.client-task-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-inline: 0.6rem;
+  border-radius: 0.4rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.client-task-link:hover,
+.client-task-link[aria-current]:not([aria-current="false"]) {
+  background: color-mix(in srgb, var(--accent) 9%, var(--bg));
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.client-task-link[aria-current]:not([aria-current="false"]) {
+  box-shadow: inset 0 -2px var(--accent);
+}
+
+.client-task-navigation + main {
+  margin-block-start: clamp(1.25rem, 4vw, 2.5rem);
+}
+
+.client-home h1,
+.client-task-navigation + main h1 {
   margin-block-end: 0.45rem;
   font-size: clamp(1.9rem, 4vw, 3rem);
+  overflow-wrap: anywhere;
 }
 
 .client-workspace {

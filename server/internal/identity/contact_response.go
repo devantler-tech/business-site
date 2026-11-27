@@ -165,6 +165,7 @@ func (b *browser) unifiedPreviewResponseAllowed(ctx context.Context, snapshot du
 // A complete rendered document never substitutes for current durable authority.
 func (b *browser) renderContact(w http.ResponseWriter, r *http.Request, status int, d contactData, problem string, verification bool, authority contactAuthority) {
 	page := b.contactPage(r, d, problem, verification)
+	page.ClientTasks = b.clientTasks(r.Context(), "contact")
 	var buffer bytes.Buffer
 	if b.templates().ExecuteTemplate(&buffer, "contact.html", page) != nil {
 		b.render(w, r, 503, "unavailable", "", "")
