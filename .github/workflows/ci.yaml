@@ -427,7 +427,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: devantler-tech/platform
-          ref: 56bfa9586e0769b7596584dc09a082ca577ea572 # Platform #6712
+          ref: 25dc8d22079e07b337d108df20b1d1c7f90aad00 # Platform #6712
           path: .tenant-policy-source
           persist-credentials: false
       - name: Setup Go for the Platform WebApp compiler
