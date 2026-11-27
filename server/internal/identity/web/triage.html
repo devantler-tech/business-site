@@ -1,7 +1,7 @@
 <!doctype html>
 {{template "portal-head" .}}
 {{template "portal-header" .}}
-<main id="main"><div class="intro"><h1>{{.Title}}</h1>
+<main id="main">{{if .TriageEnabled}}<div class="operator-workflow-navigation">{{template "operator-navigation" .}}</div>{{end}}<div class="intro"><h1>{{.Title}}</h1>
 <p>{{.Intro}}</p></div>
 <section aria-label="{{.Title}}"><p>{{.Boundary}}</p>
 {{if .Detail}}

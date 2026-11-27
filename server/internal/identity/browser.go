@@ -24,12 +24,12 @@ var browserFiles embed.FS
 // source: the stylesheet, the scripts, and the Devantler Tech tab icon and
 // wordmarks, each with its content type.
 var presentationAssets = map[string]string{
-	"portal.css":           "text/css; charset=utf-8",
-	"portal.js":            "text/javascript; charset=utf-8",
-	"review-collector.mjs": "text/javascript; charset=utf-8",
-	"icon.png":             "image/png",
-	"logo-dark.svg":        "image/svg+xml",
-	"logo-light.svg":       "image/svg+xml",
+	"portal.css":          "text/css; charset=utf-8",
+	"portal.js":           "text/javascript; charset=utf-8",
+	"trustpilot-link.css": "text/css; charset=utf-8",
+	"icon.png":            "image/png",
+	"logo-dark.svg":       "image/svg+xml",
+	"logo-light.svg":      "image/svg+xml",
 }
 
 // browserPage renders every private page with portal links under "/portal".
@@ -38,7 +38,7 @@ var browserPage = pages(internalRoot, "")
 // templateFuncs binds the portal mount and language-preserving public navigation.
 // The public origin is empty when both surfaces share a host.
 func templateFuncs(root, site string) template.FuncMap {
-	return template.FuncMap{"root": func() string { return root }, "reviewCollectorURL": reviewCollectorURL, "public": func(lang string) string {
+	return template.FuncMap{"root": func() string { return root }, "public": func(lang string) string {
 		if lang == "da" {
 			return site + "/da/"
 		}
@@ -50,23 +50,11 @@ func templateFuncs(root, site string) template.FuncMap {
 // when the portal shares a host with the public site, "" when it has its own host;
 // links to the public website use {{public .Lang}}.
 func pages(root, site string) *template.Template {
-	return template.Must(template.New("portal").Funcs(templateFuncs(root, site)).ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/work-review.html"))
+	return template.Must(template.New("portal").Funcs(templateFuncs(root, site)).ParseFS(browserFiles, "web/portal.html", "web/operator.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/work-review.html"))
 }
 
 // internalRoot is where every private route is registered and gated.
 const internalRoot = "/portal"
-
-const reviewCollectorTemplate = "56278e9abfbbba0bdcd568bc"
-const reviewCollectorFrame = "https://widget.trustpilot.com/trustboxes/" + reviewCollectorTemplate + "/index.html"
-
-func reviewCollectorURL(lang string) string {
-	locale := "en-US"
-	if lang == "da" {
-		locale = "da-DK"
-	}
-	return reviewCollectorFrame + "?templateId=" + reviewCollectorTemplate +
-		"&businessunitId=6b00bb09a7dbf30ad4d33478#locale=" + locale + "&styleHeight=52px&styleWidth=100%25"
-}
 
 type browser struct {
 	foundation *Foundation
@@ -140,10 +128,14 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 	if err != nil {
 		return nil, err
 	}
-	csrf := nosurf.New(mux)
-	csrf.SetBaseCookie(http.Cookie{Name: "__Host-portal_csrf", Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: 1800})
-	csrf.SetFailureHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { b.render(w, r, 403, "error", "", "") }))
-	secured := sm.LoadAndSave(csrf)
+	routes := b.withCSRF(mux)
+	if s.previewSessions {
+		routes, err = b.withUnifiedPreview(mux, routes)
+		if err != nil {
+			return nil, err
+		}
+	}
+	secured := sm.LoadAndSave(routes)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if atRoot {
 			r, w = b.internal(r), rootRedirects{w}
@@ -158,27 +150,7 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 			http.NotFound(w, r)
 			return
 		}
-		if (r.URL.Path == "/portal/requests" || strings.HasPrefix(r.URL.Path, "/portal/requests/")) && !s.requestsReady(r.Context()) {
-			http.NotFound(w, r)
-			return
-		}
-		if r.URL.Path == "/portal/contact/verify" && !s.contactVerificationReady(r.Context()) {
-			http.NotFound(w, r)
-			return
-		}
-		if (r.URL.Path == "/portal/operator/requests" || strings.HasPrefix(r.URL.Path, "/portal/operator/requests/")) && !s.triageReady(r.Context()) {
-			http.NotFound(w, r)
-			return
-		}
-		if strings.HasPrefix(r.URL.Path, "/portal/operator/requests/") && strings.HasSuffix(r.URL.Path, "/proposals") && !s.proposalsReady(r.Context()) {
-			http.NotFound(w, r)
-			return
-		}
-		if strings.HasPrefix(r.URL.Path, "/portal/operator/requests/") && strings.HasSuffix(r.URL.Path, "/proposal-visibility") && !s.sharingReady(r.Context()) {
-			http.NotFound(w, r)
-			return
-		}
-		if strings.HasPrefix(r.URL.Path, "/portal/operator/requests/") && (strings.HasSuffix(r.URL.Path, "/work-review") || strings.HasSuffix(r.URL.Path, "/work-approvals") || strings.HasSuffix(r.URL.Path, "/work-revocations")) && !s.workApprovalGate(r.Context()) {
+		if !s.previewSessions && !s.browserRouteAvailable(r) {
 			http.NotFound(w, r)
 			return
 		}
@@ -212,11 +184,45 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 		// this API namespace bypasses session/CSRF middleware; operatorCall still
 		// verifies the machine proof and exact action before running anything.
 		if strings.HasPrefix(r.URL.Path, operatorAPIRoot+"/") && len(r.Header.Values("Authorization")) > 0 {
+			if !s.browserRouteAvailable(r) {
+				http.NotFound(w, r)
+				return
+			}
 			mux.ServeHTTP(w, r)
 			return
 		}
 		secured.ServeHTTP(w, r)
 	}), nil
+}
+
+func (b *browser) withCSRF(handler http.Handler) http.Handler {
+	csrf := nosurf.New(handler)
+	csrf.SetBaseCookie(http.Cookie{Name: "__Host-portal_csrf", Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: 1800})
+	csrf.SetFailureHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { b.render(w, r, 403, "error", "", "") }))
+	return csrf
+}
+
+func (s *Foundation) browserRouteAvailable(r *http.Request) bool {
+	path, ctx := r.URL.Path, r.Context()
+	switch {
+	case path == "/portal/requests" || strings.HasPrefix(path, "/portal/requests/"):
+		return s.requestsReady(ctx)
+	case path == "/portal/contact/verify":
+		return s.contactVerificationReady(ctx)
+	case path == "/portal/operator/requests" || strings.HasPrefix(path, "/portal/operator/requests/"):
+		if !s.triageReady(ctx) {
+			return false
+		}
+		switch {
+		case strings.HasSuffix(path, "/proposals"):
+			return s.proposalsReady(ctx)
+		case strings.HasSuffix(path, "/proposal-visibility"):
+			return s.sharingReady(ctx)
+		case strings.HasSuffix(path, "/work-review"), strings.HasSuffix(path, "/work-approvals"), strings.HasSuffix(path, "/work-revocations"):
+			return s.workApprovalGate(ctx)
+		}
+	}
+	return true
 }
 
 const oidcScope = "openid"
@@ -299,7 +305,15 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /portal/operator", b.operator)
 	mux.HandleFunc("GET /portal/operator/audit", b.operatorAuditPage)
 	mux.HandleFunc("GET /portal/operator/customers", b.operatorCustomersPage)
+	mux.HandleFunc("POST /portal/operator/support", b.operatorSupportPage)
 	mux.HandleFunc("GET /portal/operator/invitations/new", b.operatorInvitationPage)
+	if b.foundation.previewAvailable() {
+		mux.HandleFunc("POST /portal/preview", b.enterClientPreview)
+		mux.HandleFunc("POST /portal/requests/{id}/preview-orders", b.submitPreviewPurchase)
+	}
+	if b.foundation.canLeaveClientPreview() {
+		mux.HandleFunc("POST /portal/preview/leave", b.leaveClientPreview)
+	}
 	for _, route := range operatorRoutes {
 		mux.HandleFunc(route.method+" "+operatorAPIRoot+route.path, b.operatorAPI(route))
 	}
@@ -367,22 +381,20 @@ func (b *browser) refusals(ctx context.Context) (int, int64) {
 	return count, since
 }
 
-// signIn lets the broker show both sign-in methods when operators are configured.
-// A customer-only installation goes directly to ZITADEL.
+// signIn uses the same ZITADEL login for customers and operators. During
+// rollout the old broker page remains available until an operator is linked.
 func (b *browser) signIn(w http.ResponseWriter, r *http.Request) {
 	connector := customeridentity.ZitadelConnectorID
-	if b.foundation.OperatorsLinked() {
+	if b.foundation.legacyOperatorSignIn() {
 		connector = ""
 	}
 	b.startSignIn(w, r, connector)
 }
 
-// operatorSignIn is the operators' own link: GitHub through platform SSO. It
-// exists only while the server configuration lists operators, and reaching it
-// grants nothing: the identity that returns must be listed.
+// operatorSignIn keeps existing bookmarks usable through the transition.
 func (b *browser) operatorSignIn(w http.ResponseWriter, r *http.Request) {
-	if !b.foundation.OperatorsLinked() {
-		http.NotFound(w, r)
+	if !b.foundation.legacyOperatorSignIn() {
+		b.signIn(w, r)
 		return
 	}
 	b.startSignIn(w, r, customeridentity.PlatformConnectorID)
@@ -610,13 +622,28 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 
 // principal reconstructs identity only from the server-owned durable session.
 func (b *browser) principal(ctx context.Context) Principal {
-	incarnation := b.sessions.GetString(ctx, "membership_incarnation")
+	return b.sessionPrincipal(
+		b.sessions.GetString(ctx, "issuer"), b.sessions.GetString(ctx, "subject"),
+		b.sessions.GetString(ctx, "membership_incarnation"), b.sessions.GetInt64(ctx, "expires"),
+		b.sessions.GetString(ctx, previewSessionKey),
+	)
+}
+
+func (b *browser) sessionPrincipal(issuer, subject, incarnation string, expiry int64, previewIncarnation string) Principal {
 	if incarnation == "" {
 		// Legacy authenticated payloads must sign in again; pre-authentication
 		// sessions remain anonymous and can complete their ordinary sign-in flow.
 		return Principal{}
 	}
-	return Principal{issuer: b.sessions.GetString(ctx, "issuer"), subject: b.sessions.GetString(ctx, "subject"), audience: b.foundation.broker.clientID, expires: time.Unix(b.sessions.GetInt64(ctx, "expires"), 0), membershipIncarnation: incarnation}
+	p := Principal{issuer: issuer, subject: subject, audience: b.foundation.broker.clientID, expires: time.Unix(expiry, 0), membershipIncarnation: incarnation}
+	if previewIncarnation != "" {
+		if !b.foundation.canLeaveClientPreview() {
+			return Principal{}
+		}
+		p.preview = previewOperator{subject: subject, incarnation: incarnation}
+		p.subject, p.membershipIncarnation = previewSubject, previewIncarnation
+	}
+	return p
 }
 
 // home rechecks current membership before rendering the client's workspace.
@@ -628,11 +655,11 @@ func (b *browser) home(w http.ResponseWriter, r *http.Request) {
 		b.signIn(w, r)
 		return
 	}
-	kind := "home"
 	if role == "operator" {
-		kind = "operator"
+		b.renderOperator(w, r, client)
+		return
 	}
-	b.render(w, r, 200, kind, client, nosurf.Token(r))
+	b.render(w, r, 200, "home", client, nosurf.Token(r))
 }
 
 // operator requires the current database role, never token groups or form fields.
@@ -642,7 +669,7 @@ func (b *browser) operator(w http.ResponseWriter, r *http.Request) {
 		b.render(w, r, 403, "error", "", "")
 		return
 	}
-	b.render(w, r, 200, "operator", client, nosurf.Token(r))
+	b.renderOperator(w, r, client)
 }
 
 // browserMember preserves the common unauthenticated response before role checks.
@@ -677,19 +704,17 @@ func (b *browser) logout(w http.ResponseWriter, r *http.Request) {
 type pageData struct {
 	BrokerURL                                                                                                                                  string
 	LanguageURL                                                                                                                                string
+	InviteWorkspace                                                                                                                            string
 	Lang, Kind, Client, CSRF, Title, Intro, Action, SignedIn, Logout, Error, Unavailable, Back, Theme, System, Light, Dark, Operator, Boundary string
 	RequestsEnabled                                                                                                                            bool
 	TriageEnabled                                                                                                                              bool
+	ClientPreview, PreviewAvailable                                                                                                            bool
 	Audit                                                                                                                                      []auditEntry
 }
 
 // render escapes all page data and exposes no broker tokens or raw store errors.
 func (b *browser) render(w http.ResponseWriter, r *http.Request, status int, kind, client, token string) {
 	d := b.data(r, kind, client, token)
-	if kind == "home" {
-		csp := w.Header().Get("Content-Security-Policy")
-		w.Header().Set("Content-Security-Policy", csp+"; frame-src "+reviewCollectorFrame)
-	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	_ = b.templates().ExecuteTemplate(w, "portal.html", d)
@@ -698,6 +723,12 @@ func (b *browser) render(w http.ResponseWriter, r *http.Request, status int, kin
 // data shares the same localized, escaped layout with the private contact form.
 func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	d := pageData{Lang: language(r), Kind: kind, Client: client, CSRF: token, Title: "Your client portal", Intro: "A private space for your work with Devantler Tech.", Action: "Sign in", SignedIn: "You are signed in", Logout: "Sign out", Error: "Sign-in could not be completed. The portal is invitation-only: try again with the account from your invitation, or contact Devantler Tech.", Unavailable: "The portal is unavailable. Please try again later.", Back: "Back to the website", Theme: "Appearance", System: "System", Light: "Light", Dark: "Dark", Operator: "Operator", Boundary: "Ordering and payments are not available yet."}
+	if b.foundation.canLeaveClientPreview() && b.principal(r.Context()).isClientPreview() {
+		if d.CSRF == "" {
+			d.CSRF = nosurf.Token(r)
+		}
+		d.ClientPreview = d.CSRF != ""
+	}
 	other, path := "da", r.URL.Path
 	if d.Lang == "da" {
 		other = "en"
@@ -705,6 +736,9 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	// Recovery links must not GET a POST-only route or replay an OIDC callback.
 	if kind == "error" || kind == "unavailable" || path == "/portal/logout" || path == "/portal/callback" {
 		path = "/portal/sign-in"
+		if d.ClientPreview {
+			path = "/portal/"
+		}
 	}
 	if path == "/portal/contact/verify" {
 		path = "/portal/contact"
@@ -712,7 +746,7 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	if kind == "proposal-invalid" || kind == "proposal-conflict" || kind == "sharing-invalid" || kind == "sharing-conflict" {
 		path = "/portal/operator/requests"
 	}
-	if kind == "operator-action-error" {
+	if kind == "operator-action-error" || kind == "operator-workspace-billing-error" || kind == "operator-support" {
 		path = "/portal/operator/customers"
 	}
 	d.LanguageURL = b.visible(path) + "?lang=" + other
@@ -733,6 +767,20 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 		d.Dark = "Mørk"
 		d.Operator = "Operatør"
 		d.Boundary = "Bestilling og betaling er endnu ikke tilgængelig."
+	}
+	if d.ClientPreview && (kind == "unavailable" || kind == "error") {
+		d.Error = "This action is unavailable in client preview."
+		d.Unavailable = "Client preview is temporarily unavailable."
+		if d.Lang == "da" {
+			d.Error = "Denne handling er ikke tilgængelig i portalen til test."
+			d.Unavailable = "Portalen til test er ikke tilgængelig. Prøv igen senere."
+		}
+	}
+	if kind == "home" && d.ClientPreview {
+		d.Client = "Demo workspace"
+		if d.Lang == "da" {
+			d.Client = "Arbejdsområde til test"
+		}
 	}
 	return d
 }

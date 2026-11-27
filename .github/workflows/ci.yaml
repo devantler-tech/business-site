@@ -258,7 +258,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup the exact receipt-reader toolchain
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
@@ -293,7 +293,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
@@ -311,7 +311,7 @@ jobs:
         run: node --test scripts/portal-quality-provisioning.test.mjs
       - name: Verify actual Go-template HTML quality and retained attribute failures
         working-directory: .
-        run: npx --yes --package=htmlhint@1.9.2 -- node --test scripts/portal-template-quality.test.mjs
+        run: npx --yes --package="htmlhint@$(node -p 'require("./package.json").devDependencies.htmlhint')" -- node --test scripts/portal-template-quality.test.mjs
       - name: Verify compatible embedded Go analysis and genuine finding rejection
         working-directory: .
         run: node --test scripts/portal-go-analyzer-quality.test.mjs
@@ -320,10 +320,10 @@ jobs:
         run: bash scripts/portal-links-preprocess.test.sh
       - name: Verify exact fictional credential examples and adjacent leak rejection
         working-directory: .
-        run: npx --yes --package=secretlint@14.0.0 -- node --test scripts/portal-credential-quality.test.mjs
+        run: npx --yes --package="secretlint@$(node -p 'require("./package.json").devDependencies.secretlint')" -- node --test scripts/portal-credential-quality.test.mjs
       - name: Verify portal copy and API vocabulary with retained typo failures
         working-directory: .
-        run: npx --yes --package=cspell@10.5.1 -- node --test scripts/portal-spelling-quality.test.mjs
+        run: npx --yes --package="cspell@$(node -p 'require("./package.json").devDependencies.cspell')" -- node --test scripts/portal-spelling-quality.test.mjs
       - name: Verify package documentation with all selected Go files
         working-directory: .
         env:
@@ -368,7 +368,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
@@ -379,6 +379,9 @@ jobs:
       - name: Test actual served request-character controls
         working-directory: .
         run: node --test scripts/portal-request-limits.test.mjs
+      - name: Test the served operator directory search
+        working-directory: .
+        run: node --test scripts/operator-directory.test.mjs
       - name: Provision isolated test database roles
         env:
           PGPASSWORD: fixture-only
@@ -410,6 +413,73 @@ jobs:
       - name: Scan reachable Go vulnerabilities
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
+  test-tenant-admission:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      LC_ALL: C
+      GOTOOLCHAIN: local
+    steps:
+      - name: Checkout Business Site
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Checkout the Platform admission checker and policies
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: devantler-tech/platform
+          ref: 25dc8d22079e07b337d108df20b1d1c7f90aad00 # Platform #6712
+          path: .tenant-policy-source
+          persist-credentials: false
+      - name: Setup Go for the Platform WebApp compiler
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: .tenant-policy-source/scripts/tests/webapp-compiler/go.mod
+          cache-dependency-path: .tenant-policy-source/scripts/tests/webapp-compiler/go.sum
+      - name: Compile the generated production WebApp children
+        id: generated-workloads
+        shell: bash
+        env:
+          KRO_API_BASE: HEAD
+        run: |
+          work="$(mktemp -d "$RUNNER_TEMP/tenant-admission.XXXXXXXX")"
+          kubectl kustomize deploy > "$work/production.yaml"
+          yq -o=json -I=0 '.' "$work/production.yaml" | jq -cse '
+            [.[] | select(.kind == "WebApp")]
+            | if length == 1 then .[0] else error("expected exactly one production WebApp") end
+          ' > "$work/application.json"
+          bash .tenant-policy-source/scripts/tests/test-webapp-compiler.sh \
+            --render-admission-children "$work/application.json" "$work/children.json"
+          printf 'directory=%s\n' "$work" >> "$GITHUB_OUTPUT"
+      - name: Setup Go for the Platform admission checker
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: .tenant-policy-source/scripts/tests/tenant-webapp-admission/go.mod
+          cache-dependency-path: .tenant-policy-source/scripts/tests/tenant-webapp-admission/go.sum
+      - name: Setup Node.js for fixture generation
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - name: Install fixture dependencies
+        run: npm ci --ignore-scripts --no-audit
+      - name: Exercise production package admission with Kyverno
+        id: tenant-admission
+        shell: bash
+        env:
+          ADMISSION_DIRECTORY: ${{ steps.generated-workloads.outputs.directory }}
+        run: |
+          infrastructure="$GITHUB_WORKSPACE/.tenant-policy-source/k8s/bases/infrastructure"
+          policies="$infrastructure/cluster-policies/best-practices"
+          tenant_graph="$infrastructure/resource-graph-definitions/tenant/resource-graph-definition.yaml"
+          node scripts/tenant-admission-fixtures.mjs "$tenant_graph" "$ADMISSION_DIRECTORY/children.json" < "$ADMISSION_DIRECTORY/production.yaml" |
+            go -C .tenant-policy-source/scripts/tests/tenant-webapp-admission run -mod=readonly . \
+              "$policies/restrict-tenant-webapps.yaml" "$policies/validate-pod-security.yaml" \
+              "$policies/restrict-tenant-route-hostnames.yaml" "$policies/restrict-webapp-child-ownership.yaml" \
+              "$policies/restrict-tenant-secret-stores.yaml" "$policies/restrict-tenant-network-policies.yaml"
+
   # Separate setup/build budget; identity and quality must finish successfully first.
   test-combined-runtime:
     needs: [test-portal-quality, test-portal-identity]
@@ -427,7 +497,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
@@ -562,10 +632,11 @@ jobs:
       - test-repository-contracts
       - test-portal-identity
       - test-portal-quality
+      - test-tenant-admission
       - test-combined-runtime
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@cc156a3693019fdbe9817c46f1a91cd50a124695 # v21.7.3
+        uses: devantler-tech/.github/actions/aggregate-job-checks@61d8f70f25d7d5deb8bd914136b329b5a59ff43b # v22.7.4
         with:
           job-results: >-
             ${{ needs.changes.result }}
@@ -577,6 +648,7 @@ jobs:
             ${{ needs.test-repository-contracts.result }}
             ${{ needs.test-portal-identity.result }}
             ${{ needs.test-portal-quality.result }}
+            ${{ needs.test-tenant-admission.result }}
             ${{ needs.test-combined-runtime.result }}
 
   status:
@@ -595,12 +667,13 @@ jobs:
       - test-repository-contracts
       - test-portal-identity
       - test-portal-quality
+      - test-tenant-admission
       - test-combined-runtime
       - validation
       - publish-container
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@cc156a3693019fdbe9817c46f1a91cd50a124695 # v21.7.3
+        uses: devantler-tech/.github/actions/aggregate-job-checks@61d8f70f25d7d5deb8bd914136b329b5a59ff43b # v22.7.4
         with:
           check-workflow-startup: "true"
           job-results: >-
@@ -613,6 +686,7 @@ jobs:
             ${{ needs.test-repository-contracts.result }}
             ${{ needs.test-portal-identity.result }}
             ${{ needs.test-portal-quality.result }}
+            ${{ needs.test-tenant-admission.result }}
             ${{ needs.test-combined-runtime.result }}
             ${{ needs.validation.result }}
             ${{ needs.publish-container.result }}
@@ -667,7 +741,7 @@ jobs:
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup Go for the image projection checks
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum

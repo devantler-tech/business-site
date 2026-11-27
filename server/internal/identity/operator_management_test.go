@@ -21,9 +21,12 @@ func TestOperatorManagementContract(t *testing.T) {
 	for _, action := range []struct{ method, path, id string }{
 		{"POST", "/invitations/revoke", "invitations.revoke"},
 		{"POST", "/workspaces", "workspaces.create"},
+		{"POST", "/workspaces/rename", "workspaces.rename"},
+		{"POST", "/workspaces/delete", "workspaces.delete"},
 		{"GET", "/workspaces/members", "workspaces.members.list"},
 		{"POST", "/members/deactivate", "members.deactivate"},
 		{"POST", "/members/reactivate", "members.reactivate"},
+		{"POST", "/members/remove", "members.remove"},
 	} {
 		if got := paths["/operator/api"+action.path][strings.ToLower(action.method)].OperationID; got != action.id {
 			t.Errorf("%s %s describes action %q, want %q", action.method, action.path, got, action.id)
@@ -103,7 +106,7 @@ func TestOperatorManagementRefusesClients(t *testing.T) {
 	b.finish(b.startInvited("client-a", "client-a", "client"))
 	b.invite("pending-customer", "client-b", "client")
 	token := b.csrf("/portal/")
-	for _, path := range []string{"/invitations/revoke", "/workspaces", "/members/deactivate", "/members/reactivate"} {
+	for _, path := range []string{"/invitations/revoke", "/workspaces", "/workspaces/rename", "/workspaces/delete", "/members/deactivate", "/members/reactivate", "/members/remove"} {
 		form := url.Values{"workspace": {"client-b"}, "subject": {"pending-customer"}, "csrf_token": {token}}
 		status, body, _ := b.request("POST", operatorAPIRoot+path, form, b.site.URL)
 		if status != http.StatusForbidden || strings.Contains(body, "pending-customer") {
@@ -147,12 +150,21 @@ func TestOperatorManagementRejectsAmbiguousInput(t *testing.T) {
 func TestOperatorManagementPageUsesNativeActions(t *testing.T) {
 	b := newOperatorBrowserFixture(t)
 	b.invite("pending-customer", "client-a", "client")
-	for lang, heading := range map[string]string{"en": "Customers and workspaces", "da": "Kunder og arbejdsområder"} {
+	for lang, labels := range map[string]struct{ heading, searchLabel string }{
+		"en": {"Customers and workspaces", "Find a workspace or member"},
+		"da": {"Kunder og arbejdsområder", "Find et arbejdsområde eller et medlem"},
+	} {
 		status, body, _ := b.request("GET", "/portal/operator/customers?lang="+lang, nil, "")
-		if status != http.StatusOK || !strings.Contains(body, heading) || !strings.Contains(body, "pending-customer") {
+		if status != http.StatusOK || !strings.Contains(body, labels.heading) || !strings.Contains(body, "pending-customer") {
 			t.Fatalf("management page unavailable in %s: %d", lang, status)
 		}
-		for _, action := range []string{"/invitations/revoke", "/workspaces"} {
+		if !strings.Contains(body, "data-workspace-directory") ||
+			!strings.Contains(body, `data-directory-search hidden`) ||
+			!strings.Contains(body, `for="operator-directory-query">`+labels.searchLabel) ||
+			!strings.Contains(body, `id="operator-directory-query" type="search"`) {
+			t.Fatalf("accessible workspace search is missing in %s", lang)
+		}
+		for _, action := range []string{"/invitations/revoke", "/workspaces", "/workspaces/rename", "/workspaces/delete"} {
 			if !strings.Contains(body, `method="post" action="`+operatorAPIRoot+action+`?lang=`+lang+`"`) {
 				t.Fatalf("%s native action missing in %s", action, lang)
 			}

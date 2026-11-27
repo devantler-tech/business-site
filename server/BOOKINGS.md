@@ -73,6 +73,16 @@ candidate; its documentation includes bounded recurrence expansion and condition
 That API inventory is not proof that iCloud supplies every required behavior. The adapter child
 must verify the actual protocol behavior before a compatibility claim or dependency addition.
 
+Owned-event observation uses a dedicated collection selected from the configured calendars.
+It reads one resource using a server-generated key and checks the event's identity, stored
+interval, revision and strong ETag. Creation submits one conditional write only after observing
+absence. A conflict or uncertain write result requires fresh proof of the exact event and its
+version. Unexpected provider content leaves the appointment unresolved. These paths run in
+synthetic tests while private provider setup remains separate.
+[CalDAV object resources](https://www.rfc-editor.org/rfc/rfc4791#section-5.3)
+[HTTP entity tags](https://www.rfc-editor.org/rfc/rfc9110.html#name-etag)
+[Pinned CalDAV client](https://pkg.go.dev/github.com/emersion/go-webdav@v0.8.0/caldav)
+
 The human privately selects calendars and authorizes the connection/credential setup.
 [Apple's supported third-party access and revocation guidance](https://support.apple.com/en-us/121539)
 describes authorization and the app-specific-password alternative. An agent must not inspect live

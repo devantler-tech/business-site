@@ -43,6 +43,7 @@ type Principal struct {
 	// Browser sessions retain the exact server-owned membership that admitted
 	// sign-in. Unbound broker/domain proofs have not become browser sessions.
 	membershipIncarnation string
+	preview               previewOperator
 }
 
 // NewBroker discovers the configured HTTPS issuer through maintained OIDC code.
@@ -123,9 +124,14 @@ type Foundation struct {
 	// endSession and endSessionClient name the upstream identity provider's
 	// RP-initiated logout, which the broker cannot do itself. Both are public.
 	endSession, endSessionClient string
-	// operators are the customer Dex subjects, all issued through the platform
-	// connector, that hold the operator role. Nothing else can sign in that way.
+	// operators lists the customer Dex subjects eligible for the operator role.
 	operators map[string]bool
+	// operatorOnly refuses external customer identities in the private preview.
+	operatorOnly bool
+	// The primary portal owns the browser session. A linked preview serves
+	// fictional records from its own store on the same HTTP surface.
+	clientPreview, previewAuthority *Foundation
+	previewSessions                 bool
 	// customers is the optional organization-scoped provider for operator actions.
 	customers CustomerDirectory
 	// agents is immutable policy and a distinct verifier, installed at startup.
@@ -136,12 +142,24 @@ type Foundation struct {
 // broker's client there, so sign-out and a refused sign-in also end the upstream
 // session. Without it, the portal only ends its own session.
 func (s *Foundation) LinkUpstreamLogout(endpoint, client string) error {
+	if s == nil {
+		return ErrDenied
+	}
+	if err := ValidateUpstreamLogout(endpoint, client); err != nil {
+		return err
+	}
+	s.endSession, s.endSessionClient = endpoint, client
+	return nil
+}
+
+// ValidateUpstreamLogout verifies the destination and broker client of an
+// upstream logout.
+func ValidateUpstreamLogout(endpoint, client string) error {
 	u, err := url.Parse(endpoint)
-	if s == nil || err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.String() != endpoint ||
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.String() != endpoint ||
 		client == "" || len(client) > 256 || strings.ContainsAny(client, " \t\r\n") {
 		return ErrDenied
 	}
-	s.endSession, s.endSessionClient = endpoint, client
 	return nil
 }
 
@@ -151,17 +169,17 @@ const operatorWorkspace = "devantler-tech"
 // maxOperators bounds the server-side operator list.
 const maxOperators = 10
 
-// LinkOperators names the operators: customer Dex subjects issued through the
-// platform connector, where the maintainer signs in with GitHub. Such an identity
-// holds the operator role only while it is listed here, and never anything else.
-// Customers sign in through ZITADEL and can never become operators this way.
+// LinkOperators pins exact customer Dex subjects. ZITADEL issues the same
+// subject for every sign-in method linked to the same account. The platform
+// connector is also admitted during the transition from the old operator login.
 func (s *Foundation) LinkOperators(subjects []string) error {
 	if s == nil || len(subjects) == 0 || len(subjects) > maxOperators {
 		return ErrDenied
 	}
 	operators := make(map[string]bool, len(subjects))
 	for _, subject := range subjects {
-		if !platformIdentity(subject) || operators[subject] {
+		connector := customeridentity.DexConnector(subject)
+		if (connector != customeridentity.ZitadelConnectorID && connector != customeridentity.PlatformConnectorID) || operators[subject] {
 			return ErrDenied
 		}
 		operators[subject] = true
@@ -170,23 +188,46 @@ func (s *Foundation) LinkOperators(subjects []string) error {
 	return nil
 }
 
-// OperatorsLinked reports whether operators can sign in through platform SSO.
+// LinkPreviewOperator admits one shared sign-in subject and disables customer
+// invitations. Like LinkOperators, it must run before serving any requests.
+func (s *Foundation) LinkPreviewOperator(subject string) error {
+	if customeridentity.DexConnector(subject) != customeridentity.ZitadelConnectorID {
+		return ErrDenied
+	}
+	if err := s.LinkOperators([]string{subject}); err != nil {
+		return err
+	}
+	s.operatorOnly = true
+	return nil
+}
+
+// OperatorsLinked reports whether any operator subject is configured.
 func (s *Foundation) OperatorsLinked() bool {
 	return s != nil && len(s.operators) > 0
 }
 
+// legacyOperatorSignIn preserves the existing login until the deployment has a
+// verified operator account on ZITADEL. From that point the shared page is used.
+func (s *Foundation) legacyOperatorSignIn() bool {
+	for subject := range s.operators {
+		if customeridentity.DexConnector(subject) == customeridentity.ZitadelConnectorID {
+			return false
+		}
+	}
+	return s.OperatorsLinked()
+}
+
 // platformIdentity reports whether customer Dex issued subject through the
-// platform connector, which only operators use.
+// legacy platform connector, which only operators use.
 func platformIdentity(subject string) bool {
 	return customeridentity.DexConnector(subject) == customeridentity.PlatformConnectorID
 }
 
-// canInvite reports whether an invitation may name subject and role: never a
-// GitHub identity, which is a listed operator or nobody, and never the operator
-// role for any other customer Dex identity.
-func canInvite(subject, role string) bool {
+// canInvite keeps all configured operators and the legacy platform connector
+// out of customer invitations. The customer Dex cannot invite an operator.
+func (s *Foundation) canInvite(subject, role string) bool {
 	connector := customeridentity.DexConnector(subject)
-	return connector != customeridentity.PlatformConnectorID && (connector == "" || role != "operator")
+	return !s.operatorOnly && !s.operators[subject] && connector != customeridentity.PlatformConnectorID && (connector == "" || role != "operator")
 }
 
 // enrollOperator gives a listed operator its operator membership on first sign-in.
@@ -227,7 +268,12 @@ func (s *Foundation) ready(ctx context.Context) bool {
 		return false
 	}
 	enabled, err := s.flags.BooleanValue(ctx, "portal-identity", false, openfeature.NewEvaluationContext("", nil))
-	return err == nil && enabled && s.flags.State() == openfeature.ReadyState
+	if err != nil || !enabled {
+		return false
+	}
+	// Fictional capabilities depend on the current ordinary portal identity
+	// gate, including at the final checkpoints that call ready.
+	return (s.previewAuthority == nil || s.previewAuthority.ready(ctx)) && s.flags.State() == openfeature.ReadyState
 }
 
 // Attempt secrets are for the trusted browser handler, never logs, public
@@ -277,7 +323,10 @@ func (s *Foundation) Invite(ctx context.Context, i Invitation) error {
 // invite retains the control-plane rules and permits the operator API to bind
 // its final commit to the original caller after any provider or SDK wait.
 func (s *Foundation) invite(ctx context.Context, i Invitation, allowed func(pgx.Tx) bool) error {
-	if !s.ready(ctx) || i.Issuer != s.broker.issuer || strings.TrimSpace(i.Subject) == "" || !canInvite(i.Subject, i.Role) || strings.TrimSpace(i.ClientID) == "" || (i.Role != "client" && i.Role != "operator") || !time.Now().Before(i.Expires) || i.Expires.After(time.Now().Add(7*24*time.Hour)) {
+	if i.ClientID == previewWorkspace || i.Subject == previewSubject {
+		return ErrDenied
+	}
+	if !s.ready(ctx) || i.Issuer != s.broker.issuer || strings.TrimSpace(i.Subject) == "" || !s.canInvite(i.Subject, i.Role) || strings.TrimSpace(i.ClientID) == "" || (i.Role != "client" && i.Role != "operator") || !time.Now().Before(i.Expires) || i.Expires.After(time.Now().Add(7*24*time.Hour)) {
 		return ErrDenied
 	}
 	// One identity has at most one pending invitation and none once it has any
@@ -293,6 +342,16 @@ func (s *Foundation) invite(ctx context.Context, i Invitation, allowed func(pgx.
 	}()
 	if err = lockIdentity(ctx, tx, i.Issuer, i.Subject); err != nil {
 		return err
+	}
+	if err = lockWorkspace(ctx, tx, i.ClientID); err != nil {
+		return err
+	}
+	open, err := workspaceOpen(ctx, tx, i.ClientID)
+	if err != nil {
+		return err
+	}
+	if !open {
+		return ErrDenied
 	}
 	result, err := tx.Exec(ctx, `INSERT INTO portal_invitations(token_digest,issuer,subject,client_id,role,expires_at)
  SELECT $1,$2,$3,$4,$5,$6
@@ -362,9 +421,9 @@ func (s *Foundation) completeProof(ctx context.Context, nonce, raw string) (Prin
 	if err != nil {
 		return Principal{}, ErrDenied
 	}
-	// A platform identity is an operator listed in the server configuration or
-	// nobody: it is never invited and never redeems an invitation.
-	if platformIdentity(p.subject) {
+	// Listed operators enroll directly. Private preview and legacy platform
+	// sign-ins use this branch exclusively, with no invitation fallback.
+	if s.operatorOnly || s.operators[p.subject] || platformIdentity(p.subject) {
 		if err = s.enrollOperator(ctx, p); err != nil {
 			return Principal{}, err
 		}
@@ -407,7 +466,26 @@ func (s *Foundation) redeem(ctx context.Context, p Principal) error {
 	if err = lockIdentity(ctx, tx, p.issuer, p.subject); err != nil {
 		return err
 	}
-	rows, err := tx.Query(ctx, `DELETE FROM portal_invitations WHERE issuer=$1 AND subject=$2 AND NOT revoked AND expires_at>now() RETURNING client_id,role`, p.issuer, p.subject)
+	var workspace string
+	var invitations int
+	if err = tx.QueryRow(ctx, `SELECT COALESCE(min(client_id),''),count(*) FROM portal_invitations
+ WHERE issuer=$1 AND subject=$2 AND NOT revoked AND expires_at>now()`, p.issuer, p.subject).Scan(&workspace, &invitations); err != nil {
+		return fmt.Errorf("read pending invitation: %w", err)
+	}
+	if invitations != 1 {
+		return ErrDenied
+	}
+	if err = lockWorkspace(ctx, tx, workspace); err != nil {
+		return err
+	}
+	open, err := workspaceOpen(ctx, tx, workspace)
+	if err != nil {
+		return err
+	}
+	if !open {
+		return ErrDenied
+	}
+	rows, err := tx.Query(ctx, `DELETE FROM portal_invitations WHERE issuer=$1 AND subject=$2 AND NOT revoked AND expires_at>now() AND client_id=$3 RETURNING client_id,role`, p.issuer, p.subject, workspace)
 	if err != nil {
 		return fmt.Errorf("consume invitation: %w", err)
 	}
@@ -424,7 +502,7 @@ func (s *Foundation) redeem(ctx context.Context, p Principal) error {
 	if err = rows.Err(); err != nil {
 		return fmt.Errorf("consume invitation: %w", err)
 	}
-	if pending != 1 {
+	if pending != 1 || !s.canInvite(p.subject, role) {
 		return ErrDenied
 	}
 	// An existing identity cannot gain a new client or revive revoked membership.
@@ -473,10 +551,13 @@ func (s *Foundation) membershipState(ctx context.Context, p Principal) (string, 
 	if !s.ready(ctx) || p.subject == "" || p.issuer != s.broker.issuer || p.audience != s.broker.clientID || !time.Now().Before(p.expires) {
 		return "", "", "", ErrDenied
 	}
-	// A GitHub identity is a listed operator or nobody, so removing it from the
-	// server configuration ends its access at once. A customer is never an operator.
+	if p.isClientPreview() {
+		return s.previewClient(ctx, p)
+	}
+	// Legacy platform identities can only be operators.
 	connector := customeridentity.DexConnector(p.subject)
-	if connector == customeridentity.PlatformConnectorID && !s.operators[p.subject] {
+	listed := s.operators[p.subject]
+	if (s.operatorOnly || connector == customeridentity.PlatformConnectorID) && !listed {
 		return "", "", "", ErrDenied
 	}
 	var own, role, incarnation string
@@ -491,9 +572,9 @@ func (s *Foundation) membershipState(ctx context.Context, p Principal) (string, 
 	if err != nil {
 		return "", "", "", fmt.Errorf("read membership: %w", err)
 	}
-	// The role must match the connector: GitHub through platform SSO is the only
-	// way in for an operator, and it admits nothing else.
-	if connector != "" && (connector == customeridentity.PlatformConnectorID) != (role == "operator") {
+	// A customer Dex operator must hold both the configured grant and the
+	// current operator membership. A grant does not promote an existing client.
+	if connector != "" && listed != (role == "operator") {
 		return "", "", "", ErrDenied
 	}
 	return own, role, incarnation, nil

@@ -97,6 +97,9 @@ func (s *Foundation) persistRequest(ctx context.Context, p Principal, d projectR
 	if err = tx.QueryRow(ctx, `SELECT client_id FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='client' AND NOT revoked AND ($3='' OR incarnation::text=$3) FOR SHARE`, p.issuer, p.subject, p.membershipIncarnation).Scan(&client); err != nil {
 		return projectRequest{}, ErrDenied
 	}
+	if err = s.checkPreviewWrite(ctx, tx, p, client); err != nil {
+		return projectRequest{}, err
+	}
 	// Fair use: a client with hosting has one request in progress at a time.
 	if s.orderReady(ctx) {
 		busy, err := requestBusy(ctx, tx, client, d.Key)
@@ -205,6 +208,13 @@ func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string
 			b.triageError(w, r, err)
 			return
 		}
+		if page.ClientPreview {
+			page.PreviewPurchase, err = b.foundation.readPreviewPurchase(r.Context(), b.principal(r.Context()), id, page.Acceptances)
+			if err != nil {
+				b.triageError(w, r, err)
+				return
+			}
+		}
 		if billing {
 			if page.Order, err = b.foundation.readClientOrder(r.Context(), b.principal(r.Context()), id); err != nil {
 				b.triageError(w, r, err)
@@ -298,6 +308,7 @@ type requestPageData struct {
 	Order             *projectOrder
 	OrderAcceptance   string
 	OrderProposal     *projectProposal
+	PreviewPurchase   *previewPurchase
 	OrderTerms        string
 	OrderTermsHash    string
 	Checkouts         []orderCheckout

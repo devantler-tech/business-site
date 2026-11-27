@@ -13,10 +13,12 @@ The whole directory is published as one artifact and split into Kustomize overla
 - `base/` holds the shared WebApp. The publisher pins its image in `base/webapp.yaml`.
 - `prod/` holds the production routes, network policy, disruption budget, secret
   synchronization, migration Job and retention CronJob.
-- `dev/` (#542) uses one WebApp replica in `business-site-dev` with
-  `dev.devantler.tech` as its host and `business-site-dev-disclosure` as its sole
-  Secret projection. Serving it requires the dev disclosure Secret and the platform's
-  private ingress and network policies (devantler-tech/platform#6126).
+- `dev/` (#542) packages one portal replica and a migration Job for
+  `business-site-dev`. Both use the release's pinned image. The platform supplies
+  `business-site-dev-runtime` for the portal, `business-site-dev-migration` for
+  schema changes, and the restricted database and sign-in client. The platform's
+  authenticated proxy and network policies control access to `dev.devantler.tech`
+  (devantler-tech/platform#6126).
 
 Overlays reference only `../base` and their own files. `kubectl kustomize deploy/dev`
 must render, and `deploy` must render exactly what `deploy/prod` renders.
@@ -34,6 +36,17 @@ The last command exercises the committed immutable image. Source CI passes its
 newly tested production image as an explicit argument, retaining the rendered
 arguments and runtime restrictions. Neither mode verifies a registry signature;
 that remains mandatory in the signed publisher's independent receipt check.
+
+CI renders the production overlay and checks its WebApp, migration Job,
+retention CronJob, routes, SecretStore, ExternalSecrets and network policy with
+the pinned Platform policies and Kyverno engine. The Tenant graph supplies the
+namespace labels. Each protected resource has an explicit refusal control for
+creation and updates.
+
+The pinned Platform WebApp compiler also produces the Deployment, Service and
+HTTPRoute from the same rendered application. The admission check requires
+those three generated objects and exercises policy for their ownership, the
+Deployment's pod security and the HTTPRoute's hostname.
 
 The package uses two replicas (the validator permits two or three), a
 half-core/256 MiB limit and the real `/healthz` probe, plus an application-owned
@@ -54,9 +67,9 @@ needs an image built from current source, as CI supplies.
 
 The WebApp projects the one Secret the platform composes in this namespace,
 `business-site-runtime`, read-only at `/run/webapp-inputs` with mode 0440 and the
-application's primary group. It admits exactly six items: `company-disclosure` as
+application's primary group. It admits exactly seven items: `company-disclosure` as
 `disclosure`, and `portal-settings`, `portal-client-secret`, `portal-database-ca`,
-`smtp-username` and `smtp-password` at their own names. While sign-in is off,
+`smtp-username`, `smtp-password` and `portal-zitadel-token` at their own names. While sign-in is off,
 `portal-settings` holds only a `#` comment line, so the portal reads none of the other
 portal items. Serving needs both the disclosure and the settings file: without that
 Secret or any projected item the Pods do not start, so the Secret must exist before
@@ -137,23 +150,40 @@ The database URI names host `business-site-portal-db-rw.business-site.svc`,
 port 5432, database `portal` and login `portal_web` with its password, and the query
 `sslmode=verify-full&sslrootcert=/run/webapp-inputs/portal-database-ca`.
 
-The two upstream logout keys come together and only with the five dependency keys. With
-them, sign-out and a refused sign-in also end the ZITADEL session; the ZITADEL client must
-list `https://portal.devantler.tech/signed-out` and `https://devantler.tech/` as post-logout
-addresses. `PORTAL_OPERATOR_SUBJECTS` also comes only with the five dependency keys. It lists, comma-separated, the customer Dex subjects of the operators, who sign in with GitHub through the `platform` connector at `https://portal.devantler.tech/operator/sign-in`; startup refuses any other subject. The five dependency keys come all together or not at all. With them but no
+The production overlay ships the upstream logout endpoint and its public client ID as
+a pair. An existing complete projection takes precedence. The package defaults take
+effect when a complete portal starts with both projected logout keys absent. Sign-out
+and a refused sign-in then also end the ZITADEL session. The ZITADEL client must list
+`https://portal.devantler.tech/signed-out` and `https://devantler.tech/` as post-logout addresses.
+
+`PORTAL_OPERATOR_SUBJECTS` also comes only with the five dependency keys. It lists, comma-separated, the customer Dex subjects of the operators, who sign in with GitHub through the `platform` connector at `https://portal.devantler.tech/operator/sign-in`; startup refuses any other subject. The five dependency keys come all together or not at all. With them but no
 activation keys, startup checks the database login and grants and discovers
-Dex, but sign-in stays off. Unknown or repeated keys, empty values, surrounding
-whitespace and CR line endings are refused. The staging lease and the owner-only
-secret file stay environment-only, and no portal variable may also be inherited
-from the environment. Errors never include values or paths. Restart to rotate.
+Dex, but sign-in stays off. The runtime skips well-formed portal settings outside
+its supported set and logs how many it skipped. Repeated keys, empty values,
+surrounding whitespace and CR line endings are refused. The staging lease and
+the owner-only secret file stay environment-only, and no supported portal
+variable may also be inherited from the environment. Logs and errors omit
+setting names, values and paths. Restart to rotate.
 
 The two machine keys are both-or-neither and require the complete portal. They contain
 public policy only; no machine secret is projected into this application. The audience
 must differ from the browser client, and every listed issuer must match the portal broker.
 Agents are read-only by default, with exact write grants from a closed catalogue; money
 and deletion grants are always refused. See [machine callers](../server/CUSTOMER-IDENTITY.md#machine-callers)
-for the complete format, token limits and action names. Deploy this runtime before adding
-these keys to a settings projection; an older runtime refuses unknown keys.
+for the complete format, token limits and action names. Deploy a runtime with
+forward-compatible projection support before adding keys older versions do not
+recognize. A skipped setting takes effect once a runtime that supports it starts.
+
+The regular production portal can offer operators a fictional client workspace
+in their existing session. Leave `PORTAL_CLIENT_PREVIEW_DATABASE_URL` and
+`PORTAL_CLIENT_PREVIEW_DATABASE_CA` unset until a release that accepts them is
+serving. Supply them together. The URL uses `postgres://`, the isolated
+`portal_preview` database, its `portal_preview_web` login on port 5432 and
+`?sslmode=verify-full`. The CA value is the separate database's PEM trust root
+encoded as a single Base64 line. Use the preview database's restricted runtime
+login and current migration. Restart the runtime after changing the settings.
+The operator can return to their workspace through the regular portal if the
+preview database is unavailable.
 
 With sign-in on, invite customers from a web pod as
 [CUSTOMER-IDENTITY.md](../server/CUSTOMER-IDENTITY.md#invite-a-customer) describes.
@@ -180,9 +210,34 @@ With sign-in on, invite customers from a web pod as
   package. With the portal on, web startup refuses to serve until the ledger holds the release's
   migrations, so new pods become ready only after the Job. Old pods keep serving meanwhile.
 - **Failure.** It retries at most twice within 240 seconds, inside Flux's five-minute health
-  wait. A failed Job leaves only this tenant's Kustomization unhealthy. Find the cause, then
-  delete the Job, and Flux runs it again. A ledger newer than the release refuses the Job, so
-  roll forward rather than back.
+  wait. A terminally failed Job stays failed when Flux reconciles the same release. After
+  resolving a transient cause, verify that the failed Job's pods have exited, the same
+  signed release is still selected, and its migrator supports the committed ledger.
+  An authorized platform operator can then delete that failed Job. Flux recreates it
+  from the signed release on the next reconcile. Verify that the replacement Job completes
+  and the tenant Kustomization becomes Ready.
+
+### Recovery after an additive migration
+
+An older web pod can keep serving after an additive migration, while its release's migration
+Job refuses ledger versions beyond its embedded list. A responding homepage alone cannot
+show that the older package will reconcile.
+
+1. Check the migration Job result and the committed ledger versions and checksums through the
+   authorized database read path. Treat the Job's generic failure as inconclusive. Record the
+   last successful migration image and the attempted and applied Flux revisions.
+2. If migrations from the newer release committed, prepare a forward fix that retains every
+   committed migration byte for byte. Rehearse upgrade and recovery on disposable PostgreSQL
+   with the release's migration command and separate migration and runtime roles. Verify that
+   a repeat run leaves the ledger unchanged and preserves an existing synthetic record.
+3. Use the normal signed release workflow and the platform's
+   [tenant recovery procedure](https://github.com/devantler-tech/platform/blob/main/docs/TENANTS.md#releases-reach-production-by-themselves).
+   Check that Flux applied the intended signed manifest digest, the Job completed from the
+   paired runtime image, and the rollout and Kustomization remain ready on a later reconcile.
+   Complete an authenticated portal journey before closing the recovery.
+
+Preserve the committed ledger and the separate database roles throughout recovery. If a
+forward fix is unavailable, use the separately authorized backup and restore procedure.
 
 ## Portal retention purge
 
@@ -325,9 +380,9 @@ verifier and independent paired-artifact readback remain mandatory under #276.
 
 ## Source-owned runtime release
 
-The release and runtime-publisher callers remain **off** unless the repository variable
-`RUNTIME_PUBLICATION_ENABLED` is exactly `true`. They do not select a platform
-tenant, move the public hostname, enable portal identity or accept customer orders.
+Release initiation requires a manual dispatch from `main` that confirms the full
+signed source commit. The publisher accepts stable releases created and published
+by the configured GitHub release App.
 
 `release-runtime.yaml` admits a complete successful original main-push CI attempt whose source
 equals its frozen caller commit. It independently reads current API metadata, downloads only the
@@ -344,16 +399,26 @@ After the source has merged and its main CI has succeeded, the explicit nonpubli
 gh workflow run release-runtime.yaml --ref main -f mode=dry-run
 ```
 
-That path is allowed while publication is off. It uses the real workflow-context App credentials
-and release decision, but creates no tag, release or registry publication. An offline fixture or
-repository-secret inventory is not evidence that effective inherited credentials work. Keep
-publication off until the current-source preflight and review have succeeded.
+The dry run exercises the effective App credentials and release decision without
+creating a tag, release or registry publication. Require it to pass for the
+reviewed source before dispatching a release.
 
-An explicit enabled `mode=release` dispatch on main can create a genuine semantic-version release
-through the accepted shared release tool. Release initiation is manual: no privileged completion
-trigger or release dispatch is added to source CI. Both admission jobs disable Go-cache reuse.
-One `release: published`
-caller then rebinds the actual stable tag to its source and current original CI receipt. Its
+Pass the full verified commit as `expected_source` to release the same source.
+Both release dispatch and stable-tag publication require the repository setting
+`RUNTIME_PUBLICATION_ENABLED` to be `true` and `.github/runtime-publication` to
+contain the single line `enabled` in the frozen signed source. The source policy
+ships with `disabled`. Enable it through reviewed source delivery after the
+rollout prerequisites pass. After production activation, leave the repository
+setting enabled between ordinary releases. Setting it to `false` stops new
+publication admissions, including those for a source already marked `enabled`.
+
+```sh
+gh workflow run release-runtime.yaml --ref main -f mode=release -f expected_source="$source"
+```
+
+If `main` advances before GitHub binds the dispatch, repeat the preflight for the new
+signed commit. Both admission jobs disable Go-cache reuse. The `release: published`
+caller follows the actual stable tag and its original CI receipt as `main` advances. Its
 `publish` job runs the commit-pinned `devantler-tech/.github/actions/publish-app` action in
 `prebuilt-webapp` mode, directly in this workflow, so the image and the manifests are signed as
 `publish-runtime.yaml` on the release tag: this repository signs its own releases

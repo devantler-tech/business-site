@@ -38,6 +38,19 @@ test("add-on terms follow the coordinated add-on release", () => {
   }
 });
 
+test("the portal support notice states the purpose, basis, retention and right to object in both languages", () => {
+  const cases = [
+    { locale: "en", title: "Portal support", text: [/record your request/, /read-only/, /legitimate interest/, /90 days/, /can object/] },
+    { locale: "da", title: "Support i kundeportalen", text: [/dokumenterer jeg din henvendelse/, /læseadgang/, /berettigede interesse/, /90 dage/, /gøre indsigelse/] },
+  ] as const;
+  for (const { locale, title, text } of cases) {
+    assert.ok(!legalPage("privacy", locale, false).sections.some(section => section.title === title));
+    const support = legalPage("privacy", locale, true).sections.find(section => section.title === title);
+    assert.ok(support);
+    for (const phrase of text) assert.match(support.blocks.join("\n"), phrase);
+  }
+});
+
 test("the terms describe the portal agreement and follow-up in both languages", () => {
   const cases = [
     { locale: "en", title: "Proposal and agreement", initial: /by email or phone.*invite you to the client portal/s,
@@ -60,11 +73,10 @@ test("the terms describe the portal agreement and follow-up in both languages", 
   }
 });
 
-test("the privacy notice explains how to load and hide the optional review collector", () => {
+test("the privacy notice describes Trustpilot as an external link", () => {
   for (const locale of ["en", "da"] as const) {
     const notice = flat(legalPage("privacy", locale, true));
-    assert.match(notice, /Trustpilot/);
-    assert.match(notice, /IP-adresse|IP address/);
-    assert.match(notice, locale === "da" ? /Skjul Trustpilot/ : /Hide Trustpilot/);
+    assert.match(notice, locale === "da" ? /åbner Trustpilots hjemmeside/ : /opens Trustpilot’s website/);
+    assert.doesNotMatch(notice, /Tillad Trustpilot|Allow Trustpilot|180 dage|180 days/);
   }
 });

@@ -13,6 +13,86 @@ const checker = path.join(root, "scripts/check-tenant-package.mjs");
 const render = (directory = path.join(root, "deploy")) =>
   execFileSync("kubectl", ["kustomize", directory], { encoding: "utf8", timeout: 15000 });
 const check = (input) => spawnSync(process.execPath, [checker], { input, encoding: "utf8", timeout: 5000 });
+const tenantFixtureLabels = {
+  "app.kubernetes.io/managed-by": "kro",
+  "fixture.example/namespace-label": "from-graph",
+};
+function generatedWorkload() {
+  const ownership = {
+    "app.kubernetes.io/managed-by": "kro",
+    "kro.run/instance-id": "00000000-0000-4000-8000-000000000042",
+    "kro.run/instance-kind": "WebApp",
+    "kro.run/instance-group": "kro.run",
+    "kro.run/instance-version": "v1alpha1",
+    "kro.run/instance-name": "business-site",
+    "kro.run/instance-namespace": "business-site",
+    "applyset.kubernetes.io/part-of": `applyset-${"a".repeat(43)}-v1`,
+  };
+  return [
+    ["deployment", "Deployment", "apps/v1", {
+      template: { spec: { containers: [{ securityContext: { runAsNonRoot: true } }] } },
+    }],
+    ["service", "Service", "v1", {}],
+    ["httpRoute", "HTTPRoute", "gateway.networking.k8s.io/v1", { hostnames: ["business-site.example.test"] }],
+  ].map(([node, kind, apiVersion, spec]) => ({
+    kind, apiVersion, spec,
+    metadata: { name: "business-site", namespace: "business-site", labels: { ...ownership, "kro.run/node-id": node } },
+  }));
+}
+function admissionFixtures(input, labels = tenantFixtureLabels, objects = generatedWorkload()) {
+  const directory = mkdtempSync(path.join(tmpdir(), "tenant-admission-input-"));
+  try {
+    const graph = path.join(directory, "tenant-graph.yaml");
+    const children = path.join(directory, "children.json");
+    writeFileSync(graph, yaml.dump({
+      kind: "ResourceGraphDefinition",
+      spec: { schema: { kind: "Tenant" }, resources: [{
+        id: "tenantNamespace",
+        template: { apiVersion: "v1", kind: "Namespace", metadata: { labels } },
+      }] },
+    }));
+    writeFileSync(children, JSON.stringify(objects));
+    return spawnSync(process.execPath, [path.join(root, "scripts/tenant-admission-fixtures.mjs"), graph, children],
+      { input, encoding: "utf8", timeout: 5000 });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+test("generated workload inventory is complete and ownership controls are explicit", () => {
+  const source = render();
+  const objects = generatedWorkload();
+  const result = admissionFixtures(source, tenantFixtureLabels, objects);
+  assert.equal(result.status, 0, result.stderr);
+  const fixtures = result.stdout.trim().split("\n").map((line) => JSON.parse(line));
+  assert.equal(fixtures.length, 74);
+  assert.equal(new Set(fixtures.map(({ label }) => label)).size, 74);
+  const generated = fixtures.filter(({ label }) => label.startsWith("generated-"));
+  assert.equal(generated.length, 26);
+  for (const object of objects) {
+    const controls = generated.filter((fixture) => fixture.label.startsWith(`generated-ownership-${object.kind}-`));
+    assert.deepEqual(controls.map(({ operation, expected }) => [operation, expected]),
+      [["CREATE", "pass"], ["CREATE", "fail"], ["CREATE", "fail"], ["UPDATE", "pass"], ["UPDATE", "fail"], ["UPDATE", "fail"]]);
+    assert.deepEqual(controls[0].object, object);
+    assert.equal(controls[2].actor, "system:serviceaccount:business-site:business-site");
+    assert.equal(controls[3].actor, "system:serviceaccount:kro-system:kro");
+    assert.notEqual(controls[4].oldObject.metadata.labels["applyset.kubernetes.io/part-of"],
+      object.metadata.labels["applyset.kubernetes.io/part-of"]);
+    assert.equal(controls[5].oldObject.metadata.labels["kro.run/instance-id"], undefined);
+  }
+  for (const fault of [
+    (children) => children.pop(),
+    (children) => { children[1] = children[0]; },
+    (children) => { children[1].metadata.labels["kro.run/instance-id"] = "00000000-0000-4000-8000-000000000043"; },
+    (children) => { delete children[2].metadata.labels["applyset.kubernetes.io/part-of"]; },
+  ]) {
+    const candidate = structuredClone(objects);
+    fault(candidate);
+    const refused = admissionFixtures(source, tenantFixtureLabels, candidate);
+    assert.equal(refused.status, 1);
+    assert.equal(refused.stdout, "");
+  }
+});
 
 test("the real Kustomize package renders deterministically and admits the public runtime", () => {
   let first;
@@ -28,18 +108,135 @@ test("the artifact root renders the production overlay", () => {
   assert.equal(render(), render(path.join(root, "deploy/prod")));
 });
 
-test("the hosted preview uses only its own disclosure input", () => {
+test("admission uses each rendered workload and an isolated refusal control", () => {
+  const source = render();
+  const documents = yaml.loadAll(source);
+  const result = admissionFixtures(source);
+  assert.equal(result.status, 0, result.stderr);
+  const fixtures = result.stdout.trim().split("\n").map((line) => JSON.parse(line))
+    .filter((fixture) => /^(WebApp|Job|CronJob)-/.test(fixture.label));
+  assert.equal(fixtures.length, 12);
+  assert.equal(new Set(fixtures.map((f) => f.label)).size, 12);
+  for (const [kind, policy, deny] of [
+    ["WebApp", "restrict-tenant-webapps", (object) => { object.spec.name = "fictional-other-tenant"; }],
+    ["Job", "validate-pod-security", (object) => { object.spec.template.spec.containers[0].securityContext.privileged = true; }],
+    ["CronJob", "validate-pod-security", (object) => {
+      object.spec.jobTemplate.spec.template.spec.containers[0].securityContext.privileged = true;
+    }],
+  ]) {
+    const object = documents.find((doc) => doc?.kind === kind);
+    const negative = structuredClone(object);
+    deny(negative);
+    const oldObject = structuredClone(object);
+    oldObject.metadata.annotations = { ...oldObject.metadata.annotations, "fixture.example/previous": "true" };
+    for (const operation of ["CREATE", "UPDATE"]) {
+      for (const [expected, target] of [["pass", object], ["fail", negative]]) {
+        const label = `${kind}-${operation}-${expected}`;
+        assert.deepEqual(fixtures.find((f) => f.label === label), {
+          label,
+          object: target,
+          actor: "system:serviceaccount:business-site:business-site",
+          operation,
+          policy,
+          expected,
+          ...(operation === "UPDATE" ? { oldObject } : {}),
+        });
+      }
+    }
+  }
+});
+
+test("direct tenant resources carry their rendered objects and actual namespace policy context", () => {
+  const source = render();
+  const documents = yaml.loadAll(source);
+  const result = admissionFixtures(source);
+  assert.equal(result.status, 0, result.stderr);
+  const fixtures = result.stdout.trim().split("\n").map((line) => JSON.parse(line))
+    .filter(({ label }) => !label.startsWith("generated-"));
+  assert.equal(fixtures.length, 48);
+  assert.equal(new Set(fixtures.map((fixture) => fixture.label)).size, 48);
+  const namespace = { apiVersion: "v1", kind: "Namespace", metadata: {
+    name: "business-site", labels: tenantFixtureLabels,
+  } };
+  for (const [kind, policy, count, field] of [
+    ["HTTPRoute", "restrict-tenant-route-hostnames", 2, (object) => object.spec.hostnames],
+    ["HTTPRoute", "restrict-webapp-child-ownership", 2, (object) => object.metadata.labels],
+    ["ExternalSecret", "restrict-tenant-secret-stores", 3, (object) => object.spec.secretStoreRef.kind],
+    ["SecretStore", "restrict-tenant-secret-stores", 1, (object) =>
+      object.spec.provider.vault.auth.kubernetes.serviceAccountRef.namespace],
+    ["CiliumNetworkPolicy", "restrict-tenant-network-policies", 1, (object) => object.spec.ingress],
+  ]) {
+    const targets = documents.filter((doc) => doc?.kind === kind);
+    assert.equal(targets.length, count);
+    for (const object of targets) {
+      for (const operation of ["CREATE", "UPDATE"]) {
+        const matches = fixtures.filter((f) => f.policy === policy && f.operation === operation &&
+          f.object.kind === kind && f.object.metadata.name === object.metadata.name);
+        const admitted = matches.find((f) => f.expected === "pass");
+        const refused = matches.find((f) => f.expected === "fail");
+        assert.equal(matches.length, 2);
+        assert.deepEqual(admitted.object, object, policy);
+        assert.notDeepEqual(field(refused.object), field(object), policy);
+        for (const request of matches) {
+          assert.deepEqual(request.namespaces, [namespace]);
+          assert.equal(request.actor, "system:serviceaccount:business-site:business-site");
+          if (operation === "UPDATE") assert.equal(request.oldObject.metadata.name, object.metadata.name);
+        }
+      }
+    }
+  }
+});
+
+test("direct admission refuses a graph without the tenant namespace selector", () => {
+  const result = admissionFixtures(render(), { "app.kubernetes.io/managed-by": "fixture" });
+  assert.equal(result.status, 1, result.stderr);
+  assert.equal(result.stdout, "", "invalid namespace context must not emit admission requests");
+  assert.match(result.stderr, /admission: invalid tenant namespace template/);
+});
+
+test("admission refuses incomplete, ambiguous, or misdirected workload input", () => {
+  const source = yaml.loadAll(render());
+  const invalid = [
+    source.filter((doc) => doc?.kind !== "Job"),
+    [...source, source.find((doc) => doc?.kind === "CronJob")],
+    source.filter((doc) => doc?.metadata?.name !== "business-site-portal"),
+  ];
+  for (const [kind, field, value] of [
+    ["WebApp", "apiVersion", "different.example/v1"],
+    ["Job", "name", "another-job"],
+    ["CronJob", "namespace", "business-site-dev"],
+  ]) {
+    const docs = structuredClone(source);
+    const object = docs.find((doc) => doc?.kind === kind);
+    if (field === "apiVersion") object[field] = value;
+    else object.metadata[field] = value;
+    invalid.push(docs);
+  }
+  for (const docs of invalid) {
+    const result = admissionFixtures(docs.map((doc) => yaml.dump(doc)).join("---\n"));
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(result.stdout, "", "invalid input must not emit a partial admission set");
+    assert.match(result.stderr, /admission: (missing or duplicate|unexpected identity)/);
+  }
+});
+
+test("the hosted preview keeps its application and schema migration private", () => {
   const preview = yaml.loadAll(render(path.join(root, "deploy/dev")));
-  assert.deepEqual(preview.map((document) => document.kind), ["WebApp"]);
-  const [app] = preview;
-  assert.equal(app.metadata.namespace, "business-site-dev");
+  assert.deepEqual(preview.map((document) => document.kind).sort(), ["Job", "WebApp"]);
+  assert.ok(preview.every((document) => document.metadata.namespace === "business-site-dev"));
+  const app = preview.find((document) => document.kind === "WebApp");
   assert.equal(app.metadata.name, "business-site-dev");
   assert.equal(app.spec.name, "business-site-dev");
   assert.equal(app.spec.host, "dev.devantler.tech");
   assert.equal(app.spec.replicas, 1);
   assert.deepEqual(app.spec.secretProjections, [{
-    secretName: "business-site-dev-disclosure",
-    items: [{ key: "company-disclosure", path: "disclosure" }],
+    secretName: "business-site-dev-runtime",
+    items: [
+      { key: "company-disclosure", path: "disclosure" },
+      { key: "portal-settings", path: "portal-settings" },
+      { key: "portal-client-secret", path: "portal-client-secret" },
+      { key: "portal-database-ca", path: "portal-database-ca" },
+    ],
   }]);
   const [base] = yaml.loadAll(render(path.join(root, "deploy/base")));
   assert.equal(app.spec.image, base.spec.image);
@@ -47,7 +244,20 @@ test("the hosted preview uses only its own disclosure input", () => {
     "--public", "/app/public",
     "--listen", "0.0.0.0:8080",
     "--company-disclosure-projection", "/run/webapp-inputs/disclosure",
+    "--public-host", "devantler.tech",
+    "--portal-host", "dev.devantler.tech",
+    "--portal-settings-projection", "/run/webapp-inputs/portal-settings",
   ]);
+  const job = preview.find((document) => document.kind === "Job");
+  assert.equal(job.metadata.name, "business-site-dev-migration");
+  const pod = job.spec.template.spec;
+  assert.equal(pod.automountServiceAccountToken, false);
+  assert.equal(pod.containers[0].image, app.spec.image);
+  assert.deepEqual(pod.containers[0].args, [
+    "--migrate", "--migration-database-projection", "/run/portal-migration/database-url",
+    "--runtime-role", "portal_preview_web",
+  ]);
+  assert.equal(pod.volumes.find((volume) => volume.name === "migration").secret.secretName, "business-site-dev-migration");
 });
 
 test("the rendered network policy allows only the two billing APIs on HTTPS", () => {
@@ -90,7 +300,10 @@ test("the rendered package projects the platform's runtime Secret with portal se
   assert.notEqual(disclosure.spec.target.name, app.spec.secretProjections[0].secretName);
   assert.deepEqual(app.spec.secretProjections, [{
     secretName: "business-site-runtime",
-    items: ["disclosure", "portal-settings", "portal-client-secret", "portal-database-ca", "smtp-username", "smtp-password"].map((path) => ({ key: path === "disclosure" ? disclosure.spec.data[0].secretKey : path, path })),
+    items: [
+      "disclosure", "portal-settings", "portal-client-secret", "portal-database-ca",
+      "smtp-username", "smtp-password", "portal-zitadel-token",
+    ].map((path) => ({ key: path === "disclosure" ? disclosure.spec.data[0].secretKey : path, path })),
   }]);
   // Each projected file the runtime reads is a path the projection actually supplies.
   for (const flag of ["--company-disclosure-projection", "--portal-settings-projection"]) {
@@ -173,9 +386,11 @@ for (const [name, mutate] of [
   ["a migration credential item", (d) => { d[0].spec.secretProjections[0].items.push({ key: "migration-database", path: "migration-database" }); }],
   ["a renamed settings path", (d) => { d[0].spec.secretProjections[0].items[1].path = "settings"; }],
   ["a settings key projected at another key's path", (d) => { d[0].spec.secretProjections[0].items[1].key = "portal-client-secret"; }],
-  ["a missing settings argument", (d) => { d[0].spec.args.splice(-2, 2); }],
-  ["settings outside the projection", (d) => { d[0].spec.args[d[0].spec.args.length - 1] = "/tmp/portal-settings"; }],
+  ["a missing settings argument", (d) => { d[0].spec.args.splice(d[0].spec.args.indexOf("--portal-settings-projection"), 2); }],
+  ["settings outside the projection", (d) => { d[0].spec.args[d[0].spec.args.indexOf("--portal-settings-projection") + 1] = "/tmp/portal-settings"; }],
   ["a repeated settings argument", (d) => { d[0].spec.args.push("--portal-settings-projection", "/run/webapp-inputs/portal-settings"); }],
+  ["an unapproved upstream logout endpoint", (d) => { d[0].spec.args[d[0].spec.args.indexOf("--portal-upstream-logout-url") + 1] = "https://foreign.example.invalid/end"; }],
+  ["a different upstream logout client", (d) => { d[0].spec.args[d[0].spec.args.indexOf("--portal-upstream-logout-client-id") + 1] = "123"; }],
   ["a one-shot invitation argument", (d) => { d[0].spec.args.push("--portal-invite"); }],
   ["world ingress", (d) => { d[1].spec.ingress[0].fromEntities = ["world"]; }],
   ["extra egress", (d) => { d[1].spec.egress = [{ toEntities: ["world"] }]; }],
@@ -410,4 +625,67 @@ test("actual tenant package and image checks cannot silently become optional in 
   const missing = structuredClone(workflow);
   missing.jobs["test-combined-runtime"].steps = missing.jobs["test-combined-runtime"].steps.filter((s) => !s.run?.includes("tenant-runtime-smoke"));
   assert.throws(() => assertCI(missing));
+});
+
+function assertAdmissionCI(workflow) {
+  const job = workflow.jobs["test-tenant-admission"];
+  assert.ok(job, "the native tenant admission job must exist");
+  assert.equal(job.if, undefined);
+  assert.equal(job.needs, undefined);
+  assert.equal(job["continue-on-error"], undefined);
+  assert.deepEqual(job.permissions, { contents: "read" });
+  const source = job.steps.find((step) => step.with?.repository === "devantler-tech/platform");
+  assert.match(source.uses, /^actions\/checkout@[0-9a-f]{40}$/);
+  assert.match(source.with.ref, /^[0-9a-f]{40}$/);
+  assert.equal(source.with["persist-credentials"], false);
+  assert.equal(source.with.path, ".tenant-policy-source");
+  assert.equal(source.with["sparse-checkout"], undefined);
+  const compile = job.steps.find((step) => step.id === "generated-workloads");
+  const check = job.steps.find((step) => step.id === "tenant-admission");
+  assert.ok(job.steps.indexOf(source) < job.steps.indexOf(compile) && job.steps.indexOf(compile) < job.steps.indexOf(check));
+  for (const step of [compile, check]) {
+    assert.equal(step.if, undefined);
+    assert.equal(step["continue-on-error"], undefined);
+    assert.equal(step.shell, "bash");
+  }
+  assert.deepEqual(compile.env, { KRO_API_BASE: "HEAD" });
+  assert.ok(compile.run.includes('kubectl kustomize deploy > "$work/production.yaml"'));
+  assert.ok(compile.run.includes("bash .tenant-policy-source/scripts/tests/test-webapp-compiler.sh"));
+  assert.ok(compile.run.includes('--render-admission-children "$work/application.json" "$work/children.json"'));
+  assert.deepEqual(check.env, { ADMISSION_DIRECTORY: "${{ steps.generated-workloads.outputs.directory }}" });
+  assert.ok(check.run.includes('node scripts/tenant-admission-fixtures.mjs "$tenant_graph" "$ADMISSION_DIRECTORY/children.json" < "$ADMISSION_DIRECTORY/production.yaml" |'));
+  assert.match(check.run, /go -C \.tenant-policy-source\/scripts\/tests\/tenant-webapp-admission run -mod=readonly \./);
+  for (const policy of [
+    "restrict-tenant-webapps", "validate-pod-security", "restrict-tenant-route-hostnames",
+    "restrict-webapp-child-ownership", "restrict-tenant-secret-stores", "restrict-tenant-network-policies",
+  ]) {
+    assert.ok(check.run.includes(`"$policies/${policy}.yaml"`));
+  }
+  for (const aggregate of [workflow.jobs.validation, workflow.jobs.status]) {
+    assert.ok(aggregate.needs.includes("test-tenant-admission"));
+    const observer = aggregate.steps.find((step) => step.with?.["job-results"]);
+    assert.ok(observer.with["job-results"].includes("${{ needs.test-tenant-admission.result }}"));
+  }
+}
+
+test("the policy check is required and uses an immutable read-only Platform source", () => {
+  const workflow = yaml.load(readFileSync(path.join(root, ".github/workflows/ci.yaml"), "utf8"));
+  assertAdmissionCI(workflow);
+  for (const mutate of [
+    (job) => { job.if = false; },
+    (job) => { job.permissions.contents = "write"; },
+    (job) => { job.steps.find((step) => step.with?.repository === "devantler-tech/platform").with.ref = "main"; },
+    (job) => { job.steps.find((step) => step.id === "generated-workloads").if = false; },
+    (job) => { job.steps.find((step) => step.id === "generated-workloads")["continue-on-error"] = true; },
+    (job) => { job.steps.find((step) => step.id === "tenant-admission").env.ADMISSION_DIRECTORY = "fixtures"; },
+    (job) => { job.steps.find((step) => step.id === "tenant-admission")["continue-on-error"] = true; },
+  ]) {
+    const changed = structuredClone(workflow);
+    mutate(changed.jobs["test-tenant-admission"]);
+    assert.throws(() => assertAdmissionCI(changed));
+  }
+  const missing = structuredClone(workflow);
+  const aggregate = missing.jobs.validation.steps.find((step) => step.with?.["job-results"]);
+  aggregate.with["job-results"] = aggregate.with["job-results"].replace("${{ needs.test-tenant-admission.result }}", "");
+  assert.throws(() => assertAdmissionCI(missing));
 });

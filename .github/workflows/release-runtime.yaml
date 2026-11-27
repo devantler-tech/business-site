@@ -4,10 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Nonpublishing credential preflight, or an explicitly enabled release
+        description: Check credentials and provenance, or release the confirmed commit
         type: choice
         options: [dry-run, release]
         default: dry-run
+      expected_source:
+        description: Exact signed main commit for release mode
+        type: string
+        required: false
 
 permissions: {}
 
@@ -32,7 +36,7 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
       - name: Setup the exact receipt-reader toolchain
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: server/go.mod
           cache: false
@@ -44,8 +48,8 @@ jobs:
         id: admit
         env:
           GH_TOKEN: ${{ github.token }}
-          RUNTIME_PUBLICATION_ENABLED: ${{ vars.RUNTIME_PUBLICATION_ENABLED }}
           RELEASE_MODE: ${{ inputs.mode }}
+          RUNTIME_PUBLICATION_ENABLED: ${{ vars.RUNTIME_PUBLICATION_ENABLED }}
         run: bash scripts/admit-runtime-release.sh
       - name: Setup Cosign
         uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
@@ -79,7 +83,8 @@ jobs:
     needs: admit
     permissions:
       contents: read
-    uses: devantler-tech/.github/.github/workflows/create-release.yaml@cc156a3693019fdbe9817c46f1a91cd50a124695
+      id-token: write # lets the shared release workflow prove its identity to the GitHub token broker (ADR 0020)
+    uses: devantler-tech/.github/.github/workflows/create-release.yaml@61d8f70f25d7d5deb8bd914136b329b5a59ff43b
     with:
       disable-issue-side-effects: true
       warn-missing-breaking-bang: true

@@ -2,8 +2,10 @@ package runtimeapp
 
 import (
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -12,14 +14,19 @@ import (
 // ErrPortalSettings is the entire diagnostic; setting names, values and paths stay private.
 var ErrPortalSettings = errors.New("portal settings projection is unavailable")
 
-// projectedPortalSettings are the only keys a settings projection may supply.
-// Each keeps its existing environment meaning. The staging lease and the
-// owner-only secret file remain environment-only inputs and are refused here.
+var portalSettingName = regexp.MustCompile(`^PORTAL_[A-Z][A-Z0-9_]*$`)
+
+var environmentOnlyPortalSettings = []string{"PORTAL_CLIENT_SECRET_FILE", "PORTAL_IDENTITY_LEASE_UNTIL"}
+
+// projectedPortalSettings lists the supported keys installed from a projection.
+// Each keeps its existing environment meaning.
 var projectedPortalSettings = []string{
 	"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL",
 	"PORTAL_CLIENT_SECRET_PROJECTION_FILE", "PORTAL_IDENTITY_PROFILE", "PORTAL_IDENTITY_FLAG",
+	"PORTAL_CLIENT_PREVIEW_DATABASE_URL", "PORTAL_CLIENT_PREVIEW_DATABASE_CA",
 	// Independently default-off production capabilities; never staging or work approval.
 	"PORTAL_CONTACT_VERIFICATION_FLAG", "PORTAL_REQUESTS_FLAG", "PORTAL_TRIAGE_FLAG", "PORTAL_PROPOSALS_FLAG",
+	"PORTAL_SUPPORT_FLAG",
 	"PORTAL_PROPOSAL_SHARING_FLAG", "PORTAL_PROPOSAL_ACCEPTANCE_FLAG", "PORTAL_INVOICE_BILLING_FLAG", "PORTAL_CARD_BILLING_FLAG",
 	// The optional Numina invoice path (BILLING.md); the key itself stays in its projected file.
 	"PORTAL_NUMINA_TOKEN_FILE", "PORTAL_NUMINA_API_URL", "PORTAL_NUMINA_SALES_ACCOUNT", "PORTAL_NUMINA_VAT_CODE",
@@ -29,7 +36,7 @@ var projectedPortalSettings = []string{
 	"PORTAL_SMTP_USERNAME_FILE", "PORTAL_SMTP_PASSWORD_FILE", "PORTAL_SMTP_ADDR", "PORTAL_MAIL_FROM",
 	// The optional upstream logout, which ends the identity provider's session too.
 	"PORTAL_UPSTREAM_END_SESSION_URL", "PORTAL_UPSTREAM_CLIENT_ID",
-	// The optional operators: customer Dex subjects issued through platform SSO.
+	// The optional operators: exact customer Dex subjects.
 	"PORTAL_OPERATOR_SUBJECTS",
 	// The customer directory's token stays in its separate rotating projection.
 	"PORTAL_ZITADEL_URL", "PORTAL_ZITADEL_ORG_ID", "PORTAL_ZITADEL_TOKEN_PROJECTION_FILE",
@@ -40,7 +47,7 @@ var projectedPortalSettings = []string{
 // inheritedPortalSettings are every setting ReadConfig and the activation
 // provider read. With a projection none may also come from the environment,
 // so a single source decides the portal's dependencies and activation.
-var inheritedPortalSettings = append([]string{"PORTAL_CLIENT_SECRET_FILE", "PORTAL_IDENTITY_LEASE_UNTIL"}, projectedPortalSettings...)
+var inheritedPortalSettings = slices.Concat(environmentOnlyPortalSettings, projectedPortalSettings)
 
 // ApplyPortalSettingsProjection reads one confined projected file, using the
 // company-disclosure projection's ownership, mode and size checks, and installs
@@ -66,19 +73,24 @@ func ApplyPortalSettingsProjection(filename string) error {
 	if err != nil {
 		return ErrPortalSettings
 	}
+	unsupported := len(settings)
 	for _, key := range projectedPortalSettings {
 		if value, ok := settings[key]; ok {
 			if err := os.Setenv(key, value); err != nil {
 				return ErrPortalSettings
 			}
+			unsupported--
 		}
+	}
+	if unsupported > 0 {
+		slog.Warn("ignored unsupported portal settings", "count", unsupported)
 	}
 	return nil
 }
 
 // parsePortalSettings accepts LF-separated KEY=value lines. Blank lines and
-// lines starting with # are ignored. Unknown or repeated keys, empty values,
-// surrounding whitespace, carriage returns, NUL and invalid UTF-8 are refused.
+// lines starting with # are ignored. Only the portal namespace is accepted.
+// Repeat keys, environment-only keys and malformed lines are refused.
 func parsePortalSettings(data []byte) (map[string]string, error) {
 	text := string(data)
 	if !utf8.ValidString(text) || strings.ContainsAny(text, "\r\x00") {
@@ -90,7 +102,8 @@ func parsePortalSettings(data []byte) (map[string]string, error) {
 			continue
 		}
 		key, value, ok := strings.Cut(line, "=")
-		if !ok || !slices.Contains(projectedPortalSettings, key) || value == "" || strings.TrimSpace(value) != value {
+		if !ok || !portalSettingName.MatchString(key) || slices.Contains(environmentOnlyPortalSettings, key) ||
+			value == "" || strings.TrimSpace(value) != value {
 			return nil, ErrPortalSettings
 		}
 		if _, repeated := settings[key]; repeated {

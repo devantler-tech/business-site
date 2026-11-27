@@ -15,7 +15,7 @@ func TestProjectedProductionCapabilitySettings(t *testing.T) {
 	settings["PORTAL_IDENTITY_PROFILE"] = "production"
 	settings["PORTAL_IDENTITY_FLAG"] = "{\"defaultVariant\":\"on\",\"variants\":[{\"name\":\"on\",\"value\":true}]}"
 	productionSettings := []string{
-		"PORTAL_CONTACT_VERIFICATION_FLAG", "PORTAL_REQUESTS_FLAG", "PORTAL_TRIAGE_FLAG",
+		"PORTAL_CONTACT_VERIFICATION_FLAG", "PORTAL_REQUESTS_FLAG", "PORTAL_TRIAGE_FLAG", "PORTAL_SUPPORT_FLAG",
 		"PORTAL_PROPOSALS_FLAG", "PORTAL_PROPOSAL_SHARING_FLAG", "PORTAL_PROPOSAL_ACCEPTANCE_FLAG",
 		"PORTAL_INVOICE_BILLING_FLAG", "PORTAL_CARD_BILLING_FLAG",
 	}
@@ -36,7 +36,7 @@ func TestProjectedProductionCapabilitySettings(t *testing.T) {
 	}
 	t.Cleanup(provider.(interface{ Shutdown() }).Shutdown)
 	for _, capability := range []string{
-		"portal-contact-verification", "portal-requests", "portal-triage", "portal-proposals",
+		"portal-contact-verification", "portal-requests", "portal-triage", "portal-support", "portal-proposals",
 		"portal-proposal-sharing", "portal-proposal-acceptance", "portal-invoice-billing", "portal-card-billing",
 	} {
 		result := provider.BooleanEvaluation(t.Context(), capability, false, openfeature.FlattenedContext{})

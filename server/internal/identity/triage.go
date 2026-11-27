@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/justinas/nosurf"
 	"github.com/open-feature/go-sdk/openfeature"
 )
 
@@ -183,6 +184,8 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
+	page.TriageEnabled = true
+	page.CSRF = nosurf.Token(r)
 	_ = b.templates().ExecuteTemplate(w, "triage.html", page)
 }
 

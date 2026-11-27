@@ -97,6 +97,7 @@ func (b *browser) showWorkReview(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err := b.foundation.readWorkReviewChecked(ctx, b.principal(r.Context()), r.PathValue("id"), review, cursor, func(ctx context.Context, tx pgx.Tx, work workReviewData) error {
 		page := b.workPage(r, work, review)
+		page.TriageEnabled = true
 		if b.templates().ExecuteTemplate(&buffer, "work-review.html", page) != nil {
 			return errTriageStorage
 		}

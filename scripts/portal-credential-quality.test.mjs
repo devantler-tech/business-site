@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import manifest from '../package.json' with { type: 'json' };
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const path = join(root, '.secretlintrc.json');
@@ -72,7 +73,7 @@ test('only nine complete fictional strings are recognized; the full preset is re
 test('the actual pinned scanner examines the complete tracked server', () => {
   const version = spawnSync('secretlint', ['--version'], { encoding: 'utf8', timeout: 30000 });
   assert.equal(version.status, 0);
-  assert.equal(version.stdout.trim(), '14.0.0');
+  assert.equal(version.stdout.trim(), manifest.devDependencies.secretlint);
   const tracked = spawnSync('git', ['ls-files', '-z', '--', 'server'], { cwd: root, encoding: 'utf8' });
   assert.equal(tracked.status, 0);
   const files = tracked.stdout.split('\0').filter(Boolean);

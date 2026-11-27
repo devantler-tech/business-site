@@ -65,6 +65,8 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	publicHost := options.String("public-host", "", "public site host; with --portal-host, each host redirects the other's pages")
 	portalHost := options.String("portal-host", "", "portal host; / opens the portal there")
 	portalSettings := options.String("portal-settings-projection", "", "confined projected portal settings file for serving or one invitation")
+	logoutURL := options.String("portal-upstream-logout-url", "", "release default for the upstream logout endpoint")
+	logoutClientID := options.String("portal-upstream-logout-client-id", "", "release default for the upstream logout client ID")
 	runtimeRole := options.String("runtime-role", "", "existing web login that the migration grants its runtime privileges")
 	identityPhase := registerIdentityPhaseOptions(options)
 	portalInvite := registerPortalInviteOptions(options)
@@ -130,6 +132,11 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	if settingsProjected && (seen["portal-settings-projection"] != 1 || *portalSettings == "" || *check || *version || *checkServing) {
 		return runtimeapp.ErrPortalSettings
 	}
+	logoutDefaults := seen["portal-upstream-logout-url"] != 0 || seen["portal-upstream-logout-client-id"] != 0
+	if logoutDefaults && (!settingsProjected || *portalHost == "" || seen["portal-upstream-logout-url"] != 1 ||
+		seen["portal-upstream-logout-client-id"] != 1 || *logoutURL == "" || *logoutClientID == "") {
+		return runtimeapp.ErrPortalSettings
+	}
 	if *check {
 		artifact, err := loadPublic(*public)
 		if err != nil {
@@ -176,6 +183,12 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	cfg, err := runtimeapp.ReadConfig(os.Getenv)
 	if err != nil {
 		return err
+	}
+	if logoutDefaults {
+		cfg, err = cfg.WithUpstreamLogoutDefaults(*logoutURL, *logoutClientID)
+		if err != nil {
+			return err
+		}
 	}
 	if !cfg.FitsPortalHost(*portalHost) {
 		return errors.New("portal callback does not match the portal host")
