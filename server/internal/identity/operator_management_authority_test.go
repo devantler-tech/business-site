@@ -107,7 +107,7 @@ func TestOperatorManagementNativeReturnJourney(t *testing.T) {
 		t.Fatal("native form did not return to the customer inventory", status, location)
 	}
 	status, body, _ := b.request("GET", location, nil, "")
-	if status != http.StatusOK || !strings.Contains(body, "native-workspace") || !strings.Contains(body, "Kunder og arbejdsområder") {
+	if status != http.StatusOK || !strings.Contains(body, "native-workspace") || !strings.Contains(body, "<h1>Arbejdsområder</h1>") {
 		t.Fatal("native return lost its persisted workspace or language", status)
 	}
 }

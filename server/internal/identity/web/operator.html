@@ -9,10 +9,16 @@
         <h1>{{.Title}}</h1>
         {{if .Intro}}<p>{{.Intro}}</p>{{end}}
       </div>
-      {{$canInvite := or (eq .Kind "operator") (and (eq .Kind "operator-customers") (not .View))}}
-      {{if or $canInvite .PreviewAvailable}}
+      {{$workspaceIndex := and (eq .Kind "operator-customers") (not .View)}}
+      {{if or $workspaceIndex .PreviewAvailable}}
       <div class="operator-actions">
-        {{if $canInvite}}<a class="button" href="{{root}}/operator/invitations/new?lang={{.Lang}}">{{template "operator-invite-label" .}}</a>{{end}}
+        {{if $workspaceIndex}}
+        <form method="get" action="{{root}}/operator/customers">
+          <input type="hidden" name="lang" value="{{.Lang}}">
+          <input type="hidden" name="view" value="new">
+          <button type="submit" data-workspace-create>{{template "operator-new-workspace-label" .}}</button>
+        </form>
+        {{end}}
         {{if .PreviewAvailable}}
         <form method="post" action="{{root}}/preview?lang={{.Lang}}">
           <input type="hidden" name="csrf_token" value="{{.CSRF}}">
@@ -36,7 +42,7 @@
 <nav class="operator-navigation" aria-label="{{if eq .Lang `da`}}Operatørportal{{else}}Operator workspace{{end}}">
   <ul>
     <li><a href="{{root}}/operator?lang={{.Lang}}" aria-current="{{if eq .Kind `operator`}}page{{else}}false{{end}}">{{if eq .Lang "da"}}Oversigt{{else}}Overview{{end}}</a></li>
-    <li><a href="{{root}}/operator/customers?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-customers`}}page{{else if or (eq .Kind `operator-invite`) (eq .Kind `operator-support`)}}location{{else}}false{{end}}">{{if eq .Lang "da"}}Kunder{{else}}Customers{{end}}</a></li>
+    <li><a href="{{root}}/operator/customers?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-customers`}}{{if .View}}location{{else}}page{{end}}{{else if or (eq .Kind `operator-invite`) (eq .Kind `operator-support`)}}location{{else}}false{{end}}">{{if eq .Lang "da"}}Arbejdsområder{{else}}Workspaces{{end}}</a></li>
     {{if .TriageEnabled}}<li><a href="{{root}}/operator/requests?lang={{.Lang}}" aria-current="{{if or (eq .Kind `triage`) (eq .Kind `work-review`)}}location{{else}}false{{end}}">{{template "operator-requests-label" .}}</a></li>{{end}}
     {{if .CalendarConflictsEnabled}}<li><a href="{{root}}/operator/calendar-conflicts?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-calendar-conflicts`}}page{{else}}false{{end}}">{{if eq .Lang "da"}}Kalenderstatus{{else}}Calendar review{{end}}</a></li>
     {{end}}<li><a href="{{root}}/operator/audit?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-audit`}}page{{else}}false{{end}}">{{if eq .Lang "da"}}Revisionslog{{else}}Audit log{{end}}</a></li>
@@ -50,7 +56,7 @@
 </nav>
 {{end}}
 
-{{define "operator-invite-label"}}{{if eq .Lang "da"}}Inviter en kunde{{else}}Invite a customer{{end}}{{end}}
+{{define "operator-new-workspace-label"}}{{if eq .Lang "da"}}Nyt arbejdsområde{{else}}New workspace{{end}}{{end}}
 {{define "operator-requests-label"}}{{if eq .Lang "da"}}Projektforespørgsler{{else}}Project requests{{end}}{{end}}
 
 {{define "operator-calendar-conflicts"}}
@@ -84,7 +90,7 @@
 </div>
 <ul class="workspace-actions">
   <li>
-    <a href="{{root}}/operator/customers?lang={{.Lang}}"><strong>{{if eq .Lang "da"}}Kunder og arbejdsområder{{else}}Customers and workspaces{{end}}</strong>
+    <a href="{{root}}/operator/customers?lang={{.Lang}}"><strong>{{if eq .Lang "da"}}Arbejdsområder{{else}}Workspaces{{end}}</strong>
       <span>{{if eq .Lang "da"}}Se afventende invitationer og administrer adgang.{{else}}View pending invitations and manage access.{{end}}</span></a>
   </li>
   {{if .TriageEnabled}}

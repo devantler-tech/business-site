@@ -172,16 +172,19 @@ func (b *browser) operatorInvitationPage(w http.ResponseWriter, r *http.Request)
 		for _, workspace := range spaces {
 			if workspace.Manageable {
 				d.Workspaces = append(d.Workspaces, workspace)
+				if workspace.ID == r.URL.Query().Get("workspace") {
+					d.InviteWorkspace, d.InviteName = workspace.ID, workspace.Name
+				}
 			}
 		}
-		if workspace := r.URL.Query().Get("workspace"); validCustomerWorkspace(workspace) {
-			d.InviteWorkspace = workspace
+		if r.URL.Query().Has("workspace") && d.InviteWorkspace == "" {
+			return nil, errOperatorInput
 		}
 		var buffer bytes.Buffer
 		err = b.templates().ExecuteTemplate(&buffer, "operator.html", d)
 		return buffer.Bytes(), err
 	})
-	if status != http.StatusOK && status != http.StatusServiceUnavailable {
+	if status != http.StatusOK && status != http.StatusServiceUnavailable && status != http.StatusBadRequest {
 		status = http.StatusForbidden
 	}
 	b.writeOperatorActionPage(w, r, status, result)

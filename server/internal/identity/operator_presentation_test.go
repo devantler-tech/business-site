@@ -16,8 +16,8 @@ func TestOperatorWorkspaceNavigation(t *testing.T) {
 	for _, page := range []struct {
 		path, active, current, heading, detail string
 	}{
-		{"/", "/operator", "page", "Operator workspace", "Invite a customer"},
-		{"/operator/customers", "/operator/customers", "page", "Kunder og arbejdsområder", "Aktive arbejdsområder"},
+		{"/", "/operator", "page", "Operator workspace", "Workspaces"},
+		{"/operator/customers", "/operator/customers", "page", "Arbejdsområder", "Aktive arbejdsområder"},
 		{"/operator/invitations/new", "/operator/customers", "location", "Invite a customer", `aria-describedby="invite-workspace-help"`},
 		{"/operator/audit", "/operator/audit", "page", "Revisionslog", "customers.view"},
 	} {

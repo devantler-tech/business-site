@@ -5,14 +5,19 @@
   {{if .Workspaces}}
   <form class="operator-form" method="post" action="{{root}}/operator/api/invitations?lang={{.Lang}}&amp;focus=workspace">
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    {{if .InviteWorkspace}}
+    <input type="hidden" name="workspace" value="{{.InviteWorkspace}}">
+    <p>{{if eq .Lang "da"}}Arbejdsområde{{else}}Workspace{{end}} <strong>{{.InviteName}}</strong></p>
+    {{else}}
     <div>
       <label for="invite-workspace">{{if eq .Lang "da"}}Arbejdsområde{{else}}Workspace{{end}}</label>
       <select id="invite-workspace" name="workspace" aria-describedby="invite-workspace-help" required>
         <option value="">{{if eq .Lang "da"}}Vælg et arbejdsområde{{else}}Choose a workspace{{end}}</option>
-        {{range .Workspaces}}{{if eq .ID $.InviteWorkspace}}<option value="{{.ID}}" selected>{{.Name}}</option>{{else}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{end}}
+        {{range .Workspaces}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
       </select>
       <small id="invite-workspace-help">{{if eq .Lang "da"}}Kunden får adgang til dette arbejdsområde ved første login.{{else}}The customer gains access to this workspace on their first sign-in.{{end}}</small>
     </div>
+    {{end}}
     <div><label for="invite-name">{{if eq .Lang "da"}}Fulde navn{{else}}Full name{{end}}</label>
       <input id="invite-name" name="name" autocomplete="off" maxlength="200" required></div>
     <div><label for="invite-email">{{if eq .Lang "da"}}E-mail til login{{else}}Sign-in email{{end}}</label>
@@ -23,7 +28,7 @@
   </form>
   {{else}}
   <p>{{if eq .Lang "da"}}Opret et arbejdsområde, før du inviterer en kunde.{{else}}Create a workspace before inviting a customer.{{end}}</p>
-  <a class="button" href="{{root}}/operator/customers?lang={{.Lang}}&amp;view=new">{{if eq .Lang "da"}}Opret arbejdsområde{{else}}Create workspace{{end}}</a>
+  {{template "operator-back-to-workspaces" .}}
   {{end}}
 </section>
 {{end}}
@@ -44,7 +49,6 @@
 <section class="operator-panel operator-workspace-directory" aria-labelledby="operator-workspaces">
   <div class="operator-panel-heading">
     <h2 id="operator-workspaces">{{if eq .Lang "da"}}Aktive arbejdsområder{{else}}Active workspaces{{end}}</h2>
-    <a class="operator-secondary" href="{{root}}/operator/customers?lang={{.Lang}}&amp;view=new">{{if eq .Lang "da"}}Nyt arbejdsområde{{else}}New workspace{{end}}</a>
   </div>
   <form class="operator-workspace-search" role="search" method="get" action="{{root}}/operator/customers">
     <input type="hidden" name="lang" value="{{.Lang}}">
@@ -60,10 +64,7 @@
     {{range .Workspaces}}
     <li>
       <a class="operator-workspace-row" href="{{root}}/operator/customers?lang={{$.Lang}}&amp;workspace={{.ID}}">
-        <span class="operator-workspace-label">
-          <strong>{{.Name}}</strong>
-          {{range $i, $member := .Members}}{{if eq $i 0}}{{with $member.Person}}<small>{{.Name}}{{if .Email}} · {{.Email}}{{end}}</small>{{end}}{{end}}{{end}}
-        </span>
+        <strong>{{.Name}}</strong>
         <span class="operator-workspace-counts">
           <span>{{len .Members}} {{if eq $.Lang "da"}}medlemmer{{else}}{{if eq (len .Members) 1}}member{{else}}members{{end}}{{end}}</span>
           {{$count := index $.InvitationCounts .ID}}{{if $count}}<span class="operator-status">{{$count}} {{if eq $.Lang "da"}}afventer{{else}}pending{{end}}</span>{{end}}
@@ -80,20 +81,29 @@
     <a href="{{root}}/operator/customers?lang={{.Lang}}&amp;view=cleanup">{{if eq .Lang "da"}}Ryd op i invitationer{{else}}Clean up invitations{{end}}</a>
   </div>
 </section>
+<dialog id="create-workspace-dialog" class="operator-panel operator-workspace-dialog" aria-labelledby="create-workspace-heading">
+  <h2 id="create-workspace-heading">{{template "operator-new-workspace-label" .}}</h2>
+  {{template "operator-workspace-create-form" .}}
+</dialog>
 {{end}}
 
 {{define "operator-workspace-create"}}
 <div class="operator-panel operator-workspace-form">
+  {{template "operator-workspace-create-form" .}}
+</div>
+{{end}}
+
+{{define "operator-workspace-create-form"}}
   <form class="operator-form" method="post" action="{{root}}/operator/api/workspaces?lang={{.Lang}}">
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
     <div><label for="workspace-name">{{if eq .Lang "da"}}Arbejdsområdets navn{{else}}Workspace name{{end}}</label>
       <input id="workspace-name" name="display_name" required maxlength="100"></div>
     <div class="operator-actions">
       <button type="submit">{{if eq .Lang "da"}}Opret arbejdsområde{{else}}Create workspace{{end}}</button>
-      {{template "operator-back-to-workspaces" .}}
+      {{if .View}}<a href="{{root}}/operator/customers?lang={{.Lang}}">{{if eq .Lang "da"}}Annuller{{else}}Cancel{{end}}</a>
+      {{else}}<button type="button" class="operator-secondary" data-workspace-cancel>{{if eq .Lang "da"}}Annuller{{else}}Cancel{{end}}</button>{{end}}
     </div>
   </form>
-</div>
 {{end}}
 
 {{define "operator-workspace-detail"}}
@@ -102,12 +112,12 @@
   {{template "operator-back-to-workspaces" .}}
   <div class="operator-actions">
     {{if and .SupportAvailable .SupportMembers}}<a class="operator-secondary" href="{{root}}/operator/customers?lang={{.Lang}}&amp;workspace={{$workspace}}&amp;view=support">{{if eq .Lang "da"}}Support{{else}}Support view{{end}}</a>{{end}}
-    {{if .Detail.Manageable}}<a class="button" href="{{root}}/operator/invitations/new?lang={{.Lang}}&amp;workspace={{$workspace}}">{{if eq .Lang "da"}}Inviter et medlem{{else}}Invite member{{end}}</a>{{end}}
+    {{if .Detail.Manageable}}<a class="button" href="{{root}}/operator/invitations/new?lang={{.Lang}}&amp;workspace={{$workspace}}">{{if eq .Lang "da"}}Inviter kunde{{else}}Invite customer{{end}}</a>{{end}}
   </div>
 </div>
 <section class="operator-panel operator-workspace-directory" aria-labelledby="manage-members">
   <div class="operator-panel-heading">
-    <h2 id="manage-members">{{if eq .Lang "da"}}Medlemmer{{else}}Members{{end}}</h2>
+    <h2 id="manage-members">{{if .Detail.Manageable}}{{if eq .Lang "da"}}Kunder{{else}}Customers{{end}}{{else}}{{if eq .Lang "da"}}Medlemmer{{else}}Members{{end}}{{end}}</h2>
   </div>
   {{if .Detail.Members}}
   <ul class="operator-members">

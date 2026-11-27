@@ -109,6 +109,11 @@ func TestWorkspaceInvitationSelectionAndRetry(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	status, markup, _ := b.request("GET", "/portal/operator/invitations/new?lang=en&workspace=client-b", nil, "")
+	if status != http.StatusOK || !strings.Contains(markup, `name="workspace" value="client-b"`) ||
+		strings.Contains(markup, `<select id="invite-workspace"`) || strings.Contains(markup, "client-c") {
+		t.Fatalf("the invite form escaped the selected workspace: %d", status)
+	}
 	for range 2 {
 		status, body, _ := b.request("POST", path, form, b.site.URL)
 		if status != http.StatusOK || !strings.Contains(body, `"workspace":"client-b"`) {

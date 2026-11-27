@@ -26,3 +26,16 @@ for (const field of document.querySelectorAll('[data-character-limit]')) {
   field.addEventListener('input', check);
   check();
 }
+
+const workspaceCreate = document.querySelector('[data-workspace-create]');
+const workspaceDialog = document.querySelector('#create-workspace-dialog');
+if (workspaceCreate && typeof workspaceDialog?.showModal === 'function') {
+  workspaceCreate.setAttribute('aria-haspopup', 'dialog');
+  workspaceCreate.form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    workspaceDialog.showModal();
+    workspaceDialog.querySelector('[name="display_name"]').focus();
+  });
+  workspaceDialog.querySelector('[data-workspace-cancel]').addEventListener('click', () => workspaceDialog.close());
+  workspaceDialog.addEventListener('close', () => workspaceCreate.focus());
+}

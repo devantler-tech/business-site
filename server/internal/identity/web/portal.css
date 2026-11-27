@@ -664,6 +664,17 @@ main:has(> .client-home) {
   max-width: 45rem;
 }
 
+.operator-workspace-dialog {
+  width: min(calc(100% - 2rem), 28rem);
+  max-height: calc(100% - 2rem);
+  margin: auto;
+  color: var(--ink);
+}
+
+.operator-workspace-dialog::backdrop {
+  background: rgb(0 0 0 / 60%);
+}
+
 .operator-workspace-form form {
   margin-block-start: 1rem;
 }
@@ -681,7 +692,7 @@ main:has(> .client-home) {
   color: var(--muted);
 }
 
-.operator-workspace-search input,
+.operator-workspace-search > input[type="search"],
 .operator-workspace-form select {
   width: 100%;
   min-width: 0;
@@ -699,7 +710,6 @@ main:has(> .client-home) {
 }
 
 .operator-workspace-form small,
-.operator-workspace-label small,
 .operator-help,
 .operator-access-row time {
   color: var(--muted);
@@ -749,11 +759,6 @@ main:has(> .client-home) {
 .operator-workspace-row:hover strong,
 .operator-workspace-row:focus-visible strong {
   text-decoration: underline;
-}
-
-.operator-workspace-label {
-  display: grid;
-  gap: 0.15rem;
 }
 
 .operator-workspace-counts {

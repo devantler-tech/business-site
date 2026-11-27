@@ -37,9 +37,9 @@ func (b *browser) operatorData(r *http.Request, kind, client string) pageData {
 	}
 	switch kind {
 	case "operator-customers":
-		d.Title, d.Intro = "Customers and workspaces", "Manage invitations and decide who has access to each workspace."
+		d.Title = "Workspaces"
 		if d.Lang == "da" {
-			d.Title, d.Intro = "Kunder og arbejdsområder", "Administrer invitationer og adgang til hvert arbejdsområde."
+			d.Title = "Arbejdsområder"
 		}
 	case "operator-invite":
 		d.Title = "Invite a customer"

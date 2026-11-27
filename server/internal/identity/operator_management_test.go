@@ -151,8 +151,8 @@ func TestOperatorManagementPageUsesNativeActions(t *testing.T) {
 	b := newOperatorBrowserFixture(t)
 	b.invite("pending-customer", "client-a", "client")
 	for lang, labels := range map[string]struct{ heading, searchLabel string }{
-		"en": {"Customers and workspaces", "Find a workspace, customer or invitation"},
-		"da": {"Kunder og arbejdsområder", "Find et arbejdsområde, en kunde eller en invitation"},
+		"en": {"Workspaces", "Find a workspace, customer or invitation"},
+		"da": {"Arbejdsområder", "Find et arbejdsområde, en kunde eller en invitation"},
 	} {
 		status, body, _ := b.request("GET", "/portal/operator/customers?lang="+lang, nil, "")
 		if status != http.StatusOK || !strings.Contains(body, labels.heading) || !strings.Contains(body, "client-a") {
@@ -163,6 +163,10 @@ func TestOperatorManagementPageUsesNativeActions(t *testing.T) {
 			!strings.Contains(body, `id="directory-query" name="q" type="search"`) {
 			t.Fatalf("accessible workspace search is missing in %s", lang)
 		}
+		if strings.Count(body, "data-workspace-create") != 1 || strings.Count(body, `<dialog id="create-workspace-dialog"`) != 1 ||
+			!strings.Contains(body, `aria-labelledby="create-workspace-heading"`) || strings.Contains(body, "/operator/invitations/new?") {
+			t.Fatalf("the workspace index does not expose one dedicated creation entry in %s", lang)
+		}
 		_, detail, _ := b.request("GET", "/portal/operator/customers?lang="+lang+"&workspace=client-a", nil, "")
 		_, closePage, _ := b.request("GET", "/portal/operator/customers?lang="+lang+"&workspace=client-a&view=close", nil, "")
 		_, createPage, _ := b.request("GET", "/portal/operator/customers?lang="+lang+"&view=new", nil, "")
@@ -171,7 +175,8 @@ func TestOperatorManagementPageUsesNativeActions(t *testing.T) {
 				t.Fatalf("%s native action missing in %s", action, lang)
 			}
 		}
-		if strings.Contains(body, "<details") || strings.Contains(detail, "<details") {
+		if strings.Contains(body, "<details") || strings.Contains(detail, "<details") || strings.Contains(detail, "data-workspace-create") ||
+			!strings.Contains(detail, "&amp;workspace=client-a") {
 			t.Fatal("workspace management still hides rows in disclosures")
 		}
 	}

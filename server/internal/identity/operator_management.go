@@ -35,6 +35,7 @@ type managementPage struct {
 	SupportAvailable bool
 	SupportMembers   bool
 	View, Query      string
+	InviteName       string
 	Detail           *workspaceView
 	SelectedMember   *workspaceMember
 	InvitationCounts map[string]int
