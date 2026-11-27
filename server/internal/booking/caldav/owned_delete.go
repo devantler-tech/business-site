@@ -28,7 +28,7 @@ func (c *Client) DeleteOwnedEvent(ctx context.Context, event OwnedEvent, expecte
 		return err
 	}
 	if current.ETag != expectedTag {
-		return booking.ErrUnavailable
+		return ErrOwnedEventConflict
 	}
 	request, err := c.sourceRequest(ctx, http.MethodDelete, resource, nil)
 	if err != nil {
@@ -46,8 +46,11 @@ func (c *Client) DeleteOwnedEvent(ctx context.Context, event OwnedEvent, expecte
 		}
 	}
 	current, err = c.readOwnedEvent(ctx, client, resource, uid, event)
-	if err != nil || current.Exists {
-		return booking.ErrUnavailable
+	if err != nil || !current.Exists {
+		return err
 	}
-	return nil
+	if current.ETag != expectedTag {
+		return ErrOwnedEventConflict
+	}
+	return booking.ErrUnavailable
 }

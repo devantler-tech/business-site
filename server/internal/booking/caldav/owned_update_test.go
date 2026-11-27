@@ -25,28 +25,29 @@ func TestUpdateOwnedEventRequiresThePersistedVersion(t *testing.T) {
 	foreign := strings.Replace(fixtureOwnedEvent, fixtureEventKey, strings.Repeat("a", 64), 1)
 
 	tests := []struct {
-		name    string
-		initial string
-		tag     string
-		expect  string
-		store   bool
-		status  int
-		methods []string
-		success bool
+		name     string
+		initial  string
+		tag      string
+		expect   string
+		writeTag string
+		status   int
+		methods  []string
+		errKind  string
 	}{
-		{"change the same appointment", fixtureOwnedEvent, oldTag, oldTag, true, http.StatusNoContent, []string{"GET", "PUT", "GET"}, true},
-		{"reuse a confirmed update", rescheduled, newTag, oldTag, false, 0, []string{"GET"}, true},
-		{"reject reused provider validator", rescheduled, oldTag, oldTag, false, 0, []string{"GET"}, false},
-		{"do not recreate a missing appointment", "", "", oldTag, false, 0, []string{"GET"}, false},
-		{"do not replace a different appointment", foreign, oldTag, oldTag, false, 0, []string{"GET"}, false},
-		{"do not adopt an external version", fixtureOwnedEvent, newTag, oldTag, false, 0, []string{"GET"}, false},
-		{"reject a weak validator before sending", fixtureOwnedEvent, oldTag, "W/" + oldTag, false, 0, nil, false},
-		{"reject a wildcard before sending", fixtureOwnedEvent, oldTag, "*", false, 0, nil, false},
-		{"confirm after a provider error", fixtureOwnedEvent, oldTag, oldTag, true, http.StatusServiceUnavailable, []string{"GET", "PUT", "GET"}, true},
-		{"concurrent matching update", fixtureOwnedEvent, oldTag, oldTag, true, http.StatusPreconditionFailed, []string{"GET", "PUT", "GET"}, true},
-		{"conflict without the new revision", fixtureOwnedEvent, oldTag, oldTag, false, http.StatusPreconditionFailed, []string{"GET", "PUT", "GET"}, false},
-		{"do not trust a successful response alone", fixtureOwnedEvent, oldTag, oldTag, false, http.StatusNoContent, []string{"GET", "PUT", "GET"}, false},
-		{"a revoked credential stops the update", fixtureOwnedEvent, oldTag, oldTag, false, http.StatusUnauthorized, []string{"GET", "PUT"}, false},
+		{"change the same appointment", fixtureOwnedEvent, oldTag, oldTag, newTag, http.StatusNoContent, []string{"GET", "PUT", "GET"}, ""},
+		{"reuse a confirmed update", rescheduled, newTag, oldTag, "", 0, []string{"GET"}, ""},
+		{"reject reused provider validator", rescheduled, oldTag, oldTag, "", 0, []string{"GET"}, "conflict"},
+		{"do not recreate a missing appointment", "", "", oldTag, "", 0, []string{"GET"}, "conflict"},
+		{"do not replace a different appointment", foreign, oldTag, oldTag, "", 0, []string{"GET"}, "conflict"},
+		{"do not adopt an external version", fixtureOwnedEvent, newTag, oldTag, "", 0, []string{"GET"}, "conflict"},
+		{"reject a weak validator before sending", fixtureOwnedEvent, oldTag, "W/" + oldTag, "", 0, nil, "unavailable"},
+		{"reject a wildcard before sending", fixtureOwnedEvent, oldTag, "*", "", 0, nil, "unavailable"},
+		{"confirm after a provider error", fixtureOwnedEvent, oldTag, oldTag, newTag, http.StatusServiceUnavailable, []string{"GET", "PUT", "GET"}, ""},
+		{"concurrent matching update", fixtureOwnedEvent, oldTag, oldTag, newTag, http.StatusPreconditionFailed, []string{"GET", "PUT", "GET"}, ""},
+		{"provider refusal with unchanged prior revision", fixtureOwnedEvent, oldTag, oldTag, "", http.StatusPreconditionFailed, []string{"GET", "PUT", "GET"}, "unavailable"},
+		{"do not trust a successful response alone", fixtureOwnedEvent, oldTag, oldTag, "", http.StatusNoContent, []string{"GET", "PUT", "GET"}, "unavailable"},
+		{"updated body reuses the old validator", fixtureOwnedEvent, oldTag, oldTag, oldTag, http.StatusNoContent, []string{"GET", "PUT", "GET"}, "conflict"},
+		{"a revoked credential stops the update", fixtureOwnedEvent, oldTag, oldTag, "", http.StatusUnauthorized, []string{"GET", "PUT"}, "unavailable"},
 	}
 
 	for _, test := range tests {
@@ -71,8 +72,8 @@ func TestUpdateOwnedEventRequiresThePersistedVersion(t *testing.T) {
 						w.WriteHeader(http.StatusBadRequest)
 						return
 					}
-					if test.store {
-						stored, validator = rescheduled, newTag
+					if test.writeTag != "" {
+						stored, validator = rescheduled, test.writeTag
 					}
 					w.WriteHeader(test.status)
 				default:
@@ -84,9 +85,11 @@ func TestUpdateOwnedEventRequiresThePersistedVersion(t *testing.T) {
 			got, err := client.UpdateOwnedEvent(t.Context(), prior, next, test.expect)
 			guard.Lock()
 			defer guard.Unlock()
-			ok := (err == nil && got == (OwnedEventObservation{Exists: true, ETag: newTag}))
-			refused := errors.Is(err, booking.ErrUnavailable) && got == (OwnedEventObservation{})
-			if !slices.Equal(methods, test.methods) || (test.success && !ok) || (!test.success && !refused) {
+			want := OwnedEventObservation{}
+			if test.errKind == "" {
+				want = OwnedEventObservation{Exists: true, ETag: newTag}
+			}
+			if !slices.Equal(methods, test.methods) || ownedEventErrorKind(err) != test.errKind || got != want {
 				t.Fatalf("unexpected update evidence: exists=%t error=%v methods=%v", got.Exists, err, methods)
 			}
 		})
