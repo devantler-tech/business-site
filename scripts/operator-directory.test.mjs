@@ -5,91 +5,59 @@ import vm from 'node:vm';
 
 const asset = readFileSync(new URL('../server/internal/identity/web/portal.js', import.meta.url), 'utf8');
 
-function directoryFixture() {
-  const member = (textContent) => ({
-    hidden: false,
-    querySelector: () => ({ textContent }),
-  });
-  const workspace = (textContent, open, members) => ({
-    hidden: false, open,
-    querySelector: () => ({ textContent }),
-    querySelectorAll: () => members,
-  });
-  const rosa = member('Rosa r@example.invalid');
-  const astrid = member('Astrid a@example.invalid');
-  const robin = member('Robin robin@example.invalid');
-  const studio = workspace('North Studio', false, [rosa, astrid]);
-  const shop = workspace('South Shop', true, [robin]);
-  const search = { hidden: true };
-  const status = { textContent: '', dataset: { noMatches: 'No workspaces or members match your search.' } };
-  let onInput;
-  const input = {
-    value: '',
-    addEventListener: (type, listener) => {
-      if (type === 'input') onInput = listener;
-    },
+function workspaceDialogFixture(supported) {
+  const windowEvents = new Map();
+  const cancelEvents = new Map();
+  const triggerEvents = new Map();
+  const attributes = new Map();
+  let opened = false;
+  let focused = '';
+  const input = { focus: () => { focused = 'name'; } };
+  const cancel = { addEventListener: (name, handler) => cancelEvents.set(name, handler) };
+  const trigger = {
+    form: { addEventListener: (name, handler) => triggerEvents.set(name, handler) },
+    focus: () => { focused = 'trigger'; },
+    setAttribute: (name, value) => attributes.set(name, value),
   };
-  const directory = {
-    querySelector: (selector) => ({
-      '[data-directory-search]': search,
-      'input[type="search"]': input,
-      '[data-directory-status]': status,
-    })[selector],
-    querySelectorAll: () => [studio, shop],
+  const dialog = {
+    showModal: supported ? () => { opened = true; } : undefined,
+    close: () => {
+      opened = false;
+      windowEvents.get('close')();
+    },
+    querySelector: selector => selector === '[name="display_name"]' ? input : cancel,
+    addEventListener: (name, handler) => windowEvents.set(name, handler),
   };
   const document = {
-    querySelector: (selector) => selector === '[data-workspace-directory]' ? directory : null,
+    querySelector: selector => ({
+      '[data-workspace-create]': trigger,
+      '#create-workspace-dialog': dialog,
+    })[selector],
     querySelectorAll: () => [],
   };
   vm.runInNewContext(asset, { document });
+  function dispatch(events, name) {
+    let prevented = false;
+    events.get(name)?.({ preventDefault: () => { prevented = true; } });
+    return prevented;
+  }
   return {
-    search, status, studio, shop, rosa, astrid, robin,
-    type: (value) => {
-      assert.equal(typeof onInput, 'function', 'The served asset must bind search input');
-      input.value = value;
-      onInput();
-    },
+    open: () => dispatch(triggerEvents, 'submit'),
+    cancel: () => dispatch(cancelEvents, 'click'),
+    state: () => ({ opened, focused, popup: attributes.get('aria-haspopup') }),
   };
 }
 
-test('member name or email reveals the matching customer and restores the original workspace state on clear', () => {
-  const page = directoryFixture();
-  assert.equal(page.search.hidden, false);
-  page.type(' roSA ');
-  assert.equal(page.studio.open, true);
-  assert.equal(page.studio.hidden, false);
-  assert.equal(page.rosa.hidden, false);
-  assert.equal(page.astrid.hidden, true);
-  assert.equal(page.shop.hidden, true);
-
-  page.type('Robin@EXAMPLE');
-  assert.equal(page.studio.hidden, true);
-  assert.equal(page.shop.hidden, false);
-  assert.equal(page.robin.hidden, false);
-
-  page.type('');
-  assert.equal(page.studio.open, false);
-  assert.equal(page.shop.open, true);
-  assert.equal(page.studio.hidden, false);
-  assert.equal(page.shop.hidden, false);
-  assert.equal(page.astrid.hidden, false);
+test('the creation control opens one modal and returns focus after cancellation', () => {
+  const page = workspaceDialogFixture(true);
+  assert.equal(page.open(), true);
+  assert.deepEqual(page.state(), { opened: true, focused: 'name', popup: 'dialog' });
+  page.cancel();
+  assert.deepEqual(page.state(), { opened: false, focused: 'trigger', popup: 'dialog' });
 });
 
-test('a workspace match keeps its members visible and an empty result announces its status', () => {
-  const page = directoryFixture();
-  page.type('north studio');
-  assert.equal(page.studio.hidden, false);
-  assert.equal(page.rosa.hidden, false);
-  assert.equal(page.astrid.hidden, false);
-  assert.equal(page.shop.hidden, true);
-
-  page.type('unlisted');
-  assert.equal(page.studio.hidden, true);
-  assert.equal(page.shop.hidden, true);
-  assert.equal(page.status.textContent, page.status.dataset.noMatches);
-
-  page.type('  ');
-  assert.equal(page.status.textContent, '');
-  assert.equal(page.studio.hidden, false);
-  assert.equal(page.shop.hidden, false);
+test('a browser without native dialog support keeps the server form link', () => {
+  const page = workspaceDialogFixture(false);
+  assert.equal(page.open(), false);
+  assert.deepEqual(page.state(), { opened: false, focused: '', popup: undefined });
 });

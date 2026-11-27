@@ -16,8 +16,8 @@ func TestOperatorWorkspaceNavigation(t *testing.T) {
 	for _, page := range []struct {
 		path, active, current, heading, detail string
 	}{
-		{"/", "/operator", "page", "Operator workspace", "Invite a customer"},
-		{"/operator/customers", "/operator/customers", "page", "Kunder og arbejdsområder", "Navn mangler"},
+		{"/", "/operator", "page", "Operator workspace", "Workspaces"},
+		{"/operator/customers", "/operator/customers", "page", "Arbejdsområder", "Aktive arbejdsområder"},
 		{"/operator/invitations/new", "/operator/customers", "location", "Invite a customer", `aria-describedby="invite-workspace-help"`},
 		{"/operator/audit", "/operator/audit", "page", "Revisionslog", "customers.view"},
 	} {
@@ -78,7 +78,9 @@ func TestOperatorCustomersShowPeopleAndCurrentOperators(t *testing.T) {
 	var calls atomic.Int32
 	if err := b.svc.LinkCustomerDirectory(&managementDirectory{profiles: func(ids []string) map[string]customeridentity.Profile {
 		calls.Add(1)
-		if !slices.Equal(ids, []string{customeridentity.DexUser(customerSubject, customeridentity.ZitadelConnectorID), "pending-account"}) {
+		if !slices.Equal(ids, []string{customeridentity.DexUser(customerSubject, customeridentity.ZitadelConnectorID), "pending-account"}) &&
+			!slices.Equal(ids, []string{customeridentity.DexUser(customerSubject, customeridentity.ZitadelConnectorID)}) &&
+			!slices.Equal(ids, []string{"pending-account"}) {
 			t.Error("profile lookup did not use only the current customer and invite")
 		}
 		return map[string]customeridentity.Profile{
@@ -91,7 +93,11 @@ func TestOperatorCustomersShowPeopleAndCurrentOperators(t *testing.T) {
 	b.as(shared)
 	b.finish(b.start())
 	for _, lang := range []string{"en", "da"} {
-		status, body, _ := b.request("GET", "/portal/operator/customers?lang="+lang, nil, "")
+		status, index, _ := b.request("GET", "/portal/operator/customers?lang="+lang+"&q=ada%40example.test", nil, "")
+		if status != http.StatusOK || !strings.Contains(index, "client-a") || strings.Contains(index, "client-b") {
+			t.Fatalf("search did not select the exact matching workspace: status=%d", status)
+		}
+		status, body, _ := b.request("GET", "/portal/operator/customers?lang="+lang+"&workspace=client-a", nil, "")
 		label := "You"
 		if lang == "da" {
 			label = "Dig"
@@ -100,10 +106,15 @@ func TestOperatorCustomersShowPeopleAndCurrentOperators(t *testing.T) {
 			strings.Contains(body, "<code>") || strings.Contains(body, "Ada <Example>") {
 			t.Fatalf("directory showed an opaque account or unescaped data: status=%d", status)
 		}
-		for _, fragment := range []string{"<strong>" + label + "</strong>", "<strong>Ada &lt;Example&gt;</strong>", "<span>ada@example.test</span>", "<strong>pending@example.test</strong>", `name="subject" value="` + customerSubject + `"`} {
+		for _, fragment := range []string{"<strong>Ada &lt;Example&gt;</strong>", "<span>ada@example.test</span>", `name="subject" value="` + customerSubject + `"`} {
 			if !strings.Contains(body, fragment) {
 				t.Errorf("%s directory missing %q", lang, fragment)
 			}
+		}
+		_, pendingPage, _ := b.request("GET", "/portal/operator/customers?lang="+lang+"&workspace=client-b", nil, "")
+		_, operatorPage, _ := b.request("GET", "/portal/operator/customers?lang="+lang+"&workspace="+operatorWorkspace, nil, "")
+		if !strings.Contains(pendingPage, "<strong>pending@example.test</strong>") || !strings.Contains(operatorPage, "<strong>"+label+"</strong>") || strings.Contains(operatorPage, operatorSubject) {
+			t.Errorf("%s missing an invitation or current operator label", lang)
 		}
 	}
 	b.signOut()
@@ -112,7 +123,7 @@ func TestOperatorCustomersShowPeopleAndCurrentOperators(t *testing.T) {
 	b.as(customerSubject)
 	b.finish(b.start())
 	status, body, _ := b.request("GET", "/portal/operator/customers", nil, "")
-	if status != http.StatusForbidden || calls.Load() != 2 || strings.Contains(body, "pending@example.test") {
+	if status != http.StatusForbidden || calls.Load() != 6 || strings.Contains(body, "pending@example.test") {
 		t.Fatalf("a customer could read profiles from the operator directory: status=%d calls=%d", status, calls.Load())
 	}
 }

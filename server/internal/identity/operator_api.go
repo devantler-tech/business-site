@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -91,6 +92,12 @@ type (
 	}
 )
 
+// An old invitation alone does not create a workspace once it can no longer be accepted.
+const activeWorkspaceInventory = `SELECT id FROM portal_workspaces
+ UNION SELECT client_id FROM portal_memberships WHERE issuer=$1
+ UNION SELECT client_id FROM portal_invitations
+ WHERE issuer=$1 AND NOT revoked AND expires_at>now()`
+
 // audit records one operator action. A call that cannot be recorded is not answered.
 func (s *Foundation) audit(ctx context.Context, p Principal, kind, action, target, outcome string) error {
 	if _, err := s.pool.Exec(ctx, `INSERT INTO portal_operator_audit(actor_issuer,actor_subject,actor_kind,action,target,outcome) VALUES($1,$2,$3,$4,$5,$6)`, p.issuer, p.subject, kind, action, target, outcome); err != nil {
@@ -157,7 +164,7 @@ func (b *browser) authorizedOperatorCall(ctx context.Context, bound *operatorAut
 			switch {
 			case !b.operatorMutationAllowed(ctx, b.foundation.pool):
 				status, outcome = http.StatusServiceUnavailable, "failed"
-			case errors.Is(err, errOperatorInput):
+			case errors.Is(err, errOperatorInput), errors.Is(err, errInvitationAccess):
 				status, outcome = http.StatusBadRequest, "refused"
 			case errors.Is(err, errWorkspaceStillBills):
 				status, outcome = http.StatusConflict, "refused"
@@ -201,9 +208,15 @@ func (b *browser) operatorAPI(route operatorRoute) http.HandlerFunc {
 		if r.Method == "POST" && strings.Contains(r.Header.Get("Accept"), "text/html") {
 			switch status {
 			case http.StatusOK:
-				http.Redirect(w, r, b.visible("/portal/operator/customers")+"?lang="+language(r), http.StatusSeeOther)
+				http.Redirect(w, r, b.operatorFormReturn(r, route.action, result), http.StatusSeeOther)
 			case http.StatusConflict:
 				b.render(w, r, status, "operator-workspace-billing-error", "", "")
+			case http.StatusBadRequest:
+				if route.action == "invitations.create" {
+					b.render(w, r, status, "operator-invitation-error", "", "")
+				} else {
+					b.render(w, r, status, "operator-action-error", "", "")
+				}
 			default:
 				b.render(w, r, status, "operator-action-error", "", "")
 			}
@@ -230,6 +243,26 @@ func (b *browser) operatorAPI(route operatorRoute) http.HandlerFunc {
 		w.WriteHeader(status)
 		_, _ = w.Write(result)
 	}
+}
+
+func (b *browser) operatorFormReturn(r *http.Request, action string, result []byte) string {
+	query := url.Values{"lang": {language(r)}}
+	switch {
+	case action == "invitations.cleanup":
+		query.Set("view", "cleanup")
+	case action == "workspaces.delete" && r.URL.Query().Get("focus") == "workspace":
+		query.Set("view", "closed")
+	case action == "workspaces.create" && r.PostForm.Has("display_name"):
+		var workspace workspaceView
+		if json.Unmarshal(result, &workspace) == nil && validCustomerWorkspace(workspace.ID) {
+			query.Set("workspace", workspace.ID)
+		}
+	case r.URL.Query().Get("focus") == "workspace":
+		if workspace := r.PostForm.Get("workspace"); validCustomerWorkspace(workspace) {
+			query.Set("workspace", workspace)
+		}
+	}
+	return b.visible(customerWorkspacePath) + "?" + query.Encode()
 }
 
 // operatorAuditPage shows the newest audit entries on the operator page.
@@ -263,7 +296,13 @@ func (b *browser) operatorAuditPage(w http.ResponseWriter, r *http.Request) {
 
 // pendingInvitations lists invitations that can still be accepted.
 func (b *browser) pendingInvitations(ctx context.Context) ([]pendingInvitation, error) {
-	rows, err := b.foundation.pool.Query(ctx, `SELECT subject,client_id,role,expires_at FROM portal_invitations WHERE issuer=$1 AND NOT revoked AND expires_at>now() ORDER BY expires_at,client_id LIMIT $2`, b.foundation.broker.issuer, operatorListLimit+1)
+	return b.pendingInvitationsFor(ctx, "")
+}
+
+func (b *browser) pendingInvitationsFor(ctx context.Context, workspace string) ([]pendingInvitation, error) {
+	rows, err := b.foundation.pool.Query(ctx, `SELECT subject,client_id,role,expires_at FROM portal_invitations WHERE
+ issuer=$1 AND NOT revoked AND expires_at>now() AND ($3='' OR client_id=$3)
+ ORDER BY expires_at,client_id LIMIT $2`, b.foundation.broker.issuer, operatorListLimit+1, workspace)
 	if err != nil {
 		return nil, fmt.Errorf("list invitations: %w", err)
 	}
@@ -279,15 +318,16 @@ func (b *browser) pendingInvitations(ctx context.Context) ([]pendingInvitation, 
 
 // workspaces lists every workspace with its members, revoked ones included.
 func (b *browser) workspaces(ctx context.Context) ([]workspaceView, error) {
-	rows, err := b.foundation.pool.Query(ctx, `WITH inventory AS (
- SELECT id FROM portal_workspaces
- UNION SELECT client_id FROM portal_memberships WHERE issuer=$1
- UNION SELECT client_id FROM portal_invitations WHERE issuer=$1)
+	return b.workspacesIn(ctx, "")
+}
+
+func (b *browser) workspacesIn(ctx context.Context, workspace string) ([]workspaceView, error) {
+	rows, err := b.foundation.pool.Query(ctx, `WITH inventory AS (`+activeWorkspaceInventory+`)
  SELECT i.id,COALESCE(w.display_name,i.id),COALESCE(m.subject,''),COALESCE(m.role,''),COALESCE(m.revoked,false)
  FROM inventory i LEFT JOIN portal_memberships m ON m.client_id=i.id AND m.issuer=$1
  LEFT JOIN portal_workspace_settings w ON w.workspace_id=i.id
- WHERE w.closed_at IS NULL
- ORDER BY i.id,m.role,m.subject LIMIT $2`, b.foundation.broker.issuer, operatorListLimit+1)
+ WHERE w.closed_at IS NULL AND ($3='' OR i.id=$3)
+ ORDER BY i.id,m.role,m.subject LIMIT $2`, b.foundation.broker.issuer, operatorListLimit+1, workspace)
 	if err != nil {
 		return nil, fmt.Errorf("list workspaces: %w", err)
 	}

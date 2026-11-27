@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strings"
 	"unicode"
-	"unicode/utf8"
 
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 	"github.com/jackc/pgx/v5"
@@ -45,8 +44,7 @@ func (b *browser) renameCustomerWorkspace(ctx context.Context, r *http.Request) 
 	}
 	fields := map[string]*string{"workspace": &input.Workspace, "name": &input.Name}
 	if err := decodeOperatorInput(r, &input, fields); err != nil || !validCustomerWorkspace(input.Workspace) ||
-		input.Name == "" || strings.TrimSpace(input.Name) != input.Name || !utf8.ValidString(input.Name) ||
-		utf8.RuneCountInString(input.Name) > 100 || strings.ContainsFunc(input.Name, unicode.IsControl) {
+		!validWorkspaceDisplayName(input.Name) {
 		return nil, errOperatorInput
 	}
 	return b.changeWorkspace(ctx, input.Workspace, func(tx pgx.Tx, _ string, closed bool) (any, error) {
@@ -84,19 +82,11 @@ func (b *browser) deleteCustomerWorkspace(ctx context.Context, r *http.Request) 
 }
 
 func (b *browser) changeWorkspace(ctx context.Context, workspace string, change func(pgx.Tx, string, bool) (any, error)) (any, error) {
-	authority, _ := ctx.Value(operatorAuthorityKey{}).(*operatorAuthority)
-	if authority == nil || authority.kind != "operator" {
-		return nil, ErrDenied
-	}
-	setOperatorTarget(ctx, workspace)
-	tx, err := b.foundation.pool.Begin(ctx)
+	tx, err := b.beginWorkspaceChange(ctx, workspace)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err = lockWorkspace(ctx, tx, workspace); err != nil {
-		return nil, err
-	}
 	// Existing invitations and memberships can predate the workspace registry.
 	var name string
 	var closed, hasOperator bool
@@ -127,6 +117,22 @@ func (b *browser) changeWorkspace(ctx context.Context, workspace string, change 
 		return nil, ErrDenied
 	}
 	return result, tx.Commit(ctx)
+}
+
+func (b *browser) beginWorkspaceChange(ctx context.Context, workspace string) (pgx.Tx, error) {
+	if humanOperatorAuthority(ctx) == nil {
+		return nil, ErrDenied
+	}
+	setOperatorTarget(ctx, workspace)
+	tx, err := b.foundation.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err = lockWorkspace(ctx, tx, workspace); err != nil {
+		_ = tx.Rollback(ctx)
+		return nil, err
+	}
+	return tx, nil
 }
 
 func (b *browser) closeWorkspace(ctx context.Context, tx pgx.Tx, workspace string) error {

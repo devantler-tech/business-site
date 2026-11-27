@@ -27,41 +27,15 @@ for (const field of document.querySelectorAll('[data-character-limit]')) {
   check();
 }
 
-const directory = document.querySelector('[data-workspace-directory]');
-const search = directory?.querySelector('[data-directory-search]');
-if (search) {
-  const query = directory.querySelector('input[type="search"]');
-  const status = directory.querySelector('[data-directory-status]');
-  const searchText = (value) => value.normalize('NFC').toLowerCase().trim().replace(/\s+/gu, ' ');
-  const workspaces = Array.from(directory.querySelectorAll('.operator-workspace'), (element) => ({
-    element,
-    name: searchText(element.querySelector('summary').textContent),
-    members: Array.from(element.querySelectorAll('.operator-member'), (member) => ({
-      element: member,
-      name: searchText(member.querySelector('.operator-person').textContent),
-    })),
-  }));
-  let filtering = false;
-
-  query.addEventListener('input', () => {
-    const term = searchText(query.value);
-    let hasResults = false;
-    for (const workspace of workspaces) {
-      if (term && !filtering) workspace.wasOpen = workspace.element.open;
-      const nameMatches = workspace.name.includes(term);
-      let memberMatches = false;
-      for (const member of workspace.members) {
-        const matches = member.name.includes(term);
-        member.element.hidden = !nameMatches && !matches;
-        memberMatches ||= matches;
-      }
-      workspace.element.hidden = !nameMatches && !memberMatches;
-      if (!workspace.element.hidden) hasResults = true;
-      if (term && !workspace.element.hidden) workspace.element.open = true;
-      if (!term && filtering) workspace.element.open = workspace.wasOpen;
-    }
-    status.textContent = hasResults ? '' : status.dataset.noMatches;
-    filtering = term !== '';
+const workspaceCreate = document.querySelector('[data-workspace-create]');
+const workspaceDialog = document.querySelector('#create-workspace-dialog');
+if (workspaceCreate && typeof workspaceDialog?.showModal === 'function') {
+  workspaceCreate.setAttribute('aria-haspopup', 'dialog');
+  workspaceCreate.form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    workspaceDialog.showModal();
+    workspaceDialog.querySelector('[name="display_name"]').focus();
   });
-  search.hidden = false;
+  workspaceDialog.querySelector('[data-workspace-cancel]').addEventListener('click', () => workspaceDialog.close());
+  workspaceDialog.addEventListener('close', () => workspaceCreate.focus());
 }

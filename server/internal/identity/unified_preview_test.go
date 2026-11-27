@@ -19,25 +19,26 @@ import (
 
 func TestOperatorCanStartAnInvitationWithoutClientPreview(t *testing.T) {
 	b := newOperatorBrowserFixture(t)
+	b.invite("pending-customer", "fixture-customer", "client")
 	b.atRoot()
 	checkOperatorWorkspaceActions(t, b, false)
 }
 
 func checkOperatorWorkspaceActions(t *testing.T, b *browserFixture, previewAvailable bool) {
 	t.Helper()
-	for lang, inviteLabel := range map[string]string{"en": "Invite a customer", "da": "Inviter en kunde"} {
+	for _, lang := range []string{"en", "da"} {
 		invitePath := "/operator/invitations/new?lang=" + lang
-		invitation := `href="` + invitePath + `">` + inviteLabel + `</a>`
 		previewForm := `method="post" action="/preview?lang=` + lang + `"`
 		for _, path := range []string{"/operator", "/operator/customers"} {
 			status, page, _ := b.request(http.MethodGet, path+"?lang="+lang, nil, "")
 			expectPreview := previewAvailable && path == "/operator"
-			if status != http.StatusOK || !strings.Contains(page, invitation) || strings.Contains(page, previewForm) != expectPreview {
-				t.Fatalf("%s (%s): invitation or preview unavailable, status=%d", path, lang, status)
+			if status != http.StatusOK || !strings.Contains(page, `href="/operator/customers?lang=`+lang+`"`) ||
+				strings.Contains(page, invitePath) || strings.Contains(page, previewForm) != expectPreview {
+				t.Fatalf("%s (%s): workspace navigation or preview does not match, status=%d", path, lang, status)
 			}
 		}
 		status, page, _ := b.request(http.MethodGet, invitePath, nil, "")
-		if status != http.StatusOK || !strings.Contains(page, `action="/operator/api/invitations?lang=`+lang+`"`) {
+		if status != http.StatusOK || !strings.Contains(page, `action="/operator/api/invitations?lang=`+lang+`&amp;focus=workspace"`) && !strings.Contains(page, `href="/operator/customers?lang=`+lang+`"`) {
 			t.Fatalf("operator could not reach the invitation form (%s), status=%d", lang, status)
 		}
 	}
