@@ -141,6 +141,10 @@
   color: var(--muted);
 }
 
+.appointment-times {
+  display: block;
+}
+
 @media (width <= 540px) {
   .request-list li {
     flex-direction: column;
