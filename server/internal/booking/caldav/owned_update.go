@@ -11,7 +11,7 @@ import (
 // hold booking authority over the appointment.
 func (c *Client) UpdateOwnedEvent(ctx context.Context, prior, next OwnedEvent, expectedTag string) (OwnedEventObservation, error) {
 	resource, uid, err := c.ownedEventTarget(prior)
-	if err != nil || prior.Key != next.Key || !strongEventTag.MatchString(expectedTag) {
+	if err != nil || prior.Key != next.Key || prior.CalendarBinding != next.CalendarBinding || !strongEventTag.MatchString(expectedTag) {
 		return OwnedEventObservation{}, booking.ErrUnavailable
 	}
 	if _, _, err := c.ownedEventTarget(next); err != nil || prior.Revision != next.Revision-1 {
