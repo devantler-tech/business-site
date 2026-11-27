@@ -307,6 +307,12 @@ client deletion event from the same transaction, with its database timestamp.
 The deadline is 30 days after that event. Temporary suspension remains a
 membership update and is reversible.
 
+v42 checks a new software lease against the selected approval generation and
+the held queue revision. The database assigns the acquisition time after
+locking the slot and revision. A missing, revoked or expired approval refuses
+the insert without consuming a fence. The worker must still select the oldest
+eligible request, validate all evidence and authenticate every operation.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or
