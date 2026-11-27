@@ -43,6 +43,11 @@ the pinned Platform policies and Kyverno engine. The Tenant graph supplies the
 namespace labels. Each protected resource has an explicit refusal control for
 creation and updates.
 
+The pinned Platform WebApp compiler also produces the Deployment, Service and
+HTTPRoute from the same rendered application. The admission check requires
+those three generated objects and exercises policy for their ownership, the
+Deployment's pod security and the HTTPRoute's hostname.
+
 The package uses two replicas (the validator permits two or three), a
 half-core/256 MiB limit and the real `/healthz` probe, plus an application-owned
 disruption budget allowing one unavailable Pod.
