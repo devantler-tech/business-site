@@ -2,6 +2,7 @@ package identity
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 
@@ -68,9 +69,77 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 
 // Rewinds touch only the disposable migrator's synthetic schema, never deployed
 // runtime grants or a production rollback. Remove new dependent tables before v13.
-// rewindServiceContractsFixture removes v33 while retaining the published v32 state.
+func rewindAppointmentReservationsFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	if _, err := pool.Exec(t.Context(), `DROP TRIGGER portal_paid_appointment_consumer ON portal_service_consumers;
+ DROP FUNCTION portal_guard_paid_appointment_consumer();
+ ALTER TABLE portal_orders DROP COLUMN appointment_reservation_id,DROP COLUMN appointment_revision;
+ ALTER TABLE portal_mail_outbox
+  DROP CONSTRAINT portal_mail_outbox_producer_format_check,
+  DROP CONSTRAINT portal_mail_complete_producer,
+  ADD CONSTRAINT portal_mail_outbox_producer_format_check CHECK(producer_format IN (1,2)),
+  ADD CONSTRAINT portal_mail_complete_producer CHECK(
+    num_nonnulls(producer_format,acceptance_id,proposal_version,proposal_sha256,terms_sha256,body_sha256)=0 OR
+    (num_nonnulls(producer_format,acceptance_id,proposal_version,proposal_sha256,terms_sha256,body_sha256)=6
+      AND producer_format IN (1,2) AND kind='order-confirmation'));
+ DROP TABLE portal_appointment_introduction_cancellations,portal_appointment_introductions,portal_appointment_revisions,portal_appointment_reservations;
+ DROP FUNCTION portal_guard_appointment_introduction_cancellation(),portal_guard_appointment_introduction(),portal_guard_appointment_revision();
+ DELETE FROM portal_schema_version WHERE version=34`); err != nil {
+		t.Fatal("historical fixture could not reconstruct the pre-reservation schema", err)
+	}
+	for _, guard := range []string{"visibility", "order", "confirmation"} {
+		name := "public.portal_guard_service_" + guard
+		_, remainder, found := strings.Cut(serviceContractsSchema, "CREATE FUNCTION "+name)
+		definition, _, terminated := strings.Cut(remainder, "\n$$;")
+		if !found || !terminated {
+			t.Fatalf("missing service contract guard %s", name)
+		}
+		if _, err := pool.Exec(t.Context(), "CREATE OR REPLACE FUNCTION "+name+definition+"\n$$;"); err != nil {
+			t.Fatalf("restore service contract guard %s: %v", name, err)
+		}
+	}
+}
+
+func TestAppointmentMigrationRefusesChangedServiceGuard(t *testing.T) {
+	fixtureDB(t)
+	migrator := migrationDB(t)
+	rewindAppointmentReservationsFixture(t, migrator)
+	ctx := t.Context()
+	var original string
+	if err := migrator.QueryRow(ctx, `SELECT pg_get_functiondef('public.portal_guard_service_order()'::regprocedure)`).Scan(&original); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := migrator.Exec(context.Background(), original); err != nil {
+			t.Error("restore the fixture guard", err)
+			return
+		}
+		if err := Migrate(context.Background(), migrator); err != nil {
+			t.Error("restore the fixture migration", err)
+		}
+	})
+	if _, err := migrator.Exec(ctx, `CREATE OR REPLACE FUNCTION public.portal_guard_service_order()
+ RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp
+ AS $$ BEGIN RAISE EXCEPTION 'fixture service guard drift'; END; $$`); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(ctx, migrator); err == nil || !strings.Contains(err.Error(), "unexpected source service guard") {
+		t.Fatalf("appointment migration did not refuse unexpected guard source: %v", err)
+	}
+	var tablesPresent bool
+	var version int
+	if err := migrator.QueryRow(ctx, `SELECT to_regclass('public.portal_appointment_reservations') IS NOT NULL,
+ (SELECT max(version) FROM public.portal_schema_version)`).Scan(&tablesPresent, &version); err != nil ||
+		tablesPresent || version != 33 {
+		t.Fatalf("refused migration did not roll back: tables=%t version=%d err=%v", tablesPresent, version, err)
+	}
+}
+
+// rewindServiceContractsFixture removes v33 and later migrations while retaining
+// the published v32 state.
 func rewindServiceContractsFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
+	rewindAppointmentReservationsFixture(t, pool)
 	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_service_consumers,portal_service_fulfillments;
  DROP TRIGGER portal_service_confirmation ON portal_mail_outbox;
  DROP TRIGGER portal_service_order ON portal_orders;

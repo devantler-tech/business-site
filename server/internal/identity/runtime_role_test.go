@@ -166,6 +166,8 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 		{"service consumer missing select", "REVOKE SELECT ON portal_service_consumers FROM portal_runtime; SET ROLE portal_runtime", false},
 		{"mutable service fulfillment", "GRANT UPDATE ON portal_service_fulfillments TO portal_runtime; SET ROLE portal_runtime", false},
 		{"assumable service consumer deletion", "CREATE ROLE portal_fixture_service_mutator NOLOGIN; GRANT DELETE ON portal_service_consumers TO portal_fixture_service_mutator; GRANT portal_fixture_service_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"appointment revision missing read", "REVOKE SELECT ON portal_appointment_revisions FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable appointment revision update", "CREATE ROLE portal_fixture_appointment_mutator NOLOGIN; GRANT UPDATE(starts_at) ON portal_appointment_revisions TO portal_fixture_appointment_mutator; GRANT portal_fixture_appointment_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 	}
 	for _, history := range []struct{ table, column string }{
 		{"portal_requests", "brief"}, {"portal_proposals", "scope"},

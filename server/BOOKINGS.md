@@ -57,15 +57,21 @@ The policy's enabled field alone grants neither of those authorities.
 
 ## Sequential delivery and evidence gates
 
-| Child                                                              | Boundary                                              | Required evidence                                                                                                                                                                         |
-|--------------------------------------------------------------------|-------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [#656](https://github.com/devantler-tech/business-site/issues/656) | Internal policy and availability                      | Focused real policy tests, default-off/incomplete-state refusals and DST/buffer/capacity controls                                                                                         |
-| [#657](https://github.com/devantler-tech/business-site/issues/657) | Durable reservations and introductory entitlement     | Real PostgreSQL overlap races, expiry/retry/restart, stable client IDs, one free entitlement, final conflict checks and current paid-service authority; booking migration v32 is reserved |
-| [#658](https://github.com/devantler-tech/business-site/issues/658) | Private CalDAV adapter and owned-event reconciliation | Actual library contract tests, recurring/all-day intervals, conditional writes, ambiguous failures and owned-only cancellation/rescheduling; later private iCloud acceptance              |
-| [#659](https://github.com/devantler-tech/business-site/issues/659) | Native EN/DA customer/operator journeys               | Session/CSRF/current-membership isolation, honest states, mobile/keyboard/appearance, two synthetic clients, deployment and recovery                                                      |
+| Child                                                              | Boundary                                              | Required evidence                                                                                                                                                            |
+|--------------------------------------------------------------------|-------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [#656](https://github.com/devantler-tech/business-site/issues/656) | Internal policy and availability                      | Focused real policy tests, default-off/incomplete-state refusals and DST/buffer/capacity controls                                                                            |
+| [#657](https://github.com/devantler-tech/business-site/issues/657) | Durable reservations and introductory entitlement     | Real PostgreSQL overlap races, expiry/retry/restart, stable client IDs, one free entitlement, final conflict checks and current paid-service authority                       |
+| [#658](https://github.com/devantler-tech/business-site/issues/658) | Private CalDAV adapter and owned-event reconciliation | Actual library contract tests, recurring/all-day intervals, conditional writes, ambiguous failures and owned-only cancellation/rescheduling; later private iCloud acceptance |
+| [#659](https://github.com/devantler-tech/business-site/issues/659) | Native EN/DA customer/operator journeys               | Session/CSRF/current-membership isolation, honest states, mobile/keyboard/appearance, two synthetic clients, deployment and recovery                                         |
 
 The selected direction builds the small portal-specific policy and state machine in the existing
 Go/PostgreSQL application, reusing calendar protocol libraries through the narrow interface.
+A client-bound reservation ID and its append-only revisions are stored by migration v34,
+after the shared service contract. The private hold writer serializes changes to the
+single booking calendar. It re-reads the latest revision after obtaining the lock and
+uses database time to exclude expired holds. Dual attempts for the same time can retain
+one provisional hold. The booking service must also apply provider availability,
+buffers, weekly capacity and current authority before confirming an appointment.
 A second booking application would introduce another identity, business-state and presentation
 boundary. No new service, subscription or paid enrollment is selected. The maintained MIT
 [go-webdav CalDAV package](https://pkg.go.dev/github.com/emersion/go-webdav/caldav) is the adapter
@@ -97,8 +103,10 @@ describes authorization and the app-specific-password alternative. An agent must
 events or request credentials in chat. Real connection, revocation and calendar effects are held
 acceptance gates. No calendar credential is created or rotated by this implementation.
 
-Paid confirmation must consume the shared exact-quote acceptance, current verified full funding
-and durable confirmation sender-acceptance evidence. Prepared mail, sender acceptance and actual
-inbox receipt remain distinct. This work neither implements another sender/funding policy nor
-advances the software FIFO queue. Unknown business settings, private calendar authorization,
-real payment evidence and deployed user-path proof remain gates on the parent and public activation.
+The internal paid appointment order binds the original client, accepted fixed quote and exact held
+revision. Its English or Danish agreement email includes the requested interval and the quoted
+appointment terms. Confirmation requires the current acceptance, full settled funding, sender
+acceptance of that agreement and a fresh calendar check. A committed appointment still counts
+toward capacity after the provisional hold expires. A refund or dispute blocks another confirmation
+attempt. The paid appointment flag defaults off. The customer journey, provider reconciliation and
+recovery for an expired hold with a payment remain part of the activation work.

@@ -55,11 +55,16 @@ func acceptedServiceQuoteFixture(t *testing.T, kind proposalServiceKind) *browse
 		t.Fatalf("typed quote acceptance=%d", status)
 	}
 	billingFlags(t, b, true)
+	prepareServiceOrderConfirmation(t, b)
+	return b
+}
+
+func prepareServiceOrderConfirmation(t *testing.T, b *browserFixture) {
+	t.Helper()
 	confirmationFixture(t, b)
 	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_contacts(client_id,name,email,company,revision) VALUES('private-client-key','Fictional Client','client@example.invalid','Fictional Bakery ApS',1)`); err != nil {
 		t.Fatal(err)
 	}
-	return b
 }
 
 func TestServiceQuotePersistenceRetainsContract(t *testing.T) {

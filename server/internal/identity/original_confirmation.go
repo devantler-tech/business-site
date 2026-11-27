@@ -49,7 +49,9 @@ func readOriginalConfirmation(ctx context.Context, heldQuery confirmationQuery, 
  LEFT JOIN portal_mail_deliveries d ON d.outbox_id=m.id
  WHERE o.request_id=$1 AND o.client_id=$2 AND o.acceptance_id=$3 AND o.id=$4
  AND ((m.producer_format=1 AND p.content_format=1 AND o.service_content_format IS NULL)
-   OR (m.producer_format=2 AND p.content_format=2 AND p.service_kind='software' AND o.service_content_format=2))
+   OR (m.producer_format=2 AND p.content_format=2 AND p.service_kind='software' AND o.service_content_format=2)
+   OR (m.producer_format=3 AND p.content_format=2 AND p.service_kind='appointment' AND o.service_content_format=2
+       AND o.appointment_reservation_id IS NOT NULL AND o.appointment_revision IS NOT NULL))
  AND m.body_sha256=encode(sha256(convert_to(m.body,'UTF8')),'hex')`, requestID, clientID, acceptanceID, orderID).
 		Scan(&result.OutboxID, &result.BodySHA256, &result.TermsSHA256, &result.QueuedAt, &result.SenderAcceptedAt, &format, &version, &proposalHash)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -58,7 +60,7 @@ func readOriginalConfirmation(ctx context.Context, heldQuery confirmationQuery, 
 	if err != nil {
 		return originalConfirmation{}, errTriageStorage
 	}
-	if format == 2 {
+	if format == 2 || format == 3 {
 		source, err := readOrderConfirmationSource(ctx, heldQuery, clientID, orderID, acceptanceID)
 		if errors.Is(err, errProposalConflict) {
 			return originalConfirmation{State: confirmationMissing}, nil
@@ -66,7 +68,7 @@ func readOriginalConfirmation(ctx context.Context, heldQuery confirmationQuery, 
 		if err != nil {
 			return originalConfirmation{}, err
 		}
-		if source.ContentFormat != format || source.Service.Kind != proposalServiceSoftware ||
+		if source.ContentFormat != 2 || source.ProducerFormat != format ||
 			source.ProposalVersion != version || source.ProposalSHA256 != proposalHash {
 			return originalConfirmation{State: confirmationMissing}, nil
 		}

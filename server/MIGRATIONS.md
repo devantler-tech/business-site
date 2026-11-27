@@ -258,6 +258,14 @@ sharing and acceptance. Existing proposals remain in their original format.
 The service fulfillment and consumer tables grant the runtime SELECT and INSERT.
 Appointment sharing and prepayment remain held pending the booking workflow.
 
+v34 adds client-bound appointment reservation IDs and append-only slot revisions.
+Each revision records its interval and hold expiry. The runtime can read and
+append both records. A paid appointment order references the selected revision.
+The original confirmation uses producer format 3 for this order type. The
+retention job deletes the order and its fulfillment before deleting the former
+client's reservation and revisions. The booking service checks availability,
+current funding and sender acceptance before recording the appointment consumer.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

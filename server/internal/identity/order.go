@@ -39,6 +39,12 @@ type projectOrder struct {
 	WithdrawalEnd              *time.Time   // when Stripe ends a withdrawn order's subscription
 	Launch                     *launchPlace // the launch place whose discount the one-time price includes
 	Addons                     []orderAddon // the standard add-ons the prices include
+	appointment                appointmentOrderSelection
+}
+
+type appointmentOrderSelection struct {
+	Reservation string
+	Revision    int
 }
 
 // AddonRemovalPending reports an ended add-on that a card order's
@@ -118,9 +124,19 @@ func firstOfNextMonth(t time.Time) time.Time {
 
 // placeOrder binds the client's current acceptance to one collection path. An
 // identical retry returns the existing order; a different path conflicts.
-func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance, collection string, earlyStart, launch bool, addonValues []string, mc mailContext) (projectOrder, error) {
+func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance, collection string, earlyStart, launch bool, addonValues []string, mc mailContext, selection appointmentOrderSelection) (projectOrder, error) {
 	if p.isClientPreview() || !s.collectionReady(ctx, collection) {
 		return projectOrder{}, ErrDenied
+	}
+	appointment := selection != (appointmentOrderSelection{})
+	ready := s.pathReady(collection)
+	if appointment {
+		if !opaqueRequestID.MatchString(selection.Reservation) || selection.Revision < 1 || !s.paidAppointmentsReady(ctx) {
+			return projectOrder{}, ErrDenied
+		}
+		ready = func(ctx context.Context) bool {
+			return s.collectionReady(ctx, collection) && s.paidAppointmentsReady(ctx)
+		}
 	}
 	tx, client, err := s.beginClientProposalWrite(ctx, p, id)
 	if err != nil {
@@ -143,17 +159,19 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 	case err == nil:
 		// A retry names the order's own add-ons; it keeps their stored prices,
 		// whatever the catalogue says now.
-		if existing.Acceptance != acceptance || existing.Collection != collection || (existing.EarlyStart != nil) != earlyStart || (existing.Launch != nil) != launch || !sameAddons(existing.Addons, addonValues) {
+		if existing.Acceptance != acceptance || existing.Collection != collection || existing.appointment != selection ||
+			(existing.EarlyStart != nil) != earlyStart || (existing.Launch != nil) != launch || !sameAddons(existing.Addons, addonValues) {
 			return projectOrder{}, errProposalConflict
 		}
-		return existing, s.commitOrder(ctx, p, tx, s.pathReady(collection))
+		return existing, s.commitOrder(ctx, p, tx, ready)
 	case !errors.Is(err, pgx.ErrNoRows):
 		return projectOrder{}, err
 	}
 	if current == nil || (current.Proposal.OneTimeMinor == 0 && current.Proposal.MonthlyMinor == 0) {
 		return projectOrder{}, errProposalConflict
 	}
-	if current.Proposal.ContentFormat == 2 && current.Proposal.Service.Kind == proposalServiceAppointment {
+	isAppointmentQuote := current.Proposal.ContentFormat == 2 && current.Proposal.Service.Kind == proposalServiceAppointment
+	if isAppointmentQuote != appointment {
 		return projectOrder{}, ErrDenied
 	}
 	terms, termsHash := s.termsFor(mc.Lang)
@@ -166,6 +184,27 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 	proposalHash, err := proposalContentHash(current.Proposal)
 	if err != nil {
 		return projectOrder{}, err
+	}
+	var placed time.Time
+	var heldUntil *time.Time
+	if appointment {
+		if launch || len(addonValues) != 0 || current.Proposal.OneTimeMinor <= 0 || current.Proposal.MonthlyMinor != 0 {
+			return projectOrder{}, errProposalConflict
+		}
+		placed, err = lockAppointmentCalendarTx(ctx, tx)
+		if err != nil {
+			return projectOrder{}, err
+		}
+		hold, err := readLatestAppointmentHold(ctx, tx, selection.Reservation, client)
+		if err != nil {
+			return projectOrder{}, err
+		}
+		quote := appointmentQuoteRef{Request: id, Version: current.Proposal.Version, Hash: proposalHash}
+		if hold.Revision != selection.Revision || hold.Quote != quote || !hold.HeldUntil.After(placed) ||
+			(!earlyStart && hold.Slot.Start.Before(withdrawalDeadline(placed))) {
+			return projectOrder{}, errProposalConflict
+		}
+		heldUntil = &hold.HeldUntil
 	}
 	// A new order's add-ons must exist for the request's offering; monthly ones
 	// need hosting.
@@ -180,9 +219,12 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 	// The order takes the client's launch place, if one is open, at the price
 	// the client was shown; if the last place went in between, the client
 	// sees the new price before ordering again.
-	place, err := lockLaunchPlace(ctx, tx, client, current.Proposal.OneTimeMinor, current.Proposal.MonthlyMinor)
-	if err != nil {
-		return projectOrder{}, err
+	var place *launchPlace
+	if !appointment {
+		place, err = lockLaunchPlace(ctx, tx, client, current.Proposal.OneTimeMinor, current.Proposal.MonthlyMinor)
+		if err != nil {
+			return projectOrder{}, err
+		}
 	}
 	if (place != nil) != launch {
 		return projectOrder{}, errLaunchChanged
@@ -195,7 +237,9 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 		oneTime -= place.DiscountMinor
 	}
 	// One timestamp dates the order and its first billed month.
-	placed := time.Now()
+	if placed.IsZero() {
+		placed = time.Now()
+	}
 	// The client's express request to start within the withdrawal period is
 	// dated with the order itself.
 	var early *time.Time
@@ -207,8 +251,13 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 	if current.Proposal.ContentFormat == 2 {
 		serviceFormat = 2
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO portal_orders(id,request_id,client_id,acceptance_id,client_issuer,client_subject,collection,one_time_minor,monthly_minor,monthly_from,placed_at,early_start_at,service_content_format) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-		orderID, id, client, current.ID, p.issuer, p.subject, collection, oneTime, monthly, firstOfNextMonth(placed), placed, early, serviceFormat); err != nil {
+	if _, err = tx.Exec(ctx, `INSERT INTO portal_orders(id,request_id,client_id,acceptance_id,client_issuer,client_subject,collection,one_time_minor,monthly_minor,monthly_from,placed_at,early_start_at,service_content_format,appointment_reservation_id,appointment_revision)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NULLIF($14,''),NULLIF($15,0))`,
+		orderID, id, client, current.ID, p.issuer, p.subject, collection, oneTime, monthly, firstOfNextMonth(placed), placed, early, serviceFormat,
+		selection.Reservation, selection.Revision); err != nil {
+		if appointment {
+			return projectOrder{}, creditWriteError(err)
+		}
 		return projectOrder{}, errTriageStorage
 	}
 	for _, a := range addons {
@@ -223,30 +272,40 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 	}
 	// The order's confirmation on a durable medium (section 13), queued with it.
 	confirmationFormat := 1
+	var appointmentStart, appointmentEnd, appointmentTerms string
 	if current.Proposal.ContentFormat == 2 {
 		source, err := readOrderConfirmationSource(ctx, tx, client, orderID, current.ID)
 		if err != nil {
 			return projectOrder{}, err
 		}
-		if source.ContentFormat != 2 || source.Service.Kind != proposalServiceSoftware ||
+		if source.ContentFormat != 2 || source.Service.Kind != current.Proposal.Service.Kind ||
 			source.ProposalVersion != current.Proposal.Version || source.ProposalSHA256 != proposalHash {
 			return projectOrder{}, errProposalConflict
 		}
-		confirmationFormat = source.ContentFormat
+		confirmationFormat = source.ProducerFormat
+		if appointment {
+			appointmentStart = source.StartsAt.In(copenhagen).Format(time.RFC3339)
+			appointmentEnd = source.EndsAt.In(copenhagen).Format(time.RFC3339)
+			appointmentTerms = source.Service.AppointmentTermsEN
+			if mc.Lang == "da" {
+				appointmentTerms = source.Service.AppointmentTermsDA
+			}
+		}
 	}
 	when := projectOrder{Placed: placed, OneTimeMinor: oneTime, MonthlyMinor: monthly, Addons: addons}
 	if err = s.queueOrderMail(ctx, tx, client, "order-confirmation", mc, orderMail{OrderID: orderID, Scope: current.Proposal.Scope, Deliverables: current.Proposal.Deliverables,
 		ProducerFormat: confirmationFormat, Acceptance: current.ID, ProposalVersion: current.Proposal.Version, ProposalHash: proposalHash, TermsText: terms, TermsHash: termsHash,
 		OneTimeTerms: current.Proposal.OneTimeTerms, MonthlyTerms: current.Proposal.MonthlyTerms, Collection: collection,
 		OneTimeDKK: oneTime / 100, BaseOneTimeDKK: when.BaseOneTimeDKK(), Launch: place, MonthlyDKK: monthly / 100, BaseMonthlyDKK: when.BaseMonthlyDKK(), Addons: addons, MonthlyStart: firstOfNextMonth(placed).Format("2006-01"),
-		WithdrawUntil: when.WithdrawUntil(), WorkStartsFrom: when.WorkStartsFrom(), Placed: placed.UTC().Format("2006-01-02 15:04"), EarlyStart: earlyStart}); err != nil {
+		WithdrawUntil: when.WithdrawUntil(), WorkStartsFrom: when.WorkStartsFrom(), Placed: placed.UTC().Format("2006-01-02 15:04"), EarlyStart: earlyStart,
+		AppointmentStart: appointmentStart, AppointmentEnd: appointmentEnd, AppointmentTerms: appointmentTerms}); err != nil {
 		return projectOrder{}, err
 	}
 	saved, err := readOrderTx(ctx, tx, id, client)
 	if err != nil {
 		return projectOrder{}, errTriageStorage
 	}
-	return saved, s.commitOrder(ctx, p, tx, s.pathReady(collection))
+	return saved, s.commitOrderWithHold(ctx, p, tx, ready, heldUntil)
 }
 
 // readOrderTx reads the request's order and its charges inside a scoped,
@@ -255,8 +314,10 @@ func readOrderTx(ctx context.Context, tx pgx.Tx, id, client string) (projectOrde
 	var o projectOrder
 	var place *int
 	var l launchPlace
-	err := tx.QueryRow(ctx, `SELECT o.id,o.acceptance_id,o.collection,a.proposal_version,o.one_time_minor,o.monthly_minor,o.monthly_from,o.placed_at,o.early_start_at,(SELECT x.completed_at FROM portal_order_completions x WHERE x.order_id=o.id),l.place,coalesce(l.percent,0),coalesce(l.list_minor,0),coalesce(l.discount_minor,0) FROM portal_orders o JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id LEFT JOIN portal_launch_places l ON l.order_id=o.id WHERE o.request_id=$1 AND o.client_id=$2`, id, client).
-		Scan(&o.ID, &o.Acceptance, &o.Collection, &o.Version, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &o.Placed, &o.EarlyStart, &o.Completed, &place, &l.Percent, &l.ListMinor, &l.DiscountMinor)
+	err := tx.QueryRow(ctx, `SELECT o.id,o.acceptance_id,o.collection,a.proposal_version,o.one_time_minor,o.monthly_minor,o.monthly_from,o.placed_at,o.early_start_at,(SELECT x.completed_at FROM portal_order_completions x WHERE x.order_id=o.id),l.place,coalesce(l.percent,0),coalesce(l.list_minor,0),coalesce(l.discount_minor,0),
+ coalesce(o.appointment_reservation_id::text,''),coalesce(o.appointment_revision,0)
+ FROM portal_orders o JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id LEFT JOIN portal_launch_places l ON l.order_id=o.id WHERE o.request_id=$1 AND o.client_id=$2`, id, client).
+		Scan(&o.ID, &o.Acceptance, &o.Collection, &o.Version, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &o.Placed, &o.EarlyStart, &o.Completed, &place, &l.Percent, &l.ListMinor, &l.DiscountMinor, &o.appointment.Reservation, &o.appointment.Revision)
 	if place != nil {
 		l.Place = *place
 		o.Launch = &l
@@ -335,10 +396,28 @@ func (s *Foundation) readOperatorOrder(ctx context.Context, p Principal, id stri
 // gate, not only the acceptance gates, must still be open, along with the
 // principal's expiry and the request's cancellation.
 func (s *Foundation) commitOrder(ctx context.Context, p Principal, tx pgx.Tx, ready func(context.Context) bool) error {
+	return s.commitOrderWithHold(ctx, p, tx, ready, nil)
+}
+
+// The first order and first confirmation both require a live hold after the
+// final provider evaluations. Replays of either committed write use no deadline.
+func (s *Foundation) commitOrderWithHold(ctx context.Context, p Principal, tx pgx.Tx, ready func(context.Context) bool, heldUntil *time.Time) error {
 	if !ready(ctx) {
 		return ErrDenied
 	}
-	return s.commitClientProposal(ctx, p, tx, time.Time{})
+	if heldUntil == nil {
+		return s.commitClientProposal(ctx, p, tx, time.Time{})
+	}
+	return s.commitClientProposalGuarded(ctx, p, tx, time.Time{}, func() error {
+		var active bool
+		if err := tx.QueryRow(ctx, `SELECT $1::timestamptz > clock_timestamp()`, *heldUntil).Scan(&active); err != nil {
+			return errTriageStorage
+		}
+		if !active {
+			return errProposalConflict
+		}
+		return nil
+	})
 }
 
 // readOrderFor reads the order in an already scoped, request-locked transaction
@@ -391,7 +470,7 @@ func (b *browser) submitOrder(w http.ResponseWriter, r *http.Request) {
 		b.render(w, r, 400, "error", "", "")
 		return
 	}
-	order, err := b.foundation.placeOrder(r.Context(), b.principal(r.Context()), r.PathValue("id"), acceptance, collection, earlyStart, launch, r.PostForm["addon"], mailContext{Lang: language(r), Portal: b.origin + b.base(), TermsHash: r.PostForm.Get("terms_hash")})
+	order, err := b.foundation.placeOrder(r.Context(), b.principal(r.Context()), r.PathValue("id"), acceptance, collection, earlyStart, launch, r.PostForm["addon"], mailContext{Lang: language(r), Portal: b.origin + b.base(), TermsHash: r.PostForm.Get("terms_hash")}, appointmentOrderSelection{})
 	if err == nil && order.Collection == "card" {
 		// The receipt offers to start the payment again if this fails.
 		if checkoutErr := b.foundation.ensureCheckouts(r.Context(), order.ID, b.origin+b.base(), language(r)); checkoutErr != nil {

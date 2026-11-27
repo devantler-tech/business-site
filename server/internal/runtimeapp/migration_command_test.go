@@ -21,7 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const migrationFixtureVersionCount = 33
+const migrationFixtureVersionCount = 34
 
 // migrationCommandFixture creates only a uniquely named disposable database on
 // the already validated loopback fixture, then exercises verified PostgreSQL TLS.
@@ -709,7 +709,8 @@ func TestActualMigrationGrantsRuntimeRole(t *testing.T) {
 		}
 	}
 	// Broader earlier grants converge back to the documented set on the next job.
-	if _, err := pool.Exec(t.Context(), "GRANT UPDATE ON portal_requests TO portal_runtime; GRANT TRUNCATE ON portal_sessions TO portal_runtime"); err != nil {
+	if _, err := pool.Exec(t.Context(), `GRANT UPDATE ON portal_requests,portal_appointment_revisions TO portal_runtime;
+ GRANT TRUNCATE ON portal_sessions TO portal_runtime`); err != nil {
 		t.Fatal("broader grant fixture failed")
 	}
 	if identity.CheckRuntimeRole(t.Context(), runtime) == nil {
@@ -736,6 +737,12 @@ func TestActualMigrationGrantsRuntimeRole(t *testing.T) {
  AND NOT has_table_privilege('portal_runtime','portal_service_fulfillments','UPDATE,DELETE')
  AND has_table_privilege('portal_runtime','portal_service_consumers','INSERT')
  AND NOT has_table_privilege('portal_runtime','portal_service_consumers','UPDATE,DELETE')
+ AND has_table_privilege('portal_runtime','portal_appointment_reservations','SELECT')
+ AND has_table_privilege('portal_runtime','portal_appointment_reservations','INSERT')
+ AND NOT has_table_privilege('portal_runtime','portal_appointment_reservations','UPDATE,DELETE')
+ AND has_table_privilege('portal_runtime','portal_appointment_revisions','SELECT')
+ AND has_table_privilege('portal_runtime','portal_appointment_revisions','INSERT')
+ AND NOT has_table_privilege('portal_runtime','portal_appointment_revisions','UPDATE,DELETE')
  AND NOT has_any_column_privilege('portal_runtime','portal_preview_receipts','SELECT,INSERT')
  AND (SELECT count(*) FROM portal_schema_version)=$1`, migrationFixtureVersionCount).Scan(&exact); err != nil || !exact {
 		t.Fatal("repeat migration retained privileges beyond the documented set")

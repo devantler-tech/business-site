@@ -3,6 +3,7 @@ package identity
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -11,10 +12,12 @@ import (
 // lineage is verified here without granting current authority or locking a late
 // membership. Actor and session identifiers never enter the email projection.
 type orderConfirmationSource struct {
-	ContentFormat   int
-	ProposalVersion int
-	ProposalSHA256  string
-	Service         proposalServiceTerms
+	ContentFormat    int
+	ProposalVersion  int
+	ProposalSHA256   string
+	Service          proposalServiceTerms
+	ProducerFormat   int
+	StartsAt, EndsAt time.Time
 }
 
 func readOrderConfirmationSource(ctx context.Context, tx confirmationQuery, clientID, orderID, acceptanceID string) (orderConfirmationSource, error) {
@@ -25,8 +28,9 @@ func readOrderConfirmationSource(ctx context.Context, tx confirmationQuery, clie
 	var acceptedHash, sharedHash, actorClient, actorIncarnation, acceptorIncarnation string
 	var recorded bool
 	var orderFormat *int
+	var startsAt, endsAt *time.Time
 	dest := proposalScanTargets(&proposal)
-	dest = append(dest, &acceptedHash, &sharedHash, &actorClient, &actorIncarnation, &acceptorIncarnation, &recorded, &orderFormat)
+	dest = append(dest, &acceptedHash, &sharedHash, &actorClient, &actorIncarnation, &acceptorIncarnation, &recorded, &orderFormat, &startsAt, &endsAt)
 	err := tx.QueryRow(ctx, `SELECT `+proposalColumns+`,a.content_hash,COALESCE(v.content_hash,''),COALESCE(v.operator_client,''),COALESCE(v.operator_incarnation::text,''),COALESCE(a.client_incarnation::text,''),
  EXISTS(SELECT 1 FROM portal_membership_transitions h WHERE h.incarnation=v.operator_incarnation
    AND h.issuer=v.operator_issuer AND h.subject=v.operator_subject AND h.client_id=v.operator_client
@@ -34,12 +38,14 @@ func readOrderConfirmationSource(ctx context.Context, tx confirmationQuery, clie
  AND EXISTS(SELECT 1 FROM portal_membership_transitions h WHERE h.incarnation=a.client_incarnation
    AND h.issuer=a.client_issuer AND h.subject=a.client_subject AND h.client_id=a.client_id
    AND h.role='client' AND NOT h.revoked AND h.kind IN ('baseline','insert','update')),
- o.service_content_format
+ o.service_content_format,slot.starts_at,slot.ends_at
  FROM portal_orders o JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id
    AND a.request_id=o.request_id AND a.client_id=o.client_id
  JOIN portal_proposals p ON p.request_id=a.request_id AND p.client_id=a.client_id AND p.version=a.proposal_version
  JOIN portal_proposal_visibility v ON v.request_id=a.request_id AND v.client_id=a.client_id
    AND v.event=a.visibility_event AND v.proposal_version=a.proposal_version AND v.action='share'
+ LEFT JOIN portal_appointment_revisions slot ON slot.reservation_id=o.appointment_reservation_id
+   AND slot.revision=o.appointment_revision AND slot.client_id=o.client_id
  WHERE o.client_id=$1 AND o.id=$2 AND a.id=$3`, clientID, orderID, acceptanceID).Scan(dest...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return orderConfirmationSource{}, errProposalConflict
@@ -58,5 +64,17 @@ func readOrderConfirmationSource(ctx context.Context, tx confirmationQuery, clie
 	} else if proposal.ContentFormat != 1 || orderFormat != nil {
 		return orderConfirmationSource{}, errProposalConflict
 	}
-	return orderConfirmationSource{ContentFormat: proposal.ContentFormat, ProposalVersion: proposal.Version, ProposalSHA256: hash, Service: proposal.Service}, nil
+	source := orderConfirmationSource{
+		ContentFormat: proposal.ContentFormat, ProposalVersion: proposal.Version,
+		ProposalSHA256: hash, Service: proposal.Service, ProducerFormat: proposal.ContentFormat,
+	}
+	if source.Service.Kind == proposalServiceAppointment {
+		if startsAt == nil || endsAt == nil || endsAt.Sub(*startsAt) != time.Duration(source.Service.DurationMinutes)*time.Minute {
+			return orderConfirmationSource{}, errProposalConflict
+		}
+		source.ProducerFormat, source.StartsAt, source.EndsAt = 3, startsAt.UTC(), endsAt.UTC()
+	} else if startsAt != nil || endsAt != nil {
+		return orderConfirmationSource{}, errProposalConflict
+	}
+	return source, nil
 }

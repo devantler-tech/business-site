@@ -113,6 +113,9 @@ var workspaceManagementSchema string
 //go:embed service-contracts.sql
 var serviceContractsSchema string
 
+//go:embed appointment-reservations.sql
+var appointmentReservationsSchema string
+
 // runtimeGrants is the web role's complete table privilege set after the
 // migrations above, as MIGRATIONS.md documents. A migration that adds
 // or changes runtime access updates this list in the same change; web startup's
@@ -134,12 +137,13 @@ var runtimeGrants = []string{
 	"SELECT,INSERT ON portal_workspace_settings",
 	"UPDATE(display_name,closed_at) ON portal_workspace_settings",
 	"SELECT,INSERT ON portal_service_fulfillments,portal_service_consumers",
+	"SELECT,INSERT ON portal_appointment_reservations,portal_appointment_revisions,portal_appointment_introductions,portal_appointment_introduction_cancellations",
 	"SELECT ON portal_schema_version",
 }
 
 // managedTables are every relation the migrations own. Granting first revokes
 // the migration role's earlier grants on all of them, so re-runs converge.
-const managedTables = "portal_schema_version,portal_login_attempts,portal_invitations,portal_memberships,portal_membership_transitions,portal_sessions,portal_contacts,portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_reviews,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions,portal_work_approvals,portal_work_revocations,portal_work_current,portal_orders,portal_order_charges,portal_numina_contacts,portal_card_checkouts,portal_stripe_events,portal_order_ends,portal_card_cancellations,portal_charge_reversals,portal_order_withdrawals,portal_withdrawal_cancellations,portal_order_completions,portal_withdrawal_settlements,portal_mail_outbox,portal_mail_deliveries,portal_launch_places,portal_order_addons,portal_request_closures,portal_addon_ends,portal_addon_removals,portal_operator_audit,portal_workspaces,portal_preview_receipts,portal_workspace_settings,portal_service_fulfillments,portal_service_consumers"
+const managedTables = "portal_schema_version,portal_login_attempts,portal_invitations,portal_memberships,portal_membership_transitions,portal_sessions,portal_contacts,portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_reviews,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions,portal_work_approvals,portal_work_revocations,portal_work_current,portal_orders,portal_order_charges,portal_numina_contacts,portal_card_checkouts,portal_stripe_events,portal_order_ends,portal_card_cancellations,portal_charge_reversals,portal_order_withdrawals,portal_withdrawal_cancellations,portal_order_completions,portal_withdrawal_settlements,portal_mail_outbox,portal_mail_deliveries,portal_launch_places,portal_order_addons,portal_request_closures,portal_addon_ends,portal_addon_removals,portal_operator_audit,portal_workspaces,portal_preview_receipts,portal_workspace_settings,portal_service_fulfillments,portal_service_consumers,portal_appointment_reservations,portal_appointment_revisions,portal_appointment_introductions,portal_appointment_introduction_cancellations"
 
 // errRuntimeRole hides which eligibility condition a named web role failed.
 var errRuntimeRole = errors.New("runtime role is not eligible")
@@ -236,7 +240,7 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, runtimeRole string) error 
 
 // orderedMigrations lists the embedded migrations; version N is element N-1.
 func orderedMigrations() []string {
-	return []string{schema, sessionsSchema, contactsSchema, requestsSchema, triageIndexSchema, proposalsSchema, proposalVisibilitySchema, contactVerificationSchema, proposalAcceptanceSchema, invoicesSchema, creditsSchema, invoiceTaxSchema, membershipHistorySchema, workApprovalsSchema, otherRequestsSchema, ordersSchema, cardsSchema, orderEndsSchema, workFundingSchema, clientOrderEndsSchema, orderWithdrawalsSchema, earlyStartSchema, mailSchema, launchPlacesSchema, orderAddonsSchema, requestClosuresSchema, addonEndsSchema, operatorAuditSchema, workspacesSchema, originalConfirmationSchema, previewReceiptsSchema, workspaceManagementSchema, serviceContractsSchema}
+	return []string{schema, sessionsSchema, contactsSchema, requestsSchema, triageIndexSchema, proposalsSchema, proposalVisibilitySchema, contactVerificationSchema, proposalAcceptanceSchema, invoicesSchema, creditsSchema, invoiceTaxSchema, membershipHistorySchema, workApprovalsSchema, otherRequestsSchema, ordersSchema, cardsSchema, orderEndsSchema, workFundingSchema, clientOrderEndsSchema, orderWithdrawalsSchema, earlyStartSchema, mailSchema, launchPlacesSchema, orderAddonsSchema, requestClosuresSchema, addonEndsSchema, operatorAuditSchema, workspacesSchema, originalConfirmationSchema, previewReceiptsSchema, workspaceManagementSchema, serviceContractsSchema, appointmentReservationsSchema}
 }
 
 // migrationChecksum is the ledger's record of one migration's exact bytes.
