@@ -24,7 +24,7 @@
     "fast-xml-parser": "5.12.1",
     "github-slugger": "2.0.0",
     "mermaid": "^11.17.2",
-    "pdfkit": "^0.20.2",
+    "pdfkit": "^0.21.0",
     "satteri": "0.11.7",
     "sharp": "^0.35.5",
     "expressive-code": "0.44.4",
