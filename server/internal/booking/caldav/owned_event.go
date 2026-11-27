@@ -72,6 +72,12 @@ func (c *Client) ownedEventTarget(event OwnedEvent) (resource, uid string, err e
 }
 
 func (c *Client) readOwnedEvent(ctx context.Context, client *http.Client, resource, uid string, event OwnedEvent) (OwnedEventObservation, error) {
+	return c.readMatchingOwnedEvent(ctx, client, resource, func(data []byte) bool {
+		return matchesOwnedEvent(data, uid, event)
+	})
+}
+
+func (c *Client) readMatchingOwnedEvent(ctx context.Context, client *http.Client, resource string, matches func([]byte) bool) (OwnedEventObservation, error) {
 	request, err := c.sourceRequest(ctx, http.MethodGet, resource, nil)
 	if err != nil {
 		return OwnedEventObservation{}, err
@@ -90,7 +96,7 @@ func (c *Client) readOwnedEvent(ctx context.Context, client *http.Client, resour
 		return OwnedEventObservation{}, booking.ErrUnavailable
 	}
 	data, err := readCalendarBody(ctx, response, maxOwnedEventBytes)
-	if err != nil || !matchesOwnedEvent(data, uid, event) {
+	if err != nil || !matches(data) {
 		return OwnedEventObservation{}, booking.ErrUnavailable
 	}
 	return OwnedEventObservation{Exists: true, ETag: tags[0]}, nil

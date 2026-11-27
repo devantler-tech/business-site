@@ -9,6 +9,7 @@ import (
 
 	"github.com/devantler-tech/business-site/server/internal/booking"
 	"github.com/emersion/go-ical"
+	dav "github.com/emersion/go-webdav"
 	webdav "github.com/emersion/go-webdav/caldav"
 )
 
@@ -20,6 +21,10 @@ func (c *Client) CreateOwnedEvent(ctx context.Context, event OwnedEvent) (OwnedE
 	if err != nil {
 		return OwnedEventObservation{}, err
 	}
+	return c.writeOwnedEvent(ctx, resource, uid, event, nil, "")
+}
+
+func (c *Client) writeOwnedEvent(ctx context.Context, resource, uid string, next OwnedEvent, prior *OwnedEvent, expectedTag string) (OwnedEventObservation, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	stamp := c.now().UTC()
@@ -31,23 +36,42 @@ func (c *Client) CreateOwnedEvent(ctx context.Context, event OwnedEvent) (OwnedE
 		return OwnedEventObservation{}, err
 	}
 	defer closeConnection()
-	current, err := c.readOwnedEvent(ctx, client, resource, uid, event)
-	if err != nil || current.Exists {
-		return current, err
+	targetFound := false
+	current, err := c.readMatchingOwnedEvent(ctx, client, resource, func(data []byte) bool {
+		targetFound = matchesOwnedEvent(data, uid, next)
+		return targetFound || (prior != nil && matchesOwnedEvent(data, uid, *prior))
+	})
+	if err != nil {
+		return OwnedEventObservation{}, err
 	}
-	if !c.putNewOwnedEvent(ctx, client, resource, newOwnedCalendarEvent(uid, stamp, event)) {
+	if targetFound && current.ETag != expectedTag {
+		return current, nil
+	}
+	if targetFound || (prior != nil && (!current.Exists || current.ETag != expectedTag)) {
 		return OwnedEventObservation{}, booking.ErrUnavailable
 	}
-	current, err = c.readOwnedEvent(ctx, client, resource, uid, event)
-	if err != nil || !current.Exists {
+	options := webdav.PutCalendarObjectOptions{IfNoneMatch: "*"}
+	if prior != nil {
+		options = webdav.PutCalendarObjectOptions{IfMatch: dav.ConditionalMatch(expectedTag)}
+	}
+	if !c.putOwnedEvent(ctx, client, resource, newOwnedCalendarEvent(uid, stamp, next), options) {
+		return OwnedEventObservation{}, booking.ErrUnavailable
+	}
+	current, err = c.readOwnedEvent(ctx, client, resource, uid, next)
+	if err != nil || !current.Exists || current.ETag == expectedTag {
 		return OwnedEventObservation{}, booking.ErrUnavailable
 	}
 	return current, nil
 }
 
-// putNewOwnedEvent reports whether observing the canonical resource can resolve
+// putOwnedEvent reports whether observing the canonical resource can resolve
 // the attempted write. It ignores success metadata and never repeats the PUT.
-func (c *Client) putNewOwnedEvent(ctx context.Context, client *http.Client, resource string, event *ical.Calendar) bool {
+func (c *Client) putOwnedEvent(ctx context.Context, client *http.Client, resource string, event *ical.Calendar, options webdav.PutCalendarObjectOptions) bool {
+	create := options.IfNoneMatch == "*" && options.IfMatch == ""
+	update := options.IfNoneMatch == "" && strongEventTag.MatchString(string(options.IfMatch))
+	if !create && !update {
+		return false
+	}
 	origin := url.URL{Scheme: "https", Host: c.origin.Host}
 	target := origin
 	target.Path = resource
@@ -55,7 +79,8 @@ func (c *Client) putNewOwnedEvent(ctx context.Context, client *http.Client, reso
 	status := 0
 	transport := writeClientFunc(func(request *http.Request) (*http.Response, error) {
 		if attempted || request.Method != http.MethodPut || request.URL.String() != target.String() ||
-			request.Header.Get("If-None-Match") != "*" || request.Header.Get("If-Match") != "" ||
+			request.Header.Get("If-None-Match") != string(options.IfNoneMatch) ||
+			request.Header.Get("If-Match") != string(options.IfMatch) ||
 			c.authorizeSourceRequest(request) != nil {
 			return nil, booking.ErrUnavailable
 		}
@@ -75,7 +100,7 @@ func (c *Client) putNewOwnedEvent(ctx context.Context, client *http.Client, reso
 	if err != nil {
 		return false
 	}
-	_, _ = dav.PutCalendarObject(ctx, resource, event, &webdav.PutCalendarObjectOptions{IfNoneMatch: "*"})
+	_, _ = dav.PutCalendarObject(ctx, resource, event, &options)
 	return attempted && (status == 0 || status/100 == 2 || status == http.StatusPreconditionFailed || status/100 == 5)
 }
 
