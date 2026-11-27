@@ -94,8 +94,16 @@
 
 {{define "operator-directory"}}
 <div class="operator-directory">
-  <section class="operator-panel" aria-labelledby="operator-workspaces">
+  <section class="operator-panel" aria-labelledby="operator-workspaces" data-workspace-directory>
     <h2 id="operator-workspaces">{{if eq .Lang "da"}}Arbejdsområder og medlemmer{{else}}Workspaces and members{{end}}</h2>
+    {{if .Workspaces}}
+    <div class="operator-directory-search" data-directory-search hidden>
+      <label for="operator-directory-query">{{if eq .Lang "da"}}Find et arbejdsområde eller et medlem{{else}}Find a workspace or member{{end}}</label>
+      <input id="operator-directory-query" type="search" autocomplete="off" spellcheck="false" maxlength="100">
+    </div>
+    <p class="operator-directory-status" role="status" data-directory-status
+      data-no-matches="{{if eq .Lang `da`}}Ingen arbejdsområder eller medlemmer matcher din søgning.{{else}}No workspaces or members match your search.{{end}}"></p>
+    {{end}}
     {{range .Workspaces}}
     <details class="operator-workspace" open="open">
       <summary>{{if .Name}}{{.Name}}{{else}}{{.ID}}{{end}}</summary>
