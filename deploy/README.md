@@ -406,10 +406,10 @@ reviewed source before dispatching a release.
 Pass the full verified commit as `expected_source` to release the same source.
 Both release dispatch and stable-tag publication require the repository setting
 `RUNTIME_PUBLICATION_ENABLED` to be `true` and `.github/runtime-publication` to
-contain the single line `enabled` in the frozen signed source. The source policy
-ships with `disabled`. Enable it through reviewed source delivery after the
-rollout prerequisites pass. After production activation, leave the repository
-setting enabled between ordinary releases. Setting it to `false` stops new
+contain the single line `enabled` in the frozen signed source. Use a reviewed
+source change to enable the policy after the rollout prerequisites pass.
+After production activation, leave the repository setting enabled between
+ordinary releases. Setting it to `false` stops new
 publication admissions, including those for a source already marked `enabled`.
 
 ```sh
