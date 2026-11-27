@@ -75,7 +75,7 @@ func (s *Foundation) recordPreviewPurchase(ctx context.Context, session durableR
 		if !ok || !samePreviewSnapshot(grant.session, session) {
 			return ErrDenied
 		}
-	} else if !previewSessionCurrent(ctx, tx, session) {
+	} else if !lockBrowserSession(ctx, tx, session) {
 		return ErrDenied
 	}
 	if err = tx.Commit(ctx); err != nil {

@@ -111,7 +111,8 @@
 }
 
 .acceptance-receipt summary,
-.invoice-record summary {
+.invoice-record summary,
+.appointment-cancellation summary {
   cursor: pointer;
   min-height: 44px;
   line-height: 1.7;
