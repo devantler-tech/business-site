@@ -72,7 +72,7 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 func rewindAppointmentReservationsFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_work_leases,portal_work_lease_slot;
- DROP FUNCTION portal_assign_work_lease_fence();
+ DROP FUNCTION portal_assign_work_lease_fence(),portal_validate_work_lease_selection();
  DROP TABLE portal_customer_account_closures;
  DROP FUNCTION portal_guard_customer_account_closure();
  DROP FUNCTION portal_lock_work_queue_revision(bigint);

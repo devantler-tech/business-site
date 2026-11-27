@@ -68,6 +68,46 @@ func TestWorkLeaseStorageRefusesExpiredApproval(t *testing.T) {
 	requireLeaseDatabaseError(t, err, "55000")
 }
 
+func TestWorkLeaseStorageRefusesRevisionChangedWhileWaitingForSlot(t *testing.T) {
+	b, operator := approvalFixture(t)
+	savedApproval(t, b, operator)
+	db := migrationDB(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
+	defer cancel()
+	holder := beginFixtureTransaction(ctx, t, db)
+	if _, err := holder.Exec(ctx, `SELECT issued_fence FROM portal_work_lease_slot WHERE singleton FOR UPDATE`); err != nil {
+		t.Fatal("hold the software lease slot", err)
+	}
+	claim := beginFixtureTransaction(ctx, t, db)
+	pid := claim.Conn().PgConn().PID()
+	finished := make(chan error, 1)
+	go func() {
+		defer close(finished)
+		_, err := insertFixtureWorkLease(ctx, claim, "fictional-worker", secret(), time.Minute)
+		finished <- err
+	}()
+	defer func() {
+		cancel()
+		<-finished
+	}()
+	waitForFixtureDatabaseLock(ctx, t, db, `SELECT EXISTS(
+ SELECT 1 FROM pg_locks WHERE pid=$1 AND NOT granted)`, pid)
+
+	// An evidence writer must commit while this claim waits for the slot.
+	if _, err := db.Exec(ctx, `UPDATE portal_requests SET submitted_at=submitted_at WHERE id=$1`, proposalRequestID); err != nil {
+		t.Fatal("waiting claim locked the queue revision ahead of the slot", err)
+	}
+	if err := holder.Commit(ctx); err != nil {
+		t.Fatal("release the slot after the evidence writer commits", err)
+	}
+	select {
+	case err := <-finished:
+		requireLeaseDatabaseError(t, err, "55000")
+	case <-ctx.Done():
+		t.Fatal("claim did not refuse the revision changed during its wait")
+	}
+}
+
 func TestWorkLeaseStorageSerializesCompetingClaims(t *testing.T) {
 	b, operator := approvalFixture(t)
 	savedApproval(t, b, operator)

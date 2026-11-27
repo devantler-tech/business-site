@@ -1,12 +1,6 @@
-CREATE OR REPLACE FUNCTION public.portal_assign_work_lease_fence() RETURNS trigger
+CREATE FUNCTION public.portal_validate_work_lease_selection() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
 BEGIN
-  UPDATE public.portal_work_lease_slot SET issued_fence=issued_fence+1
-    WHERE singleton RETURNING issued_fence INTO NEW.fence;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'software lease slot is unavailable' USING ERRCODE='55000';
-  END IF;
-
   -- Keep the observed revision stable through commit. Source writers update
   -- it at commit, after acquiring their ordinary evidence locks.
   IF NOT public.portal_lock_work_queue_revision(NEW.queue_revision) THEN
@@ -28,3 +22,9 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+-- PostgreSQL orders BEFORE INSERT triggers by name. Lock the slot in
+-- portal_assign_work_lease_fence before taking the queue revision lock.
+CREATE TRIGGER portal_validate_work_lease_selection BEFORE INSERT ON public.portal_work_leases
+  FOR EACH ROW EXECUTE FUNCTION public.portal_validate_work_lease_selection();
+REVOKE ALL ON FUNCTION public.portal_validate_work_lease_selection() FROM PUBLIC;
