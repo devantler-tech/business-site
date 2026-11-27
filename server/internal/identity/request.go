@@ -333,7 +333,7 @@ func (p requestPageData) ReceiptStage() string {
 	en, da := "Request received", "Forespørgsel modtaget"
 	switch {
 	case p.Order != nil && p.Order.Withdrawn != nil:
-		en, da = "Order withdrawn", "Aftalen er fortrudt"
+		en, da = "Order withdrawn", "Fortrydelse registreret"
 	case p.Order != nil:
 		en, da = "Order recorded", "Bestilling registreret"
 	case slices.ContainsFunc(p.Acceptances, func(a proposalAcceptance) bool { return a.Current }):

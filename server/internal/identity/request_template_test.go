@@ -71,7 +71,7 @@ func TestRequestTemplateShowsTheCurrentReceiptStage(t *testing.T) {
 		{name: "ready-for-review", en: "Proposal ready for review", da: "Tilbud klar til gennemgang", shared: &proposal, acceptances: []proposalAcceptance{historical}},
 		{name: "accepted", en: "Proposal accepted", da: "Tilbud accepteret", shared: &proposal, acceptances: []proposalAcceptance{historical, current}},
 		{name: "ordered", en: "Order recorded", da: "Bestilling registreret", shared: &proposal, acceptances: []proposalAcceptance{current}, order: &projectOrder{}},
-		{name: "withdrawn", en: "Order withdrawn", da: "Aftalen er fortrudt", shared: &proposal, acceptances: []proposalAcceptance{current}, order: &projectOrder{Withdrawn: &withdrawn}},
+		{name: "withdrawn", en: "Order withdrawn", da: "Fortrydelse registreret", shared: &proposal, acceptances: []proposalAcceptance{current}, order: &projectOrder{Withdrawn: &withdrawn}},
 	} {
 		for _, lang := range []string{"en", "da"} {
 			t.Run(tc.name+"/"+lang, func(t *testing.T) {
