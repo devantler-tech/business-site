@@ -17,12 +17,14 @@ const workflow = load(readFileSync(join(root, '.github/workflows/ci.yaml'), 'utf
 function mandatoryQualityChecks(candidate) {
   const job = candidate.jobs['test-portal-quality'];
   assert.equal(job.if, undefined);
+  assert.deepEqual(job.permissions, { contents: 'read' });
   assert.ok(job['continue-on-error'] == null || job['continue-on-error'] === false);
   for (const command of [
     `npx --yes --package="htmlhint@$(node -p 'require("./package.json").devDependencies.htmlhint')" -- node --test scripts/portal-template-quality.test.mjs`,
     `npx --yes --package="cspell@$(node -p 'require("./package.json").devDependencies.cspell')" -- node --test scripts/portal-spelling-quality.test.mjs`,
     'node --test scripts/portal-go-analyzer-quality.test.mjs',
     'bash scripts/portal-links-preprocess.test.sh',
+    'bash scripts/check-portal-links.sh --github-records',
     `npx --yes --package="secretlint@$(node -p 'require("./package.json").devDependencies.secretlint')" -- node --test scripts/portal-credential-quality.test.mjs`,
     'go install github.com/mgechev/revive@v1.16.0\nPORTAL_REVIVE="$GOBIN/revive" bash scripts/portal-package-quality.test.sh\n',
   ]) {
@@ -32,10 +34,12 @@ function mandatoryQualityChecks(candidate) {
     assert.equal(steps[0].if, undefined);
     assert.ok(steps[0]['continue-on-error'] == null || steps[0]['continue-on-error'] === false);
   }
+  const githubRecords = job.steps.find(step => step.run === 'bash scripts/check-portal-links.sh --github-records');
+  assert.deepEqual(githubRecords.env, { GITHUB_TOKEN: '${{ github.token }}' });
 }
 
 test('the actual source CI unconditionally executes every quality observer', () => mandatoryQualityChecks(workflow));
-for (const observer of ['portal-template-quality.test.mjs', 'portal-spelling-quality.test.mjs', 'portal-package-quality.test.sh', 'portal-go-analyzer-quality.test.mjs', 'portal-credential-quality.test.mjs', 'portal-links-preprocess.test.sh']) {
+for (const observer of ['portal-template-quality.test.mjs', 'portal-spelling-quality.test.mjs', 'portal-package-quality.test.sh', 'portal-go-analyzer-quality.test.mjs', 'portal-credential-quality.test.mjs', 'portal-links-preprocess.test.sh', 'check-portal-links.sh']) {
   for (const mutation of ['missing', 'conditional', 'ignored failure']) {
     test(`${observer} cannot be ${mutation}`, () => {
       const candidate = structuredClone(workflow);
@@ -141,7 +145,7 @@ test('GitHub records are authenticated once and ordinary links still use Lychee'
   writeFileSync(join(directory, 'lychee'), `#!/bin/bash
 set -euo pipefail
 case " $* " in
-  *" --dump "*) printf 'discover\\n' >> "$LINK_TEST_TRACE"; printf '%s\\n' "$LINK_TEST_RECORD" ;;
+  *" --dump "*) test -z "\${GITHUB_TOKEN:-}"; printf 'discover\\n' >> "$LINK_TEST_TRACE"; printf '%s\\n' "$LINK_TEST_RECORD" ;;
   *" --exclude "*) printf 'check\\n' >> "$LINK_TEST_TRACE"; exit "$LINK_TEST_ORDINARY_STATUS" ;;
   *) printf 'anonymous\\n' >> "$LINK_TEST_TRACE" ;;
 esac
@@ -164,9 +168,9 @@ printf 'github\\n' >> "$LINK_TEST_TRACE"
 printf '%s' "$LINK_TEST_HTTP_STATUS"
 `, { mode: 0o700 });
 
-  const run = (overrides = {}) => {
+  const run = (overrides = {}, mode = ['--github-records']) => {
     writeFileSync(trace, '');
-    const result = spawnSync('bash', [join(root, 'scripts/check-portal-links.sh'), 'fixture.md'], {
+    const result = spawnSync('bash', [join(root, 'scripts/check-portal-links.sh'), ...mode, 'fixture.md'], {
       cwd: root, encoding: 'utf8', timeout: 15000,
       env: {
         ...process.env,
@@ -182,13 +186,15 @@ printf '%s' "$LINK_TEST_HTTP_STATUS"
     assert.ifError(result.error);
     assert.equal(result.signal, null);
     assert.ok(!(result.stdout + result.stderr).includes(credential));
-    return { status: result.status, trace: readFileSync(trace, 'utf8').trim().split('\n') };
+    return { status: result.status, trace: readFileSync(trace, 'utf8').trim().split('\n').filter(Boolean) };
   };
-  assert.deepEqual(run(), { status: 0, trace: ['discover', 'github', 'check'] });
+  assert.deepEqual(run(), { status: 0, trace: ['discover', 'github'] });
   assert.deepEqual(run({ LINK_TEST_HTTP_STATUS: '404' }), { status: 1, trace: ['discover', 'github'] });
-  assert.deepEqual(run({ LINK_TEST_RECORD: 'https://example.invalid/issue/659' }), { status: 0, trace: ['discover', 'check'] });
-  assert.deepEqual(run({ LINK_TEST_ORDINARY_STATUS: '1' }), { status: 1, trace: ['discover', 'github', 'check'] });
-  assert.deepEqual(run({ GITHUB_TOKEN: '' }), { status: 0, trace: ['anonymous'] });
+  assert.deepEqual(run({ LINK_TEST_RECORD: 'https://example.invalid/issue/659' }), { status: 0, trace: ['discover'] });
+  assert.deepEqual(run({ GITHUB_TOKEN: '' }), { status: 1, trace: [] });
+  assert.deepEqual(run({ GITHUB_TOKEN: 'HIDDEN_BY_MEGALINTER' }), { status: 1, trace: [] });
+  assert.deepEqual(run({ GITHUB_TOKEN: 'HIDDEN_BY_MEGALINTER' }, []), { status: 0, trace: ['check'] });
+  assert.deepEqual(run({ LINK_TEST_ORDINARY_STATUS: '1' }, []), { status: 1, trace: ['check'] });
 });
 
 function lint(files) {

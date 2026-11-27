@@ -2,23 +2,41 @@
 set -euo pipefail
 export LC_ALL=C
 
+# Both checkers share one allowlist. MegaLinter handles all other links, and
+# the required portal quality job checks these records with a read-only token.
+readonly github_record='^https://api\.github\.com/repos/(devantler-tech/(business-site|monorepo)/(issues|pulls)/[1-9][0-9]*|justinas/nosurf/security-advisories/GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})$'
 case "${1:-}" in
+  --github-records) shift ;;
   -h|--help|-V|--version) exec lychee "$@" ;;
+  *) exec lychee "$@" --exclude "$github_record" ;;
 esac
-if [[ -z "${GITHUB_TOKEN:-}" ]]; then
-  exec lychee "$@"
-fi
-if [[ ! "$GITHUB_TOKEN" =~ ^[a-zA-Z0-9_.-]+$ ]]; then
-  echo 'GitHub reference checker received an invalid credential' >&2
+if [[ ! "${GITHUB_TOKEN:-}" =~ ^[a-zA-Z0-9_.-]+$ || "$GITHUB_TOKEN" == HIDDEN_BY_MEGALINTER ]]; then
+  echo 'GitHub reference checker requires a read-only credential' >&2
   exit 1
 fi
 
-# Keep credentials on the exact public records. The ordinary Lychee pass still
-# checks every other link, including GitHub URLs with fragments or query strings.
-readonly github_record='^https://api\.github\.com/repos/(devantler-tech/(business-site|monorepo)/(issues|pulls)/[1-9][0-9]*|justinas/nosurf/security-advisories/GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})$'
 work="$(mktemp -d)"
 trap 'rm -rf -- "$work"' EXIT
-lychee "$@" --dump >"$work/discovered"
+if [[ $# == 0 ]]; then
+  root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+  cd "$root"
+  env -u GITHUB_TOKEN node --input-type=module - "$root" >"$work/arguments" <<'NODE'
+import { readFileSync } from 'node:fs';
+import { load } from 'js-yaml';
+
+const options = load(readFileSync('.mega-linter.yml', 'utf8')).SPELL_LYCHEE_ARGUMENTS;
+for (const option of options) {
+  process.stdout.write(option.replace('/github/workspace', process.argv[2]) + '\0');
+}
+NODE
+  cd "$root/server"
+  git ls-files -z -- '*.md' '*.mdx' '*.markdown' '*.html' '*.htm' '*.rst' '*.txt' \
+    '*.json' '*.jsonc' '*.json5' '*.yaml' '*.yml' >"$work/sources"
+  [[ -s "$work/sources" ]] || { echo 'GitHub reference checker found no source inputs' >&2; exit 1; }
+  while IFS= read -r -d '' input; do set -- "$@" "$input"; done <"$work/arguments"
+  while IFS= read -r -d '' input; do set -- "$@" "$input"; done <"$work/sources"
+fi
+env -u GITHUB_TOKEN lychee "$@" --no-progress --dump >"$work/discovered"
 sort -u "$work/discovered" >"$work/records"
 
 checked=0
@@ -36,5 +54,3 @@ while IFS= read -r record || [[ -n "$record" ]]; do
   ((checked += 1))
 done <"$work/records"
 printf 'Verified %d GitHub API references.\n' "$checked"
-
-lychee "$@" --exclude "$github_record"
