@@ -147,7 +147,9 @@ func TestTransportNeverFollowsRedirect(t *testing.T) {
 	foreign.StartTLS()
 	t.Cleanup(foreign.Close)
 	f := newTransportFixture(t, selectedCalendarHost)
-	f.handler = func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, foreign.URL+"/foreign/", http.StatusFound) }
+	f.handler = func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, foreign.URL+"/foreign/", http.StatusFound)
+	}
 	client := transportClient(t, Config{Origin: "https://calendar.example.test", Calendars: []string{"/calendars/selected/"}}, func(context.Context) (string, string, error) {
 		f.record("credential")
 		return "fictional-user", "fictional-password", nil
