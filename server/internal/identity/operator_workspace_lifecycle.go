@@ -170,9 +170,8 @@ func recordClosedCustomerAccounts(ctx context.Context, tx pgx.Tx, issuer, worksp
 		return nil
 	}
 	saved, err := tx.Exec(ctx, `INSERT INTO portal_customer_account_closures(membership_event,closed_at,remove_by)
- SELECT h.incarnation,w.closed_at,w.closed_at+interval '720 hours'
+ SELECT h.incarnation,h.recorded_at,h.recorded_at+interval '720 hours'
  FROM portal_membership_transitions h
- JOIN portal_workspace_settings w ON w.workspace_id=h.client_id
  JOIN unnest($3::text[]) AS prior(incarnation) ON h.previous_incarnation=prior.incarnation::uuid
  WHERE h.issuer=$1 AND h.client_id=$2 AND h.role='client' AND h.kind='delete'`, issuer, workspace, closedAccounts)
 	if err != nil || saved.RowsAffected() != int64(len(closedAccounts)) {
@@ -203,13 +202,21 @@ func (b *browser) removeCustomerMember(ctx context.Context, r *http.Request) (an
 	if !b.operatorMutationAllowed(ctx, tx) {
 		return nil, ErrDenied
 	}
-	result, err := tx.Exec(ctx, `DELETE FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND client_id=$3 AND role='client'`,
-		b.foundation.broker.issuer, input.Subject, input.Workspace)
+	issuer := b.foundation.broker.issuer
+	var incarnation string
+	err = tx.QueryRow(ctx, `DELETE FROM portal_memberships
+ WHERE issuer=$1 AND subject=$2 AND client_id=$3 AND role='client' RETURNING incarnation::text`,
+		issuer, input.Subject, input.Workspace).Scan(&incarnation)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errOperatorInput
+	}
 	if err != nil {
 		return nil, err
 	}
-	if result.RowsAffected() != 1 {
-		return nil, errOperatorInput
+	if customeridentity.DexUser(input.Subject, customeridentity.ZitadelConnectorID) != "" {
+		if err := recordClosedCustomerAccounts(ctx, tx, issuer, input.Workspace, []string{incarnation}); err != nil {
+			return nil, err
+		}
 	}
 	if !b.operatorMutationAllowed(ctx, tx) {
 		return nil, ErrDenied
