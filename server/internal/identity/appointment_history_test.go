@@ -71,20 +71,26 @@ func TestAppointmentHistoryListsOnlyCurrentWorkspace(t *testing.T) {
 }
 
 func TestAppointmentHistoryRefusesARevokedSessionAfterReading(t *testing.T) {
-	b := newBrowserFixture(t)
-	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-appointment-history"}, []any{true, true})
 	const subject = "appointment-history-reader"
+	b, start := appointmentHistoryFixture(t, subject, false)
+
+	status, body := requestAfterReadRevocation(t, b, "FROM portal_appointment_introductions i JOIN", "/portal/appointments", subject)
+	if status != http.StatusServiceUnavailable || strings.Contains(html.UnescapeString(body), start.Format(time.RFC3339)) {
+		t.Fatalf("a revoked session received private appointment history: status=%d", status)
+	}
+}
+
+func appointmentHistoryFixture(t *testing.T, subject string, cancellation bool) (*browserFixture, time.Time) {
+	t.Helper()
+	b := newBrowserFixture(t)
+	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-appointment-history", "portal-appointment-cancellation"}, []any{true, true, cancellation})
 	b.invite(subject, subject, "client")
 	b.as(subject)
 	b.finish(b.start())
 	seedAppointmentWorkspaces(t, b.pool, subject)
 	start, policy := appointmentHoldFixture(t)
 	addHistoryIntroduction(t, b, policy, subject, start, false)
-
-	status, body := requestAfterReadRevocation(t, b, "FROM portal_appointment_introductions i JOIN", "/portal/appointments", subject)
-	if status != http.StatusServiceUnavailable || strings.Contains(html.UnescapeString(body), start.Format(time.RFC3339)) {
-		t.Fatalf("a revoked session received private appointment history: status=%d", status)
-	}
+	return b, start
 }
 
 func TestAppointmentHistoryMakesTheAutumnClockChangeUnambiguous(t *testing.T) {

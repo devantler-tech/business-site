@@ -29,12 +29,8 @@ func (b *browser) cancelAppointmentIntroduction(w http.ResponseWriter, r *http.R
 		http.NotFound(w, r)
 		return
 	}
-	client, role, ok := b.browserMember(w, r)
+	client, ok := b.appointmentClient(w, r)
 	if !ok {
-		return
-	}
-	if role != "client" {
-		b.render(w, r, http.StatusForbidden, "error", "", "")
 		return
 	}
 	reservation, revision, valid := parseAppointmentCancellation(r)

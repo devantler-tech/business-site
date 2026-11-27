@@ -39,12 +39,8 @@ func (b *browser) appointmentHistory(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	client, role, ok := b.browserMember(w, r)
+	client, ok := b.appointmentClient(w, r)
 	if !ok {
-		return
-	}
-	if role != "client" {
-		b.render(w, r, http.StatusForbidden, "error", "", "")
 		return
 	}
 	snapshot, ok := b.captureDurableResponse(ctx, b.contactAuthority(ctx, client))
@@ -76,6 +72,18 @@ func (b *browser) appointmentHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write(buffer.Bytes())
+}
+
+func (b *browser) appointmentClient(w http.ResponseWriter, r *http.Request) (string, bool) {
+	client, role, ok := b.browserMember(w, r)
+	if !ok {
+		return "", false
+	}
+	if role != "client" {
+		b.render(w, r, http.StatusForbidden, "error", "", "")
+		return "", false
+	}
+	return client, true
 }
 
 func (s *Foundation) readAppointmentHistory(ctx context.Context, client, lang string, allowCancellation bool) ([]appointmentHistoryItem, error) {

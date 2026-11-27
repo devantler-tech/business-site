@@ -154,15 +154,7 @@ func TestAppointmentCancellationRefusesSessionDeletedWhileWaiting(t *testing.T) 
 
 func bookedCancellationFixture(t *testing.T) (*browserFixture, url.Values) {
 	t.Helper()
-	b := newBrowserFixture(t)
-	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-appointment-history", "portal-appointment-cancellation"}, []any{true, true, true})
-	const subject = "booked-intro-client"
-	b.invite(subject, subject, "client")
-	b.as(subject)
-	b.finish(b.start())
-	seedAppointmentWorkspaces(t, b.pool, subject)
-	start, policy := appointmentHoldFixture(t)
-	addHistoryIntroduction(t, b, policy, subject, start, false)
+	b, _ := appointmentHistoryFixture(t, "booked-intro-client", true)
 	status, body, _ := b.request("GET", "/portal/appointments", nil, "")
 	if status != http.StatusOK {
 		t.Fatalf("the fictional client's appointment history got status=%d", status)
