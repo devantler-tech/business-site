@@ -529,7 +529,7 @@ func (b *browser) retrySignIn(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	lang := language(r)
 	if refused, _ := b.refusals(ctx); refused < refusalLimit {
-		http.Redirect(w, r, "/portal/sign-in?lang="+lang, http.StatusSeeOther)
+		b.brokerHandoff(w, r, b.visible("/portal/sign-in")+"?lang="+lang)
 		return
 	}
 	if err := b.renewEmptySession(ctx); err != nil {
@@ -552,7 +552,8 @@ func withLanguage(r *http.Request, lang string) *http.Request {
 	return r
 }
 
-// brokerHandoff starts native navigation for an internally constructed broker URL.
+// brokerHandoff starts native navigation to the configured broker or the
+// portal's own sign-in route.
 // Both ordinary sign-in and purpose-bound contact proof retain the same strict CSP.
 func (b *browser) brokerHandoff(w http.ResponseWriter, r *http.Request, address string) {
 	// Finish the form POST in a fresh portal document. Chromium applies the
@@ -561,9 +562,7 @@ func (b *browser) brokerHandoff(w http.ResponseWriter, r *http.Request, address 
 	// Ordinary navigation keeps this boundary confined to the configured broker.
 	d := b.data(r, "broker-handoff", "", "")
 	d.BrokerURL = address
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_ = b.templates().ExecuteTemplate(w, "portal.html", d)
+	b.renderPortalPage(w, http.StatusOK, d)
 }
 
 // callback consumes the attempt before exchange, verifies broker proof and
@@ -827,6 +826,9 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	}
 	if path == "/portal/contact/verify" {
 		path = "/portal/contact"
+	}
+	if path == "/portal/sign-in/retry" {
+		path = "/portal/sign-in"
 	}
 	if kind == "appointment-cancellation-error" {
 		path = "/portal/appointments"
