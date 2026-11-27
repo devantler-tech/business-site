@@ -1,7 +1,11 @@
 <!doctype html>
 {{template "portal-head" .}}
 {{template "portal-header" .}}
-<main id="main"><div class="intro"><h1>{{.Title}}</h1>
+<main id="main" data-portal-view="{{.Kind}}">
+{{if eq .Kind `home`}}
+{{template "client-home" .}}
+{{else}}
+<div class="intro"><h1>{{.Title}}</h1>
 {{if .Intro}}<p>{{.Intro}}</p>{{end}}</div>
 <section aria-label="{{.Title}}">
 {{if eq .Kind `appointments`}}
@@ -34,18 +38,50 @@
 <p><a href="{{root}}/appointments?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til dine aftaler{{else}}Back to your appointments{{end}}</a></p>
 {{else if eq .Kind `no-access`}}<p role="alert">{{if eq .Lang `da`}}Portalen kræver en invitation, og den konto, du loggede ind med, er ikke inviteret. Kontakt Devantler Tech, hvis du havde ventet adgang.{{else}}The portal is invitation-only, and the account you signed in with has not been invited. Contact Devantler Tech if you expected access.{{end}}</p>
 {{else if or (eq .Kind `sign-out-handoff`) (eq .Kind `broker-handoff`)}}<p>{{if eq .Kind `sign-out-handoff`}}{{if eq .Lang `da`}}Du bliver logget ud.{{else}}Signing you out.{{end}}{{else if eq .Lang `da`}}Du bliver sendt videre til dit login.{{else}}Continuing to your sign-in.{{end}}</p><a id="broker-continue" href="{{.BrokerURL}}">{{if ne .Kind `sign-out-handoff`}}{{.Action}}{{else if eq .Lang `da`}}Fortsæt{{else}}Continue{{end}}</a>
-{{else if or (eq .Kind `home`) (eq .Kind `operator`)}}<h2>{{if eq .Kind `operator`}}{{.Operator}}{{else}}{{.SignedIn}}{{end}}</h2>
-<p>{{if eq .Lang `da`}}Dit arbejdsområde{{else}}Your workspace{{end}}: <strong>{{.Client}}</strong></p>{{if eq .Kind `home`}}<p><a href="{{root}}/contact?lang={{.Lang}}">{{if eq .Lang `da`}}Dine kontaktoplysninger{{else}}Your contact details{{end}}</a></p>{{end}}{{if eq .Kind `operator`}}<p><a href="{{root}}/operator/invitations/new?lang={{.Lang}}">{{if eq .Lang `da`}}Inviter en kunde{{else}}Invite a customer{{end}}</a></p><p><a href="{{root}}/operator/customers?lang={{.Lang}}">{{if eq .Lang `da`}}Kunder og arbejdsområder{{else}}Customers and workspaces{{end}}</a></p><p><a href="{{root}}/operator/audit?lang={{.Lang}}">{{if eq .Lang `da`}}Revisionslog{{else}}Audit log{{end}}</a></p>{{end}}<p>{{.Boundary}}</p><form method="post" action="{{root}}/logout?lang={{.Lang}}"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><button type="submit">{{.Logout}}</button></form>
+{{else if eq .Kind `operator`}}<h2>{{.Operator}}</h2>
+<p>{{if eq .Lang `da`}}Dit arbejdsområde{{else}}Your workspace{{end}}: <strong>{{.Client}}</strong></p><p><a href="{{root}}/operator/invitations/new?lang={{.Lang}}">{{if eq .Lang `da`}}Inviter en kunde{{else}}Invite a customer{{end}}</a></p><p><a href="{{root}}/operator/customers?lang={{.Lang}}">{{if eq .Lang `da`}}Kunder og arbejdsområder{{else}}Customers and workspaces{{end}}</a></p><p><a href="{{root}}/operator/audit?lang={{.Lang}}">{{if eq .Lang `da`}}Revisionslog{{else}}Audit log{{end}}</a></p><p>{{.Boundary}}</p><form method="post" action="{{root}}/logout?lang={{.Lang}}"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><button type="submit">{{.Logout}}</button></form>
 {{else if eq .Kind `operator-workspace-billing-error`}}<p role="alert">{{if eq .Lang `da`}}Afslut den løbende fakturering, før du sletter arbejdsområdet.{{else}}End active billing before deleting this workspace.{{end}}</p><a class="button" href="{{root}}/operator/customers?lang={{.Lang}}">{{if eq .Lang `da`}}Kunder og arbejdsområder{{else}}Customers and workspaces{{end}}</a>
 {{else if eq .Kind `operator-action-error`}}<p role="alert">{{if eq .Lang `da`}}Handlingen kunne ikke gennemføres. Kontrollér oplysningerne og prøv igen fra kundeoversigten. Hvis kontoen blev oprettet, bruges den samme konto ved et nyt forsøg.{{else}}The action could not be completed. Check the details and retry from the customer overview. If the account was created, retrying uses the same account.{{end}}</p><a class="button" href="{{root}}/operator/customers?lang={{.Lang}}">{{if eq .Lang `da`}}Kunder og arbejdsområder{{else}}Customers and workspaces{{end}}</a>
 {{else if eq .Kind `triage-invalid`}}<p role="alert">{{if eq .Lang `da`}}Denne side med forespørgsler kunne ikke åbnes. Gå tilbage til oversigten for at starte igen.{{else}}This inbox page could not be opened. Return to requests to start again.{{end}}</p><a class="button" href="{{root}}/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til forespørgsler{{else}}Back to requests{{end}}</a>
 {{else if or (eq .Kind `proposal-invalid`) (eq .Kind `proposal-conflict`)}}<p role="alert">{{if eq .Lang `da`}}{{if eq .Kind `proposal-conflict`}}Udkastet er ændret eller historikken er fuld. Intet er overskrevet. Åbn forespørgslen igen og sammenlign de gemte versioner.{{else}}Udkastet kunne ikke gemmes. Brug de angivne tegngrænser og hele DKK, og prøv igen fra forespørgslen.{{end}}{{else}}{{if eq .Kind `proposal-conflict`}}The draft has changed or its history is full. Nothing was overwritten. Reopen the request and compare saved versions.{{else}}The draft could not be saved. Use the stated character limits and whole DKK, and try again from the request.{{end}}{{end}}</p><a class="button" href="{{root}}/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til forespørgsler{{else}}Back to requests{{end}}</a>
 {{else if or (eq .Kind `sharing-invalid`) (eq .Kind `sharing-conflict`)}}<p role="alert">{{if eq .Lang `da`}}Delingen kunne ikke ændres. Intet er overskrevet. Åbn forespørgslen igen og kontrollér versionen og den aktuelle deling.{{else}}Sharing could not be changed. Nothing was overwritten. Reopen the request and check its version and current sharing state.{{end}}</p><a class="button" href="{{root}}/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til forespørgsler{{else}}Back to requests{{end}}</a>
 {{else}}<p role="alert">{{if eq .Kind `unavailable`}}{{.Unavailable}}{{else}}{{.Error}}{{end}}</p>{{if not .ClientPreview}}<a class="button" href="{{root}}/sign-in?lang={{.Lang}}">{{.Action}}</a>{{end}}{{end}}
-{{if .RequestsEnabled}}<p><a href="{{root}}/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Dine projektforespørgsler{{else}}Your project requests{{end}}</a></p>{{end}}
-{{if .AppointmentsEnabled}}<p><a href="{{root}}/appointments?lang={{.Lang}}">{{if eq .Lang `da`}}Dine aftaler{{else}}Your appointments{{end}}</a></p>
-{{end}}{{if .TriageEnabled}}<p><a href="{{root}}/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Læs projektforespørgsler{{else}}Review project requests{{end}}</a></p>{{end}}
-</section><a class="back" href="{{public .Lang}}">{{.Back}}</a></main>{{template "portal-footer" .}}
+{{if .TriageEnabled}}<p><a href="{{root}}/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Læs projektforespørgsler{{else}}Review project requests{{end}}</a></p>{{end}}
+</section><a class="back" href="{{public .Lang}}">{{.Back}}</a>
+{{end}}
+</main>
+{{template "portal-footer" .}}
+
+{{define "client-home"}}
+  <h1>{{.Title}}</h1>
+  <p class="client-workspace">{{if eq .Lang `da`}}Arbejdsområde{{else}}Workspace{{end}} <strong>{{.Client}}</strong></p>
+  <ul class="workspace-actions" role="list" aria-label="{{if eq .Lang `da`}}Dine opgaver{{else}}Your tasks{{end}}">
+    {{if .RequestsEnabled}}
+    <li><a href="{{root}}/requests?lang={{.Lang}}">
+      <strong>{{if eq .Lang `da`}}Dine projektforespørgsler{{else}}Your project requests{{end}}</strong>
+      <span>{{if eq .Lang `da`}}Opret en forespørgsel, eller se dem, du har sendt.{{else}}Start a request or check one you’ve sent.{{end}}</span>
+    </a></li>
+    {{end}}
+    {{if .AppointmentsEnabled}}
+    <li><a href="{{root}}/appointments?lang={{.Lang}}">
+      <strong>{{if eq .Lang `da`}}Dine aftaler{{else}}Your appointments{{end}}</strong>
+      <span>{{if eq .Lang `da`}}Se dine kommende og tidligere aftaler.{{else}}See your upcoming and past appointments.{{end}}</span>
+    </a></li>
+    {{end}}
+    <li><a href="{{root}}/contact?lang={{.Lang}}">
+      <strong>{{if eq .Lang `da`}}Dine kontaktoplysninger{{else}}Your contact details{{end}}</strong>
+      <span>{{if eq .Lang `da`}}Opdater, hvordan Devantler Tech kan kontakte dig.{{else}}Update how Devantler Tech can reach you.{{end}}</span>
+    </a></li>
+  </ul>
+  {{if .Boundary}}<p>{{.Boundary}}</p>{{end}}
+  <div class="client-account-actions">
+    <a href="{{public .Lang}}">{{.Back}}</a>
+    <form method="post" action="{{root}}/logout?lang={{.Lang}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+      <button type="submit">{{.Logout}}</button>
+    </form>
+  </div>
+{{end}}
 
 {{define "portal-head"}}<html lang="{{.Lang}}">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="description" content="{{.Intro}}">{{if or (eq .Kind `broker-handoff`) (eq .Kind `sign-out-handoff`)}}<meta http-equiv="refresh" content="0;url={{.BrokerURL}}">{{end}}<title>{{.Title}} — Devantler Tech</title><link rel="icon" type="image/png" href="{{root}}/assets/icon.png"><link rel="stylesheet" href="{{root}}/assets/portal.css"></head>

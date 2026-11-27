@@ -378,7 +378,7 @@ func TestBrowserSessionDurabilityAndLogout(t *testing.T) {
 		t.Fatal("authentication did not rotate the session")
 	}
 	s, body, _ := b.request("GET", "/portal/?lang=da", nil, "")
-	if s != 200 || !strings.Contains(body, "Du er logget ind") || !strings.Contains(body, "client-a") || strings.Contains(body, "Operatør") {
+	if s != 200 || !strings.Contains(body, "Din kundeportal") || !strings.Contains(body, "client-a") || strings.Contains(body, "Operatør") {
 		t.Fatalf("signed-in client page wrong: %d %s", s, body)
 	}
 	if strings.Contains(authenticated, "client-a") || strings.Contains(authenticated, b.f.issuer) {
