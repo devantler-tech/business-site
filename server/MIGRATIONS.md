@@ -329,6 +329,11 @@ row lock. An unchanged repeat preserves the original release. Existing lease
 records and the retention deletion path are unchanged. The migration adds no
 runtime grant or worker authority.
 
+v46 requires new software leases to start without a release timestamp. Invalid
+inserts stop before acquiring the slot lock or allocating a fence. Existing
+lease history stays intact. A release is still a separate, database-timed
+transition.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or
