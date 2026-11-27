@@ -667,7 +667,9 @@ func (b *browser) sessionPrincipal(issuer, subject, incarnation string, expiry i
 
 // home rechecks current membership before rendering the client's workspace.
 func (b *browser) home(w http.ResponseWriter, r *http.Request) {
-	client, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
+	ctx := r.Context()
+	p := b.principal(ctx)
+	client, role, err := b.foundation.membership(ctx, p)
 	if err != nil {
 		// Opening the portal without a membership goes straight to the login;
 		// signIn shows the unavailable page instead if the lookup itself failed.
@@ -678,7 +680,21 @@ func (b *browser) home(w http.ResponseWriter, r *http.Request) {
 		b.renderOperator(w, r, client)
 		return
 	}
-	b.render(w, r, 200, "home", client, nosurf.Token(r))
+	page := b.data(r, "home", client, nosurf.Token(r))
+	if !p.isClientPreview() {
+		page.Client, err = workspaceDisplayName(ctx, b.foundation.pool, client)
+		if err != nil {
+			b.render(w, r, http.StatusServiceUnavailable, "unavailable", "", "")
+			return
+		}
+	}
+	// A name read or a display flag evaluation may complete after revocation.
+	current, currentRole, err := b.foundation.membership(ctx, p)
+	if err != nil || current != client || currentRole != role {
+		b.render(w, r, http.StatusForbidden, "error", "", "")
+		return
+	}
+	b.renderPortalPage(w, http.StatusOK, page)
 }
 
 // operator requires the current database role, never token groups or form fields.
@@ -753,10 +769,13 @@ func (b *browser) clientTasks(ctx context.Context, area string) clientTaskNaviga
 
 // render escapes all page data and exposes no broker tokens or raw store errors.
 func (b *browser) render(w http.ResponseWriter, r *http.Request, status int, kind, client, token string) {
-	d := b.data(r, kind, client, token)
+	b.renderPortalPage(w, status, b.data(r, kind, client, token))
+}
+
+func (b *browser) renderPortalPage(w http.ResponseWriter, status int, page pageData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	_ = b.templates().ExecuteTemplate(w, "portal.html", d)
+	_ = b.templates().ExecuteTemplate(w, "portal.html", page)
 }
 
 // data shares the same localized, escaped layout with the private contact form.
