@@ -319,6 +319,7 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /portal/appointments", b.appointmentHistory)
 	mux.HandleFunc("GET /portal/operator", b.operator)
 	mux.HandleFunc("GET /portal/operator/audit", b.operatorAuditPage)
+	mux.HandleFunc("GET /portal/operator/calendar-conflicts", b.operatorCalendarConflicts)
 	mux.HandleFunc("GET /portal/operator/customers", b.operatorCustomersPage)
 	mux.HandleFunc("POST /portal/operator/support", b.operatorSupportPage)
 	mux.HandleFunc("GET /portal/operator/invitations/new", b.operatorInvitationPage)
@@ -724,6 +725,7 @@ type pageData struct {
 	RequestsEnabled                                                                                                                            bool
 	AppointmentsEnabled, AppointmentsLimited                                                                                                   bool
 	Appointments                                                                                                                               []appointmentHistoryItem
+	CalendarConflictsEnabled                                                                                                                   bool
 	TriageEnabled                                                                                                                              bool
 	ClientPreview, PreviewAvailable                                                                                                            bool
 	Audit                                                                                                                                      []auditEntry

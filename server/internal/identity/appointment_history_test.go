@@ -81,32 +81,9 @@ func TestAppointmentHistoryRefusesARevokedSessionAfterReading(t *testing.T) {
 	start, policy := appointmentHoldFixture(t)
 	addHistoryIntroduction(t, b, policy, subject, start, false)
 
-	pause := installCompletedRead(t, b, "FROM portal_appointment_introductions i JOIN")
-	resume := onceRelease(pause.release)
-	defer resume()
-	type response struct {
-		status int
-		body   string
-	}
-	finished := make(chan response, 1)
-	go func() {
-		status, body, _ := b.request("GET", "/portal/appointments", nil, "")
-		finished <- response{status: status, body: body}
-	}()
-	select {
-	case <-pause.blocked:
-	case <-time.After(5 * time.Second):
-		t.Fatal("appointment history did not read its private records")
-	}
-	revokeFixtureAccess(t.Context(), t, b, subject)
-	resume()
-	select {
-	case got := <-finished:
-		if got.status != http.StatusServiceUnavailable || strings.Contains(html.UnescapeString(got.body), start.Format(time.RFC3339)) {
-			t.Fatalf("a revoked session received private appointment history: status=%d", got.status)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("appointment response did not finish after revocation")
+	status, body := requestAfterReadRevocation(t, b, "FROM portal_appointment_introductions i JOIN", "/portal/appointments", subject)
+	if status != http.StatusServiceUnavailable || strings.Contains(html.UnescapeString(body), start.Format(time.RFC3339)) {
+		t.Fatalf("a revoked session received private appointment history: status=%d", status)
 	}
 }
 

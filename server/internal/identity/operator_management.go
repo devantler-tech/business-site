@@ -33,8 +33,8 @@ type managementPage struct {
 
 func (b *browser) operatorCustomersPage(w http.ResponseWriter, r *http.Request) {
 	status, result := b.operatorCall(r, "customers.view", func(ctx context.Context, client string) ([]byte, error) {
-		authority, _ := ctx.Value(operatorAuthorityKey{}).(*operatorAuthority)
-		if authority == nil || authority.kind != "operator" {
+		authority := humanOperatorAuthority(ctx)
+		if authority == nil {
 			return nil, ErrDenied
 		}
 		spaces, err := b.workspaces(ctx)

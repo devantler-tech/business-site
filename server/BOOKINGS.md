@@ -129,3 +129,11 @@ as the appointment order's durable fulfillment. The history displays Copenhagen
 time and lists upcoming appointments before past or cancelled ones. The portal
 rechecks the original session before releasing the page. The independently default-off
 `portal-appointment-history` switch has no environment activation mapping.
+
+## Calendar conflicts in the operator workspace
+
+The calendar conflicts page shows recorded conflicts with the scheduled time,
+appointment type and workspace display name. A current human operator session
+and a successful audit record are required. The
+`portal-calendar-conflicts` switch defaults off and has no environment
+activation mapping.

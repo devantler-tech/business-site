@@ -30,6 +30,7 @@ func (b *browser) writeOperatorActionPage(w http.ResponseWriter, r *http.Request
 func (b *browser) operatorData(r *http.Request, kind, client string) pageData {
 	d := b.data(r, kind, client, nosurf.Token(r))
 	d.PreviewAvailable = kind == "operator" && b.foundation.previewAvailable()
+	d.CalendarConflictsEnabled = b.foundation.calendarConflictReviewReady(r.Context())
 	d.Intro = ""
 	if kind != "operator" {
 		d.TriageEnabled = b.foundation.triageReady(r.Context())
@@ -49,6 +50,11 @@ func (b *browser) operatorData(r *http.Request, kind, client string) pageData {
 		d.Title, d.Intro = "Audit log", "See recent actions by operators and agents."
 		if d.Lang == "da" {
 			d.Title, d.Intro = "Revisionslog", "Se de seneste handlinger fra operatører og agenter."
+		}
+	case "operator-calendar-conflicts":
+		d.Title = "Calendar conflicts"
+		if d.Lang == "da" {
+			d.Title = "Kalenderkonflikter"
 		}
 	case "operator-support":
 		d.Title = "Read-only support view"

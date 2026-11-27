@@ -21,6 +21,7 @@
     {{if eq .Kind "operator-customers"}}{{template "operator-directory" .}}
     {{else if eq .Kind "operator-invite"}}{{template "operator-invite-form" .}}
     {{else if eq .Kind "operator-audit"}}{{template "operator-activity" .}}
+    {{else if eq .Kind "operator-calendar-conflicts"}}{{template "operator-calendar-conflicts" .}}
     {{else if eq .Kind "operator-support"}}{{template "operator-support" .}}
     {{else}}{{template "operator-overview" .}}{{end}}
   </div>
@@ -33,7 +34,8 @@
     <li><a href="{{root}}/operator?lang={{.Lang}}" aria-current="{{if eq .Kind `operator`}}page{{else}}false{{end}}">{{if eq .Lang "da"}}Oversigt{{else}}Overview{{end}}</a></li>
     <li><a href="{{root}}/operator/customers?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-customers`}}page{{else if or (eq .Kind `operator-invite`) (eq .Kind `operator-support`)}}location{{else}}false{{end}}">{{if eq .Lang "da"}}Kunder{{else}}Customers{{end}}</a></li>
     {{if .TriageEnabled}}<li><a href="{{root}}/operator/requests?lang={{.Lang}}" aria-current="{{if or (eq .Kind `triage`) (eq .Kind `work-review`)}}location{{else}}false{{end}}">{{template "operator-requests-label" .}}</a></li>{{end}}
-    <li><a href="{{root}}/operator/audit?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-audit`}}page{{else}}false{{end}}">{{if eq .Lang "da"}}Revisionslog{{else}}Audit log{{end}}</a></li>
+    {{if .CalendarConflictsEnabled}}<li><a href="{{root}}/operator/calendar-conflicts?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-calendar-conflicts`}}page{{else}}false{{end}}">{{if eq .Lang "da"}}Kalenderkonflikter{{else}}Calendar conflicts{{end}}</a></li>
+    {{end}}<li><a href="{{root}}/operator/audit?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-audit`}}page{{else}}false{{end}}">{{if eq .Lang "da"}}Revisionslog{{else}}Audit log{{end}}</a></li>
   </ul>
   {{if .CSRF}}
   <form method="post" action="{{root}}/logout?lang={{.Lang}}">
@@ -46,6 +48,22 @@
 
 {{define "operator-invite-label"}}{{if eq .Lang "da"}}Inviter en kunde{{else}}Invite a customer{{end}}{{end}}
 {{define "operator-requests-label"}}{{if eq .Lang "da"}}Projektforespørgsler{{else}}Project requests{{end}}{{end}}
+
+{{define "operator-calendar-conflicts"}}
+<section class="operator-panel" aria-label="{{.Title}}">
+  {{if .CalendarConflicts}}
+  <ul class="request-list" role="list">
+    {{range .CalendarConflicts}}<li>
+      <div><strong>{{.Workspace}}</strong>
+        <span class="appointment-times">{{.Date}} · <time datetime="{{.Start}}">{{.StartTime}}</time>–<time datetime="{{.End}}">{{.EndTime}}</time></span>
+      </div>
+      <span>{{.Service}}</span>
+    </li>{{end}}
+  </ul>
+  {{if .CalendarConflictsLimited}}<p>{{if eq .Lang "da"}}Viser de 20 nyeste konflikter.{{else}}Showing the 20 most recent conflicts.{{end}}</p>{{end}}
+  {{else}}<p>{{if eq .Lang "da"}}Ingen kalenderkonflikter.{{else}}No calendar conflicts.{{end}}</p>{{end}}
+</section>
+{{end}}
 
 {{define "operator-overview"}}
 <div class="operator-summary">
