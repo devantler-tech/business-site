@@ -8,14 +8,6 @@ import (
 	"time"
 )
 
-// earlyStartReady reports whether work may start on an order: the client asked
-// for an early start when ordering, or the withdrawal period has ended
-// (Consumer Contracts Act, section 18(2)(2)). The portal cannot tell a business
-// from a consumer, so every order waits.
-func earlyStartReady(placed time.Time, early *time.Time) bool {
-	return early != nil || !time.Now().Before(withdrawalDeadline(placed))
-}
-
 // wholeDKK is an amount owed in whole DKK; the order's own amounts bound it
 // further (SettlementLimitDKK).
 var wholeDKK = regexp.MustCompile(`^(0|[1-9][0-9]{0,7})$`)

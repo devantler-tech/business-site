@@ -93,8 +93,16 @@ func readWorkFunding(ctx context.Context, tx pgx.Tx, id, client, acceptance stri
 	if err != nil {
 		return workOrder{}, workFunding{}, err
 	}
-	if !earlyStartReady(order.placed, order.earlyStart) {
-		return workOrder{}, workFunding{}, errProposalConflict
+	if order.earlyStart == nil {
+		// Without an explicit early-start request, the database clock decides
+		// whether the withdrawal period has ended.
+		var at time.Time
+		if err := tx.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&at); err != nil {
+			return workOrder{}, workFunding{}, errTriageStorage
+		}
+		if at.Before(withdrawalDeadline(order.placed)) {
+			return workOrder{}, workFunding{}, errProposalConflict
+		}
 	}
 	funding, err := readSettledOrderFunding(ctx, tx, order)
 	if err != nil {
