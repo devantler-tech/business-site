@@ -42,7 +42,7 @@ func TestMemberIdentityLockCancelledDuringAcquisition(t *testing.T) {
 	defer cancel()
 	result := make(chan error, 1)
 	go func() {
-		_, release, err := (&browser{foundation: b.svc}).customerIdentityConnection(ctx, customerSubject)
+		_, release, err := b.svc.customerIdentityConnection(ctx, customerSubject)
 		if release != nil {
 			release()
 		}
@@ -103,7 +103,7 @@ func TestMemberIdentityLockCleanup(t *testing.T) {
 			b := oneConnectionMemberBrowser(t)
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
-			connection, release, err := (&browser{foundation: b.svc}).customerIdentityConnection(ctx, customerSubject)
+			connection, release, err := b.svc.customerIdentityConnection(ctx, customerSubject)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -10,8 +10,8 @@ import (
 // customerIdentityConnection retains the distributed identity lock across local
 // commit and provider synchronization. Its caller uses this same connection for
 // transactions and post-wait authority checks, including with a one-slot pool.
-func (b *browser) customerIdentityConnection(ctx context.Context, subject string) (*pgxpool.Conn, func(), error) {
-	connection, err := b.foundation.pool.Acquire(ctx)
+func (s *Foundation) customerIdentityConnection(ctx context.Context, subject string) (*pgxpool.Conn, func(), error) {
+	connection, err := s.pool.Acquire(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -23,7 +23,7 @@ func (b *browser) customerIdentityConnection(ctx context.Context, subject string
 		defer cancel()
 		_ = raw.Close(fresh)
 	}
-	if _, err = connection.Exec(ctx, `SELECT pg_advisory_lock($1::int,hashtext($2 || ' ' || $3))`, identityLock, b.foundation.broker.issuer, subject); err != nil {
+	if _, err = connection.Exec(ctx, `SELECT pg_advisory_lock($1::int,hashtext($2 || ' ' || $3))`, identityLock, s.broker.issuer, subject); err != nil {
 		discard()
 		return nil, nil, err
 	}
@@ -33,7 +33,7 @@ func (b *browser) customerIdentityConnection(ctx context.Context, subject string
 		fresh, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		var unlocked bool
-		if err := connection.QueryRow(fresh, `SELECT pg_advisory_unlock($1::int,hashtext($2 || ' ' || $3))`, identityLock, b.foundation.broker.issuer, subject).Scan(&unlocked); err != nil || !unlocked {
+		if err := connection.QueryRow(fresh, `SELECT pg_advisory_unlock($1::int,hashtext($2 || ' ' || $3))`, identityLock, s.broker.issuer, subject).Scan(&unlocked); err != nil || !unlocked {
 			discard()
 			return
 		}

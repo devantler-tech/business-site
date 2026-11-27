@@ -134,6 +134,73 @@ func TestOperatorInviteRejectsAccountRemovedAfterLookup(t *testing.T) {
 	}
 }
 
+type pausedInvitationVerification struct {
+	CustomerDirectory
+	started, resume chan struct{}
+}
+
+func (p pausedInvitationVerification) VerifyUser(ctx context.Context, id string) error {
+	close(p.started)
+	select {
+	case <-p.resume:
+		return p.CustomerDirectory.VerifyUser(ctx, id)
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func TestProviderVerificationKeepsOnlyTheInvitationIdentityLocked(t *testing.T) {
+	b := newOperatorBrowserFixture(t)
+	b.invite("existing-invitation", "client-b", "client")
+	inviteDirectory(t, b, true, false, nil)
+	pause := pausedInvitationVerification{b.svc.customers, make(chan struct{}), make(chan struct{})}
+	if err := b.svc.LinkCustomerDirectory(pause); err != nil {
+		t.Fatal(err)
+	}
+	form := invitationForm(b)
+	statuses := make(chan int, 1)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		status, _, _ := b.request("POST", operatorAPIRoot+"/invitations", form, b.site.URL)
+		statuses <- status
+	}()
+	resume := onceRelease(pause.resume)
+	retainOperatorWorker(t, resume, done)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	select {
+	case <-pause.started:
+	case <-ctx.Done():
+		t.Fatal("the invitation did not reach exact account verification")
+	}
+	subject := customeridentity.DexSubject("customer-42", customeridentity.ZitadelConnectorID)
+	probe := beginFixtureTransaction(ctx, t, b.pool)
+	var identityFree, workspaceFree bool
+	if err := probe.QueryRow(ctx, `SELECT
+ pg_try_advisory_xact_lock($1::int,hashtext($2 || ' ' || $3)),
+ pg_try_advisory_xact_lock($4::int,hashtext($5))`,
+		identityLock, b.f.issuer, subject, workspaceLock, form.Get("workspace")).Scan(&identityFree, &workspaceFree); err != nil {
+		t.Fatal(err)
+	}
+	if err := probe.Rollback(ctx); err != nil || identityFree || !workspaceFree {
+		t.Fatalf("provider verification must block removal of only the same account: identity free=%t workspace free=%t: %v", identityFree, workspaceFree, err)
+	}
+	closeWorkspace := url.Values{"workspace": {"client-b"}, "confirm": {"client-b"}, "csrf_token": {form.Get("csrf_token")}}
+	if status, _, _ := b.request("POST", operatorAPIRoot+"/workspaces/delete", closeWorkspace, b.site.URL); status != http.StatusOK {
+		t.Fatalf("workspace closure was refused while verification waited: %d", status)
+	}
+	resume()
+	select {
+	case status := <-statuses:
+		if status != http.StatusServiceUnavailable || b.invitationCount() != 1 {
+			t.Fatalf("verification could reopen the closed workspace: %d", status)
+		}
+	case <-ctx.Done():
+		t.Fatal("the invitation did not finish after verification")
+	}
+}
+
 func TestConcurrentOperatorInvitesHaveOnePendingInvitation(t *testing.T) {
 	b := newOperatorBrowserFixture(t)
 	inviteDirectory(t, b, true, false, nil)

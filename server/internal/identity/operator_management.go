@@ -230,7 +230,7 @@ func (b *browser) changeCustomerMember(ctx context.Context, r *http.Request, act
 	if user == "" || b.foundation.customers == nil {
 		return nil, ErrDenied
 	}
-	connection, release, err := b.customerIdentityConnection(ctx, input.Subject)
+	connection, release, err := b.foundation.customerIdentityConnection(ctx, input.Subject)
 	if err != nil {
 		return nil, err
 	}

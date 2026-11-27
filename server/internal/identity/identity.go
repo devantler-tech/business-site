@@ -317,22 +317,28 @@ func (s *Foundation) Begin(ctx context.Context) (Attempt, error) {
 // row key is a random digest that is never shown.
 // Operators are never invited: they come from the server configuration.
 func (s *Foundation) Invite(ctx context.Context, i Invitation) error {
-	return s.invite(ctx, i, nil)
+	return s.invite(ctx, i, func(ctx context.Context) (pgx.Tx, error) {
+		return s.pool.Begin(ctx)
+	}, nil)
 }
 
+// One identity has at most one pending invitation and none once it has any
+// membership, current or revoked, so sign-in never has to choose between them.
+const invitationIdentityAvailable = `NOT EXISTS (
+ SELECT 1 FROM portal_invitations WHERE issuer=$1 AND subject=$2 AND NOT revoked AND expires_at>now())
+ AND NOT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2)`
+
 // invite retains the control-plane rules and permits the operator API to bind
-// its final commit to the original caller after any provider or SDK wait.
-func (s *Foundation) invite(ctx context.Context, i Invitation, checkpoint func(pgx.Tx) error) error {
+// its final commit to the original caller on its already locked connection.
+func (s *Foundation) invite(ctx context.Context, i Invitation, begin func(context.Context) (pgx.Tx, error), checkpoint func(pgx.Tx) error) error {
 	if i.ClientID == previewWorkspace || i.Subject == previewSubject {
 		return ErrDenied
 	}
 	if !s.ready(ctx) || i.Issuer != s.broker.issuer || strings.TrimSpace(i.Subject) == "" || !s.canInvite(i.Subject, i.Role) || strings.TrimSpace(i.ClientID) == "" || (i.Role != "client" && i.Role != "operator") || !time.Now().Before(i.Expires) || i.Expires.After(time.Now().Add(7*24*time.Hour)) {
 		return ErrDenied
 	}
-	// One identity has at most one pending invitation and none once it has any
-	// membership, current or revoked, so sign-in never has to choose between them.
 	// The identity's lock serializes concurrent invitations and first sign-ins.
-	tx, err := s.pool.Begin(ctx)
+	tx, err := begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin invitation: %w", err)
 	}
@@ -354,9 +360,7 @@ func (s *Foundation) invite(ctx context.Context, i Invitation, checkpoint func(p
 		return ErrDenied
 	}
 	result, err := tx.Exec(ctx, `INSERT INTO portal_invitations(token_digest,issuer,subject,client_id,role,expires_at)
- SELECT $1,$2,$3,$4,$5,$6
- WHERE NOT EXISTS (SELECT 1 FROM portal_invitations WHERE issuer=$2 AND subject=$3 AND NOT revoked AND expires_at>now())
- AND NOT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$2 AND subject=$3)`, digest(secret()), i.Issuer, i.Subject, i.ClientID, i.Role, i.Expires)
+ SELECT $3,$1,$2,$4,$5,$6 WHERE `+invitationIdentityAvailable, i.Issuer, i.Subject, digest(secret()), i.ClientID, i.Role, i.Expires)
 	if err != nil {
 		return fmt.Errorf("persist invitation: %w", err)
 	}
