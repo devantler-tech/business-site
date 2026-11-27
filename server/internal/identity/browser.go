@@ -314,6 +314,7 @@ func (w rootRedirects) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 func (b *browser) routes() (*http.ServeMux, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /portal/sign-in", b.signIn)
+	mux.HandleFunc("POST /portal/sign-in/retry", b.retrySignIn)
 	mux.HandleFunc("GET /portal/operator/sign-in", b.operatorSignIn)
 	mux.HandleFunc("GET /portal/signed-out", b.signedOut)
 	mux.HandleFunc("GET /portal/callback", b.callback)
@@ -523,6 +524,28 @@ func (b *browser) signedOut(w http.ResponseWriter, r *http.Request) {
 	b.signIn(w, r)
 }
 
+// retrySignIn lets the browser explicitly restart after the automatic loop
+// stops. An active session has no refusal marker and follows normal sign-in.
+func (b *browser) retrySignIn(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	lang := language(r)
+	if refused, _ := b.refusals(ctx); refused < refusalLimit {
+		http.Redirect(w, r, "/portal/sign-in?lang="+lang, http.StatusSeeOther)
+		return
+	}
+	if err := b.sessions.RenewToken(ctx); err != nil {
+		b.render(w, r, 503, "unavailable", "", "")
+		return
+	}
+	if err := b.sessions.Clear(ctx); err != nil {
+		b.render(w, r, 503, "unavailable", "", "")
+		return
+	}
+	b.sessions.Put(ctx, "lang", lang)
+	b.sessions.SetDeadline(ctx, time.Now().Add(refusalWindow))
+	b.signOutHandoff(w, r, b.origin+b.visible("/portal/signed-out"))
+}
+
 // withLanguage returns a copy of r presenting lang, without granting anything.
 func withLanguage(r *http.Request, lang string) *http.Request {
 	urlCopy := *r.URL
@@ -729,16 +752,19 @@ func (b *browser) logout(w http.ResponseWriter, r *http.Request) {
 	if site == "" {
 		site = b.origin
 	}
+	b.signOutHandoff(w, r, site+"/")
+}
+
+func (b *browser) signOutHandoff(w http.ResponseWriter, r *http.Request, target string) {
 	d := b.data(r, "sign-out-handoff", "", "")
-	d.BrokerURL = b.endSessionAddress(site + "/")
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_ = b.templates().ExecuteTemplate(w, "portal.html", d)
+	d.BrokerURL = b.endSessionAddress(target)
+	b.renderPortalPage(w, http.StatusOK, d)
 }
 
 type pageData struct {
 	BrokerURL                                                                                                                        string
 	LanguageURL                                                                                                                      string
+	IdentityHost                                                                                                                     string
 	InviteWorkspace                                                                                                                  string
 	Lang, Kind, Client, CSRF, Title, Intro, Action, Logout, Error, Unavailable, Back, Theme, System, Light, Dark, Operator, Boundary string
 	RequestsEnabled                                                                                                                  bool
@@ -781,6 +807,16 @@ func (b *browser) renderPortalPage(w http.ResponseWriter, status int, page pageD
 // data shares the same localized, escaped layout with the private contact form.
 func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	d := pageData{Lang: language(r), Kind: kind, Client: client, CSRF: token, Title: "Your client portal", Intro: "A private space for your work with Devantler Tech.", Action: "Sign in", Logout: "Sign out", Error: "Sign-in could not be completed. The portal is invitation-only: try again with the account from your invitation, or contact Devantler Tech.", Unavailable: "The portal is unavailable. Please try again later.", Back: "Back to the website", Theme: "Appearance", System: "System", Light: "Light", Dark: "Dark", Operator: "Operator", Boundary: "Ordering and payments are not available yet."}
+	if kind == "no-access" {
+		if d.CSRF == "" {
+			d.CSRF = nosurf.Token(r)
+		}
+		if b.foundation != nil {
+			if endpoint, err := url.Parse(b.foundation.endSession); err == nil {
+				d.IdentityHost = endpoint.Hostname()
+			}
+		}
+	}
 	if b.foundation.canLeaveClientPreview() && b.principal(r.Context()).isClientPreview() {
 		if d.CSRF == "" {
 			d.CSRF = nosurf.Token(r)
