@@ -4,7 +4,20 @@
 <main id="main"><div class="intro"><h1>{{.Title}}</h1>
 <p>{{.Intro}}</p></div>
 <section aria-label="{{.Title}}">
-{{if eq .Kind `no-access`}}<p role="alert">{{if eq .Lang `da`}}Portalen kræver en invitation, og den konto, du loggede ind med, er ikke inviteret. Kontakt Devantler Tech, hvis du havde ventet adgang.{{else}}The portal is invitation-only, and the account you signed in with has not been invited. Contact Devantler Tech if you expected access.{{end}}</p>
+{{if eq .Kind `appointments`}}
+{{if .Appointments}}
+<ol class="request-list" role="list">
+{{range .Appointments}}<li>
+  <div><strong>{{.Date}}</strong>
+    <span class="appointment-times"><time datetime="{{.Start}}">{{.StartTime}}</time>–<time datetime="{{.End}}">{{.EndTime}}</time></span>
+  </div>
+  <span>{{.Status}}</span>
+</li>{{end}}
+</ol>
+{{if .AppointmentsLimited}}<p>{{if eq .Lang `da`}}Viser 20 aftaler.{{else}}Showing 20 appointments.{{end}}</p>{{end}}
+{{else}}<p>{{if eq .Lang `da`}}Du har endnu ingen indledende samtaler.{{else}}You have no introductory appointments yet.{{end}}</p>{{end}}
+<p><a href="{{root}}/?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til kundeportalen{{else}}Back to the client portal{{end}}</a></p>
+{{else if eq .Kind `no-access`}}<p role="alert">{{if eq .Lang `da`}}Portalen kræver en invitation, og den konto, du loggede ind med, er ikke inviteret. Kontakt Devantler Tech, hvis du havde ventet adgang.{{else}}The portal is invitation-only, and the account you signed in with has not been invited. Contact Devantler Tech if you expected access.{{end}}</p>
 {{else if or (eq .Kind `sign-out-handoff`) (eq .Kind `broker-handoff`)}}<p>{{if eq .Kind `sign-out-handoff`}}{{if eq .Lang `da`}}Du bliver logget ud.{{else}}Signing you out.{{end}}{{else if eq .Lang `da`}}Du bliver sendt videre til dit login.{{else}}Continuing to your sign-in.{{end}}</p><a id="broker-continue" href="{{.BrokerURL}}">{{if ne .Kind `sign-out-handoff`}}{{.Action}}{{else if eq .Lang `da`}}Fortsæt{{else}}Continue{{end}}</a>
 {{else if or (eq .Kind `home`) (eq .Kind `operator`)}}<h2>{{if eq .Kind `operator`}}{{.Operator}}{{else}}{{.SignedIn}}{{end}}</h2>
 <p>{{if eq .Lang `da`}}Dit arbejdsområde{{else}}Your workspace{{end}}: <strong>{{.Client}}</strong></p>{{if eq .Kind `home`}}<p><a href="{{root}}/contact?lang={{.Lang}}">{{if eq .Lang `da`}}Dine kontaktoplysninger{{else}}Your contact details{{end}}</a></p>{{end}}{{if eq .Kind `operator`}}<p><a href="{{root}}/operator/invitations/new?lang={{.Lang}}">{{if eq .Lang `da`}}Inviter en kunde{{else}}Invite a customer{{end}}</a></p><p><a href="{{root}}/operator/customers?lang={{.Lang}}">{{if eq .Lang `da`}}Kunder og arbejdsområder{{else}}Customers and workspaces{{end}}</a></p><p><a href="{{root}}/operator/audit?lang={{.Lang}}">{{if eq .Lang `da`}}Revisionslog{{else}}Audit log{{end}}</a></p>{{end}}<p>{{.Boundary}}</p><form method="post" action="{{root}}/logout?lang={{.Lang}}"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><button type="submit">{{.Logout}}</button></form>
@@ -15,7 +28,8 @@
 {{else if or (eq .Kind `sharing-invalid`) (eq .Kind `sharing-conflict`)}}<p role="alert">{{if eq .Lang `da`}}Delingen kunne ikke ændres. Intet er overskrevet. Åbn forespørgslen igen og kontrollér versionen og den aktuelle deling.{{else}}Sharing could not be changed. Nothing was overwritten. Reopen the request and check its version and current sharing state.{{end}}</p><a class="button" href="{{root}}/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til forespørgsler{{else}}Back to requests{{end}}</a>
 {{else}}<p role="alert">{{if eq .Kind `unavailable`}}{{.Unavailable}}{{else}}{{.Error}}{{end}}</p>{{if not .ClientPreview}}<a class="button" href="{{root}}/sign-in?lang={{.Lang}}">{{.Action}}</a>{{end}}{{end}}
 {{if .RequestsEnabled}}<p><a href="{{root}}/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Dine projektforespørgsler{{else}}Your project requests{{end}}</a></p>{{end}}
-{{if .TriageEnabled}}<p><a href="{{root}}/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Læs projektforespørgsler{{else}}Review project requests{{end}}</a></p>{{end}}
+{{if .AppointmentsEnabled}}<p><a href="{{root}}/appointments?lang={{.Lang}}">{{if eq .Lang `da`}}Dine aftaler{{else}}Your appointments{{end}}</a></p>
+{{end}}{{if .TriageEnabled}}<p><a href="{{root}}/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Læs projektforespørgsler{{else}}Review project requests{{end}}</a></p>{{end}}
 </section><a class="back" href="{{public .Lang}}">{{.Back}}</a></main>{{template "portal-footer" .}}
 
 {{define "portal-head"}}<html lang="{{.Lang}}">

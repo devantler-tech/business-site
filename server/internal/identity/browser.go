@@ -316,6 +316,7 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /portal/signed-out", b.signedOut)
 	mux.HandleFunc("GET /portal/callback", b.callback)
 	mux.HandleFunc("GET /portal/{$}", b.home)
+	mux.HandleFunc("GET /portal/appointments", b.appointmentHistory)
 	mux.HandleFunc("GET /portal/operator", b.operator)
 	mux.HandleFunc("GET /portal/operator/audit", b.operatorAuditPage)
 	mux.HandleFunc("GET /portal/operator/customers", b.operatorCustomersPage)
@@ -721,6 +722,8 @@ type pageData struct {
 	InviteWorkspace                                                                                                                            string
 	Lang, Kind, Client, CSRF, Title, Intro, Action, SignedIn, Logout, Error, Unavailable, Back, Theme, System, Light, Dark, Operator, Boundary string
 	RequestsEnabled                                                                                                                            bool
+	AppointmentsEnabled, AppointmentsLimited                                                                                                   bool
+	Appointments                                                                                                                               []appointmentHistoryItem
 	TriageEnabled                                                                                                                              bool
 	ClientPreview, PreviewAvailable                                                                                                            bool
 	Audit                                                                                                                                      []auditEntry
@@ -765,6 +768,7 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	}
 	d.LanguageURL = b.visible(path) + "?lang=" + other
 	d.RequestsEnabled = kind == "home" && b.foundation.requestsReady(r.Context())
+	d.AppointmentsEnabled = kind == "home" && b.foundation.appointmentHistoryReady(r.Context())
 	d.TriageEnabled = kind == "operator" && b.foundation.triageReady(r.Context())
 	if d.Lang == "da" {
 		d.Title = "Din kundeportal"
