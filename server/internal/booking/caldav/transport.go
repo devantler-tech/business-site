@@ -4,12 +4,16 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"io"
+	"mime"
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"time"
 
 	"github.com/devantler-tech/business-site/server/internal/booking"
+	"github.com/emersion/go-ical"
 )
 
 // sourceNetwork is private to the adapter. Tests map checked public addresses to
@@ -44,7 +48,7 @@ func withSourceNetwork(client *Client, network sourceNetwork) *Client {
 	return &selected
 }
 
-func (c *Client) reportClient(ctx context.Context) (*http.Client, func(), error) {
+func (c *Client) sourceClient(ctx context.Context) (*http.Client, func(), error) {
 	if c.network == nil {
 		if c.httpClient == nil || c.httpClient.Transport == nil {
 			return nil, nil, booking.ErrUnavailable
@@ -81,6 +85,41 @@ func (c *Client) reportClient(ctx context.Context) (*http.Client, func(), error)
 		},
 	}
 	return &http.Client{Transport: transport, Timeout: 10 * time.Second, CheckRedirect: refuseRedirect}, transport.CloseIdleConnections, nil
+}
+
+func (c *Client) sourceRequest(ctx context.Context, method, resource string, body io.Reader) (*http.Request, error) {
+	address := url.URL{Scheme: "https", Host: c.origin.Host, Path: resource}
+	request, err := http.NewRequestWithContext(ctx, method, address.String(), body)
+	if err != nil || c.authorizeSourceRequest(request) != nil {
+		return nil, booking.ErrUnavailable
+	}
+	return request, nil
+}
+
+func (c *Client) authorizeSourceRequest(request *http.Request) error {
+	ctx := request.Context()
+	if ctx.Err() != nil {
+		return booking.ErrUnavailable
+	}
+	user, password, err := c.credentials(ctx)
+	if err != nil || user == "" || password == "" || ctx.Err() != nil {
+		return booking.ErrUnavailable
+	}
+	request.SetBasicAuth(user, password)
+	request.Header.Set("Accept", ical.MIMEType)
+	return nil
+}
+
+func readCalendarBody(ctx context.Context, response *http.Response, limit int64) ([]byte, error) {
+	mediaType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
+	if err != nil || mediaType != ical.MIMEType || response.StatusCode != http.StatusOK || response.ContentLength > limit {
+		return nil, booking.ErrUnavailable
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
+	if err != nil || int64(len(body)) > limit || ctx.Err() != nil {
+		return nil, booking.ErrUnavailable
+	}
+	return body, nil
 }
 
 func (c *Client) dialChecked(ctx context.Context, checked []netip.Addr, network, address string) (net.Conn, error) {

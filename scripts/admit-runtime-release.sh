@@ -12,12 +12,20 @@ fail() {
 }
 [[ "${GITHUB_REPOSITORY:-}" == "$repo" && "${GITHUB_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || fail 'source context'
 readonly source=$GITHUB_SHA
+[[ "$(git rev-parse --verify HEAD 2>/dev/null)" == "$source" ]] || fail 'frozen source checkout'
 [[ -f "${GITHUB_EVENT_PATH:-}" && -n "${GITHUB_OUTPUT:-}" && -d "${RUNNER_TEMP:-}" ]] || fail 'workflow files'
 [[ -f "$RUNNER_TEMP/runtime-receipt" && -x "$RUNNER_TEMP/runtime-receipt" ]] || fail 'compiled receipt reader'
 event=${GITHUB_EVENT_NAME:-}
 mode=${RELEASE_MODE:-}
 [[ "$mode" == release || "$mode" == dry-run ]] || fail 'release mode'
-[[ "$mode" == dry-run || "${RUNTIME_PUBLICATION_ENABLED:-}" == true ]] || fail 'runtime publication disabled'
+if [[ "$mode" == release ]]; then
+  [[ "${RUNTIME_PUBLICATION_ENABLED:-}" == true ]] || fail 'runtime publication disabled in repository'
+  readonly policy=.github/runtime-publication
+  entry="$(git ls-tree "$source" -- "$policy" 2>/dev/null)" || fail 'runtime publication policy'
+  [[ "$entry" == '100644 blob '* ]] || fail 'runtime publication policy'
+  git cat-file blob "$source:$policy" 2>/dev/null | cmp -s - <(printf 'enabled\n') ||
+    fail 'runtime publication disabled'
+fi
 work="$(mktemp -d "$RUNNER_TEMP/runtime-admission.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 jq -se 'length==1 and (.[0]|type)=="object"' "$GITHUB_EVENT_PATH" >/dev/null || fail 'event document'

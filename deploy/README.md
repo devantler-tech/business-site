@@ -43,6 +43,11 @@ the pinned Platform policies and Kyverno engine. The Tenant graph supplies the
 namespace labels. Each protected resource has an explicit refusal control for
 creation and updates.
 
+The pinned Platform WebApp compiler also produces the Deployment, Service and
+HTTPRoute from the same rendered application. The admission check requires
+those three generated objects and exercises policy for their ownership, the
+Deployment's pod security and the HTTPRoute's hostname.
+
 The package uses two replicas (the validator permits two or three), a
 half-core/256 MiB limit and the real `/healthz` probe, plus an application-owned
 disruption budget allowing one unavailable Pod.
@@ -399,9 +404,13 @@ creating a tag, release or registry publication. Require it to pass for the
 reviewed source before dispatching a release.
 
 Pass the full verified commit as `expected_source` to release the same source.
-The standing repository setting `RUNTIME_PUBLICATION_ENABLED` must be exactly
-`true` for both release dispatch and stable-tag publication. Leave it enabled
-between ordinary releases once production publishing has been authorized.
+Both release dispatch and stable-tag publication require the repository setting
+`RUNTIME_PUBLICATION_ENABLED` to be `true` and `.github/runtime-publication` to
+contain the single line `enabled` in the frozen signed source. The source policy
+ships with `disabled`. Enable it through reviewed source delivery after the
+rollout prerequisites pass. After production activation, leave the repository
+setting enabled between ordinary releases. Setting it to `false` stops new
+publication admissions, including those for a source already marked `enabled`.
 
 ```sh
 gh workflow run release-runtime.yaml --ref main -f mode=release -f expected_source="$source"
