@@ -185,15 +185,11 @@ func (b *browser) cleanupCustomerInvitations(ctx context.Context, r *http.Reques
 		!validCustomerWorkspace(workspace) || len(fingerprint) != sha256.Size*2 {
 		return nil, errOperatorInput
 	}
-	setOperatorTarget(ctx, workspace)
-	tx, err := b.foundation.pool.Begin(ctx)
+	tx, err := b.beginWorkspaceChange(ctx, workspace)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := lockWorkspace(ctx, tx, workspace); err != nil {
-		return nil, err
-	}
 	digests, current, err := b.cleanupSelection(ctx, tx, workspace)
 	if err != nil {
 		return nil, err

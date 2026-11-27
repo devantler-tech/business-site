@@ -82,19 +82,11 @@ func (b *browser) deleteCustomerWorkspace(ctx context.Context, r *http.Request) 
 }
 
 func (b *browser) changeWorkspace(ctx context.Context, workspace string, change func(pgx.Tx, string, bool) (any, error)) (any, error) {
-	authority, _ := ctx.Value(operatorAuthorityKey{}).(*operatorAuthority)
-	if authority == nil || authority.kind != "operator" {
-		return nil, ErrDenied
-	}
-	setOperatorTarget(ctx, workspace)
-	tx, err := b.foundation.pool.Begin(ctx)
+	tx, err := b.beginWorkspaceChange(ctx, workspace)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err = lockWorkspace(ctx, tx, workspace); err != nil {
-		return nil, err
-	}
 	// Existing invitations and memberships can predate the workspace registry.
 	var name string
 	var closed, hasOperator bool
@@ -125,6 +117,22 @@ func (b *browser) changeWorkspace(ctx context.Context, workspace string, change 
 		return nil, ErrDenied
 	}
 	return result, tx.Commit(ctx)
+}
+
+func (b *browser) beginWorkspaceChange(ctx context.Context, workspace string) (pgx.Tx, error) {
+	if humanOperatorAuthority(ctx) == nil {
+		return nil, ErrDenied
+	}
+	setOperatorTarget(ctx, workspace)
+	tx, err := b.foundation.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err = lockWorkspace(ctx, tx, workspace); err != nil {
+		_ = tx.Rollback(ctx)
+		return nil, err
+	}
+	return tx, nil
 }
 
 func (b *browser) closeWorkspace(ctx context.Context, tx pgx.Tx, workspace string) error {

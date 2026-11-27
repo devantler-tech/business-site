@@ -38,8 +38,8 @@ func TestWorkspaceNativeCreationRetriesAndReusesClosedName(t *testing.T) {
 	if got := createOnce(); got != first || first == "North Studio" {
 		t.Fatal("a retry made another workspace or used display text as its identity")
 	}
-	close := url.Values{"workspace": {first}, "confirm": {"North Studio"}, "csrf_token": {create.Get("csrf_token")}}
-	if status, _, _ := b.request("POST", operatorAPIRoot+"/workspaces/delete", close, b.site.URL); status != http.StatusOK {
+	closeForm := url.Values{"workspace": {first}, "confirm": {"North Studio"}, "csrf_token": {create.Get("csrf_token")}}
+	if status, _, _ := b.request("POST", operatorAPIRoot+"/workspaces/delete", closeForm, b.site.URL); status != http.StatusOK {
 		t.Fatalf("workspace did not close: %d", status)
 	}
 	if status, page, _ := b.request("GET", "/portal/operator/customers?view=closed", nil, ""); status != http.StatusOK || !strings.Contains(page, "North Studio") {
