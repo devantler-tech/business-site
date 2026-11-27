@@ -13,6 +13,11 @@ const checker = path.join(root, "scripts/check-tenant-package.mjs");
 const render = (directory = path.join(root, "deploy")) =>
   execFileSync("kubectl", ["kustomize", directory], { encoding: "utf8", timeout: 15000 });
 const check = (input) => spawnSync(process.execPath, [checker], { input, encoding: "utf8", timeout: 5000 });
+const admissionFixtures = (input) => spawnSync(
+  process.execPath,
+  [path.join(root, "scripts/tenant-admission-fixtures.mjs")],
+  { input, encoding: "utf8", timeout: 5000 },
+);
 
 test("the real Kustomize package renders deterministically and admits the public runtime", () => {
   let first;
@@ -26,6 +31,68 @@ test("the real Kustomize package renders deterministically and admits the public
 
 test("the artifact root renders the production overlay", () => {
   assert.equal(render(), render(path.join(root, "deploy/prod")));
+});
+
+test("admission uses each rendered workload and an isolated refusal control", () => {
+  const source = render();
+  const documents = yaml.loadAll(source);
+  const result = admissionFixtures(source);
+  assert.equal(result.status, 0, result.stderr);
+  const fixtures = result.stdout.trim().split("\n").map((line) => JSON.parse(line));
+  assert.equal(fixtures.length, 12);
+  assert.equal(new Set(fixtures.map((f) => f.label)).size, 12);
+  for (const [kind, policy, deny] of [
+    ["WebApp", "restrict-tenant-webapps", (object) => { object.spec.name = "fictional-other-tenant"; }],
+    ["Job", "validate-pod-security", (object) => { object.spec.template.spec.containers[0].securityContext.privileged = true; }],
+    ["CronJob", "validate-pod-security", (object) => {
+      object.spec.jobTemplate.spec.template.spec.containers[0].securityContext.privileged = true;
+    }],
+  ]) {
+    const object = documents.find((doc) => doc?.kind === kind);
+    const negative = structuredClone(object);
+    deny(negative);
+    const oldObject = structuredClone(object);
+    oldObject.metadata.annotations = { ...oldObject.metadata.annotations, "fixture.example/previous": "true" };
+    for (const operation of ["CREATE", "UPDATE"]) {
+      for (const [expected, target] of [["pass", object], ["fail", negative]]) {
+        const label = `${kind}-${operation}-${expected}`;
+        assert.deepEqual(fixtures.find((f) => f.label === label), {
+          label,
+          object: target,
+          actor: "system:serviceaccount:business-site:business-site",
+          operation,
+          policy,
+          expected,
+          ...(operation === "UPDATE" ? { oldObject } : {}),
+        });
+      }
+    }
+  }
+});
+
+test("admission refuses incomplete, ambiguous, or misdirected workload input", () => {
+  const source = yaml.loadAll(render());
+  const invalid = [
+    source.filter((doc) => doc?.kind !== "Job"),
+    [...source, source.find((doc) => doc?.kind === "CronJob")],
+  ];
+  for (const [kind, field, value] of [
+    ["WebApp", "apiVersion", "different.example/v1"],
+    ["Job", "name", "another-job"],
+    ["CronJob", "namespace", "business-site-dev"],
+  ]) {
+    const docs = structuredClone(source);
+    const object = docs.find((doc) => doc?.kind === kind);
+    if (field === "apiVersion") object[field] = value;
+    else object.metadata[field] = value;
+    invalid.push(docs);
+  }
+  for (const docs of invalid) {
+    const result = admissionFixtures(docs.map((doc) => yaml.dump(doc)).join("---\n"));
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(result.stdout, "", "invalid input must not emit a partial admission set");
+    assert.match(result.stderr, /admission: (expected one|unexpected identity)/);
+  }
 });
 
 test("the hosted preview keeps its application and schema migration private", () => {
@@ -433,4 +500,47 @@ test("actual tenant package and image checks cannot silently become optional in 
   const missing = structuredClone(workflow);
   missing.jobs["test-combined-runtime"].steps = missing.jobs["test-combined-runtime"].steps.filter((s) => !s.run?.includes("tenant-runtime-smoke"));
   assert.throws(() => assertCI(missing));
+});
+
+function assertAdmissionCI(workflow) {
+  const job = workflow.jobs["test-tenant-admission"];
+  assert.ok(job, "the native tenant admission job must exist");
+  assert.equal(job.if, undefined);
+  assert.equal(job.needs, undefined);
+  assert.equal(job["continue-on-error"], undefined);
+  assert.deepEqual(job.permissions, { contents: "read" });
+  const source = job.steps.find((step) => step.with?.repository === "devantler-tech/platform");
+  assert.match(source.uses, /^actions\/checkout@[0-9a-f]{40}$/);
+  assert.match(source.with.ref, /^[0-9a-f]{40}$/);
+  assert.equal(source.with["persist-credentials"], false);
+  const check = job.steps.find((step) => step.id === "tenant-admission");
+  assert.equal(check.if, undefined);
+  assert.equal(check["continue-on-error"], undefined);
+  assert.equal(check.shell, "bash");
+  assert.match(check.run, /kubectl kustomize deploy \| node scripts\/tenant-admission-fixtures\.mjs \|/);
+  assert.match(check.run, /go -C \.tenant-policy-source\/scripts\/tests\/tenant-webapp-admission run -mod=readonly \./);
+  for (const aggregate of [workflow.jobs.validation, workflow.jobs.status]) {
+    assert.ok(aggregate.needs.includes("test-tenant-admission"));
+    const observer = aggregate.steps.find((step) => step.with?.["job-results"]);
+    assert.ok(observer.with["job-results"].includes("${{ needs.test-tenant-admission.result }}"));
+  }
+}
+
+test("the policy check is required and uses an immutable read-only Platform source", () => {
+  const workflow = yaml.load(readFileSync(path.join(root, ".github/workflows/ci.yaml"), "utf8"));
+  assertAdmissionCI(workflow);
+  for (const mutate of [
+    (job) => { job.if = false; },
+    (job) => { job.permissions.contents = "write"; },
+    (job) => { job.steps.find((step) => step.with?.repository === "devantler-tech/platform").with.ref = "main"; },
+    (job) => { job.steps.find((step) => step.id === "tenant-admission")["continue-on-error"] = true; },
+  ]) {
+    const changed = structuredClone(workflow);
+    mutate(changed.jobs["test-tenant-admission"]);
+    assert.throws(() => assertAdmissionCI(changed));
+  }
+  const missing = structuredClone(workflow);
+  const aggregate = missing.jobs.validation.steps.find((step) => step.with?.["job-results"]);
+  aggregate.with["job-results"] = aggregate.with["job-results"].replace("${{ needs.test-tenant-admission.result }}", "");
+  assert.throws(() => assertAdmissionCI(missing));
 });
