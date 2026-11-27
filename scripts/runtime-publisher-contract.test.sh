@@ -9,6 +9,11 @@ fail() {
 }
 release="$(yq -o=json '.' "$root/.github/workflows/release-runtime.yaml")" || fail 'source-owned release caller is missing'
 publish="$(yq -o=json '.' "$root/.github/workflows/publish-runtime.yaml")" || fail 'source-owned publisher is missing'
+policy="$root/.github/runtime-publication"
+[[ -f "$policy" && ! -L "$policy" ]] || fail 'regular source publication policy is required'
+if ! cmp -s "$policy" <(printf 'disabled\n') && ! cmp -s "$policy" <(printf 'enabled\n'); then
+  fail 'source publication policy must be one canonical line'
+fi
 # Accept only mandatory, read-only admission and original-image verification on the frozen source.
 admission_valid() {
   jq -e '
