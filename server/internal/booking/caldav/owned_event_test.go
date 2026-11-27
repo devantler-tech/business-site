@@ -10,14 +10,15 @@ import (
 	"time"
 
 	"github.com/devantler-tech/business-site/server/internal/booking"
+	"github.com/emersion/go-ical"
 )
 
 const fixtureEventKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 const fixtureOwnedEvent = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Devantler Tech//Booking//EN\r\n" +
-	"BEGIN:VEVENT\r\nUID:portal-" + fixtureEventKey + "@devantler.tech\r\n" +
+	"BEGIN:" + ical.CompEvent + "\r\nUID:portal-" + fixtureEventKey + "@devantler.tech\r\n" +
 	"DTSTAMP:20270327T200000Z\r\nDTSTART:20270327T210000Z\r\nDTEND:20270327T213000Z\r\n" +
-	"SUMMARY:Devantler Tech appointment\r\nCLASS:PRIVATE\r\nSEQUENCE:2\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+	"SUMMARY:Devantler Tech appointment\r\nCLASS:PRIVATE\r\nSEQUENCE:2\r\nEND:" + ical.CompEvent + "\r\nEND:VCALENDAR\r\n"
 
 func fixtureOwnedSelection() Config {
 	const collection = "/calendars/selected/"
