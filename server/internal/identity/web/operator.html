@@ -297,17 +297,62 @@
 {{end}}
 
 {{define "operator-activity"}}
-<div class="operator-panel">
+<form class="operator-audit-search operator-panel" role="search" method="get" action="{{root}}/operator/audit">
+  <input type="hidden" name="lang" value="{{.Lang}}">
+  <div class="operator-audit-query">
+    <label for="audit-query">{{if eq .Lang "da"}}Søg i revisionsloggen{{else}}Search audit log{{end}}</label>
+    <input id="audit-query" name="q" type="search" value="{{.Search.Query}}" maxlength="120" aria-describedby="audit-query-help">
+    <small id="audit-query-help">{{if eq .Lang "da"}}Søg efter en handling, et mål eller en aktør.{{else}}Search by action, target or actor ID.{{end}}</small>
+  </div>
+  <div>
+    <label for="audit-actor">{{if eq .Lang "da"}}Aktørtype{{else}}Actor type{{end}}</label>
+    <select id="audit-actor" name="actor">
+      <option value="">{{if eq .Lang "da"}}Alle aktører{{else}}All actors{{end}}</option>
+      <option value="operator" {{if eq .Search.Actor "operator"}}selected{{end}}>{{if eq .Lang "da"}}Operatør{{else}}Operator{{end}}</option>
+      <option value="agent" {{if eq .Search.Actor "agent"}}selected{{end}}>Agent</option>
+      <option value="other" {{if eq .Search.Actor "other"}}selected{{end}}>{{if eq .Lang "da"}}Anden aktør{{else}}Other actor{{end}}</option>
+    </select>
+  </div>
+  <div>
+    <label for="audit-outcome">{{if eq .Lang "da"}}Resultat{{else}}Outcome{{end}}</label>
+    <select id="audit-outcome" name="outcome">
+      <option value="">{{if eq .Lang "da"}}Alle resultater{{else}}All outcomes{{end}}</option>
+      <option value="allowed" {{if eq .Search.Outcome "allowed"}}selected{{end}}>{{if eq .Lang "da"}}Tilladt{{else}}Allowed{{end}}</option>
+      <option value="refused" {{if eq .Search.Outcome "refused"}}selected{{end}}>{{if eq .Lang "da"}}Afvist{{else}}Refused{{end}}</option>
+      <option value="failed" {{if eq .Search.Outcome "failed"}}selected{{end}}>{{if eq .Lang "da"}}Fejl{{else}}Failed{{end}}</option>
+    </select>
+  </div>
+  <div>
+    <label for="audit-from">{{if eq .Lang "da"}}Fra (UTC){{else}}From (UTC){{end}}</label>
+    <input id="audit-from" name="from" type="date" value="{{.Search.From}}">
+  </div>
+  <div>
+    <label for="audit-to">{{if eq .Lang "da"}}Til og med (UTC){{else}}Through (UTC){{end}}</label>
+    <input id="audit-to" name="to" type="date" value="{{.Search.To}}">
+  </div>
+  <div class="operator-actions operator-audit-query">
+    <button type="submit">{{if eq .Lang "da"}}Søg{{else}}Search{{end}}</button>
+    <a href="{{root}}/operator/audit?lang={{.Lang}}">{{if eq .Lang "da"}}Nulstil filtre{{else}}Clear filters{{end}}</a>
+  </div>
+</form>
+<section class="operator-panel" aria-labelledby="audit-events">
+  <h2 id="audit-events">{{if eq .Lang "da"}}Hændelser{{else}}Events{{end}}</h2>
   {{if .Audit}}
   <ol class="operator-events">
     {{range .Audit}}
     <li>
       <div><strong>{{.Action}}</strong><span class="operator-status">{{if eq $.Lang "da"}}{{if eq .Outcome "allowed"}}Tilladt{{else if eq .Outcome "refused"}}Afvist{{else}}Fejl{{end}}{{else}}{{if eq .Outcome "allowed"}}Allowed{{else if eq .Outcome "refused"}}Refused{{else}}Failed{{end}}{{end}}</span></div>
       <time datetime="{{.At.UTC.Format `2006-01-02T15:04:05Z`}}">{{.At.UTC.Format "2006-01-02 15:04"}} UTC</time>
-      <p>{{.Kind}} <code>{{.Subject}}</code>{{if .Target}} · <code>{{.Target}}</code>{{end}}</p>
+      <p>{{if eq .Subject $.Viewer}}{{if eq $.Lang "da"}}Dig{{else}}You{{end}}{{else}}{{if eq .Kind "agent"}}Agent{{else if eq .Kind "operator"}}{{if eq $.Lang "da"}}Operatør{{else}}Operator{{end}}{{else}}{{if eq $.Lang "da"}}Anden aktør{{else}}Other actor{{end}}{{end}} <code>{{.Subject}}</code>{{end}}{{if .Target}} <span class="operator-audit-target">{{if eq $.Lang "da"}}Mål{{else}}Target{{end}} <strong>{{.Target}}</strong></span>{{end}}</p>
     </li>
     {{end}}
   </ol>
-  {{else}}<p>{{if eq .Lang "da"}}Ingen handlinger registreret endnu.{{else}}No actions recorded yet.{{end}}</p>{{end}}
-</div>
+  {{else}}<p>{{if eq .Lang "da"}}Ingen hændelser matcher de valgte filtre.{{else}}No events match these filters.{{end}}</p>{{end}}
+  {{if or .Newer .Older}}
+  <nav class="operator-audit-pages" aria-label="{{if eq .Lang `da`}}Sider i revisionsloggen{{else}}Audit log pages{{end}}">
+    {{if .Newer}}<a class="operator-secondary" href="{{.Newer}}">{{if eq .Lang "da"}}Nyere hændelser{{else}}Newer events{{end}}</a>{{end}}
+    {{if .Older}}<a class="operator-secondary" href="{{.Older}}">{{if eq .Lang "da"}}Ældre hændelser{{else}}Older events{{end}}</a>{{end}}
+  </nav>
+  {{end}}
+</section>
 {{end}}

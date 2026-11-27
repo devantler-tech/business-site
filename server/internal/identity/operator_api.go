@@ -235,12 +235,14 @@ func (b *browser) operatorAPI(route operatorRoute) http.HandlerFunc {
 // operatorAuditPage shows the newest audit entries on the operator page.
 func (b *browser) operatorAuditPage(w http.ResponseWriter, r *http.Request) {
 	status, result := b.operatorCall(r, "audit.view", func(ctx context.Context, client string) ([]byte, error) {
-		entries, err := b.auditLog(ctx)
+		search, err := readAuditSearch(r.URL.RawQuery)
 		if err != nil {
 			return nil, err
 		}
-		d := b.operatorData(r, "operator-audit", client)
-		d.Audit, _ = entries.([]auditEntry)
+		d := auditSearchPage{pageData: b.operatorData(r, "operator-audit", client), Search: search}
+		if err := b.populateAuditPage(ctx, &d); err != nil {
+			return nil, err
+		}
 		var buffer bytes.Buffer
 		err = b.templates().ExecuteTemplate(&buffer, "operator.html", d)
 		return buffer.Bytes(), err
@@ -252,6 +254,8 @@ func (b *browser) operatorAuditPage(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(result)
 	case http.StatusServiceUnavailable:
 		b.render(w, r, status, "unavailable", "", "")
+	case http.StatusBadRequest:
+		b.render(w, r, status, "operator-action-error", "", "")
 	default:
 		b.render(w, r, http.StatusForbidden, "error", "", "")
 	}

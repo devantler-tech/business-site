@@ -194,7 +194,7 @@ func TestOperatorAPIOnlyForOperators(t *testing.T) {
 	_, entry, found := strings.Cut(body, "<strong>openapi.read</strong>")
 	entry, _, bounded := strings.Cut(entry, "</li>")
 	if s != http.StatusOK || !strings.Contains(body, "Revisionslog") || !found || !bounded ||
-		!strings.Contains(entry, "Tilladt") || !strings.Contains(entry, "operator <code>"+operatorSubject+"</code>") {
+		!strings.Contains(entry, "Tilladt") || !strings.Contains(entry, "Dig") {
 		t.Fatalf("the audit page does not list the calls: %d", s)
 	}
 	if got := b.auditRows(); got[len(got)-1] != "operator audit.view allowed" {
