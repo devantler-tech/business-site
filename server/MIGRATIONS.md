@@ -271,6 +271,11 @@ when a destination binding is supplied. The runtime can read and insert intents.
 The record keeps an independent event key and points to the confirmed revision,
 which also removes the intent during retention. Existing bookings are unchanged.
 
+v36 records a shared software queue revision. Changes to requests, agreement,
+approval, payment, membership, mail confirmation and closure evidence advance
+it when their transaction commits. The web role can read the revision. The
+migration-owned triggers are its only writer in normal operation.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

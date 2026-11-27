@@ -21,7 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const migrationFixtureVersionCount = 35
+const migrationFixtureVersionCount = 36
 
 // migrationCommandFixture creates only a uniquely named disposable database on
 // the already validated loopback fixture, then exercises verified PostgreSQL TLS.
@@ -709,7 +709,7 @@ func TestActualMigrationGrantsRuntimeRole(t *testing.T) {
 		}
 	}
 	// Broader earlier grants converge back to the documented set on the next job.
-	if _, err := pool.Exec(t.Context(), `GRANT UPDATE ON portal_requests,portal_appointment_revisions TO portal_runtime;
+	if _, err := pool.Exec(t.Context(), `GRANT UPDATE ON portal_requests,portal_appointment_revisions,portal_work_queue_revision TO portal_runtime;
  GRANT TRUNCATE ON portal_sessions TO portal_runtime`); err != nil {
 		t.Fatal("broader grant fixture failed")
 	}
@@ -724,6 +724,8 @@ func TestActualMigrationGrantsRuntimeRole(t *testing.T) {
  AND NOT has_table_privilege('portal_runtime','portal_requests','UPDATE')
  AND has_table_privilege('portal_runtime','portal_schema_version','SELECT')
  AND NOT has_table_privilege('portal_runtime','portal_schema_version','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN')
+ AND has_table_privilege('portal_runtime','portal_work_queue_revision','SELECT')
+ AND NOT has_table_privilege('portal_runtime','portal_work_queue_revision','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN')
  AND has_table_privilege('portal_runtime','portal_order_charges','UPDATE')
  AND NOT has_table_privilege('portal_runtime','portal_orders','UPDATE')
  AND NOT has_table_privilege('portal_runtime','portal_numina_contacts','DELETE')

@@ -74,7 +74,7 @@ False, missing, wrong-type, error and stale provider states fail closed.
 This reader depends on the certified confirmation producer and schema in
 [#667](https://github.com/devantler-tech/business-site/issues/667) and the shared
 operator API in [#665](https://github.com/devantler-tech/business-site/pull/665).
-It adds no migration of its own. Included-maintenance authorization remains
+Included-maintenance authorization remains
 [#259](https://github.com/devantler-tech/business-site/issues/259); covered work
 must not acquire an additional feature invoice through this policy.
 Future appointments require the shared locked payment and confirmation facts,
@@ -87,6 +87,13 @@ claims.
 A later software queue needs
 an explicit server-owned delivery kind bound to the approved agreement;
 `other` and free-text briefs cannot establish that classification.
+
+The software queue revision tracks durable eligibility changes at commit.
+Request, agreement, approval, payment, membership, confirmation and closure
+writes advance it once per transaction. Software claim selection will sample
+it before scanning and compare it under lock after acquiring its evidence locks.
+It also has to recheck the database time at the withdrawal and approval boundaries.
+The operator inventory continues to report separate observations.
 
 Fictional disposable PostgreSQL and TLS/browser tests prove ordering, bounded
 continuations, failure behavior, SDK and deadline checks, private response
