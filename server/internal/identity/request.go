@@ -173,6 +173,10 @@ func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string
 	// Optional display evaluations may wait even when they return false/error.
 	// Perform them before private reads, whose own gates and final membership
 	// checkpoints still authorize every request independently.
+	tasks := b.clientTasks(r.Context(), "requests")
+	if id != "" {
+		tasks.Current = "location"
+	}
 	sharing := id != "" && b.foundation.sharingReady(r.Context())
 	acceptance := id != "" && b.foundation.acceptanceReady(r.Context())
 	billing := acceptance && b.foundation.orderReady(r.Context())
@@ -194,6 +198,7 @@ func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string
 		receipt = rows[0]
 	}
 	page := b.requestPage(r, kind, receipt, rows, "")
+	page.ClientTasks = tasks
 	if sharing {
 		page.SharedProposal, err = b.foundation.readSharedProposal(r.Context(), b.principal(r.Context()), id)
 		if err != nil {
