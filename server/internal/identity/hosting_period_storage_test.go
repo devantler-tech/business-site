@@ -63,14 +63,14 @@ func TestHostingPeriodStorageBindsTypedAcceptance(t *testing.T) {
 		{"foreign acceptance", otherRequest, otherClient, contentHash, start, end, operator, "23503"},
 		{"changed accepted bytes", proposalRequestID, client, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", start, end, operator, "23503"},
 		{"empty agreement interval", proposalRequestID, client, contentHash, start, start, operator, "23514"},
-		{"nonfinite end", proposalRequestID, client, contentHash, start, "infinity", operator, "23514"},
+		{"infinite end", proposalRequestID, client, contentHash, start, "infinity", operator, "23514"},
 		{"client membership as operator evidence", proposalRequestID, client, contentHash, start, end, acceptor, "23514"},
 	} {
 		t.Run(control.name, func(t *testing.T) {
 			err := insert(control.request, control.workspace, control.hash, "DDDDDDDDDDDDDDDDDDDDDDDDDD", control.from, control.until, control.actor)
 			var databaseError *pgconn.PgError
 			if !errors.As(err, &databaseError) || databaseError.Code != control.code {
-				t.Fatalf("expected SQLSTATE %s, got %v", control.code, err)
+				t.Fatalf("expected SQL state %s, got %v", control.code, err)
 			}
 		})
 	}
