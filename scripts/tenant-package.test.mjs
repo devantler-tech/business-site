@@ -17,10 +17,33 @@ const tenantFixtureLabels = {
   "app.kubernetes.io/managed-by": "kro",
   "fixture.example/namespace-label": "from-graph",
 };
-function admissionFixtures(input, labels = tenantFixtureLabels) {
+function generatedWorkload() {
+  const ownership = {
+    "app.kubernetes.io/managed-by": "kro",
+    "kro.run/instance-id": "00000000-0000-4000-8000-000000000042",
+    "kro.run/instance-kind": "WebApp",
+    "kro.run/instance-group": "kro.run",
+    "kro.run/instance-version": "v1alpha1",
+    "kro.run/instance-name": "business-site",
+    "kro.run/instance-namespace": "business-site",
+    "applyset.kubernetes.io/part-of": `applyset-${"a".repeat(43)}-v1`,
+  };
+  return [
+    ["deployment", "Deployment", "apps/v1", {
+      template: { spec: { containers: [{ securityContext: { runAsNonRoot: true } }] } },
+    }],
+    ["service", "Service", "v1", {}],
+    ["httpRoute", "HTTPRoute", "gateway.networking.k8s.io/v1", { hostnames: ["business-site.example.test"] }],
+  ].map(([node, kind, apiVersion, spec]) => ({
+    kind, apiVersion, spec,
+    metadata: { name: "business-site", namespace: "business-site", labels: { ...ownership, "kro.run/node-id": node } },
+  }));
+}
+function admissionFixtures(input, labels = tenantFixtureLabels, objects = generatedWorkload()) {
   const directory = mkdtempSync(path.join(tmpdir(), "tenant-admission-input-"));
   try {
     const graph = path.join(directory, "tenant-graph.yaml");
+    const children = path.join(directory, "children.json");
     writeFileSync(graph, yaml.dump({
       kind: "ResourceGraphDefinition",
       spec: { schema: { kind: "Tenant" }, resources: [{
@@ -28,12 +51,48 @@ function admissionFixtures(input, labels = tenantFixtureLabels) {
         template: { apiVersion: "v1", kind: "Namespace", metadata: { labels } },
       }] },
     }));
-    return spawnSync(process.execPath, [path.join(root, "scripts/tenant-admission-fixtures.mjs"), graph],
+    writeFileSync(children, JSON.stringify(objects));
+    return spawnSync(process.execPath, [path.join(root, "scripts/tenant-admission-fixtures.mjs"), graph, children],
       { input, encoding: "utf8", timeout: 5000 });
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
 }
+
+test("generated workload inventory is complete and ownership controls are explicit", () => {
+  const source = render();
+  const objects = generatedWorkload();
+  const result = admissionFixtures(source, tenantFixtureLabels, objects);
+  assert.equal(result.status, 0, result.stderr);
+  const fixtures = result.stdout.trim().split("\n").map((line) => JSON.parse(line));
+  assert.equal(fixtures.length, 74);
+  assert.equal(new Set(fixtures.map(({ label }) => label)).size, 74);
+  const generated = fixtures.filter(({ label }) => label.startsWith("generated-"));
+  assert.equal(generated.length, 26);
+  for (const object of objects) {
+    const controls = generated.filter((fixture) => fixture.label.startsWith(`generated-ownership-${object.kind}-`));
+    assert.deepEqual(controls.map(({ operation, expected }) => [operation, expected]),
+      [["CREATE", "pass"], ["CREATE", "fail"], ["CREATE", "fail"], ["UPDATE", "pass"], ["UPDATE", "fail"], ["UPDATE", "fail"]]);
+    assert.deepEqual(controls[0].object, object);
+    assert.equal(controls[2].actor, "system:serviceaccount:business-site:business-site");
+    assert.equal(controls[3].actor, "system:serviceaccount:kro-system:kro");
+    assert.notEqual(controls[4].oldObject.metadata.labels["applyset.kubernetes.io/part-of"],
+      object.metadata.labels["applyset.kubernetes.io/part-of"]);
+    assert.equal(controls[5].oldObject.metadata.labels["kro.run/instance-id"], undefined);
+  }
+  for (const fault of [
+    (children) => children.pop(),
+    (children) => { children[1] = children[0]; },
+    (children) => { children[1].metadata.labels["kro.run/instance-id"] = "00000000-0000-4000-8000-000000000043"; },
+    (children) => { delete children[2].metadata.labels["applyset.kubernetes.io/part-of"]; },
+  ]) {
+    const candidate = structuredClone(objects);
+    fault(candidate);
+    const refused = admissionFixtures(source, tenantFixtureLabels, candidate);
+    assert.equal(refused.status, 1);
+    assert.equal(refused.stdout, "");
+  }
+});
 
 test("the real Kustomize package renders deterministically and admits the public runtime", () => {
   let first;
@@ -92,7 +151,8 @@ test("direct tenant resources carry their rendered objects and actual namespace 
   const documents = yaml.loadAll(source);
   const result = admissionFixtures(source);
   assert.equal(result.status, 0, result.stderr);
-  const fixtures = result.stdout.trim().split("\n").map((line) => JSON.parse(line));
+  const fixtures = result.stdout.trim().split("\n").map((line) => JSON.parse(line))
+    .filter(({ label }) => !label.startsWith("generated-"));
   assert.equal(fixtures.length, 48);
   assert.equal(new Set(fixtures.map((fixture) => fixture.label)).size, 48);
   const namespace = { apiVersion: "v1", kind: "Namespace", metadata: {
@@ -578,19 +638,27 @@ function assertAdmissionCI(workflow) {
   assert.match(source.uses, /^actions\/checkout@[0-9a-f]{40}$/);
   assert.match(source.with.ref, /^[0-9a-f]{40}$/);
   assert.equal(source.with["persist-credentials"], false);
-  const sourceFiles = source.with["sparse-checkout"].split("\n");
-  assert.ok(sourceFiles.includes("/k8s/bases/infrastructure/resource-graph-definitions/tenant/resource-graph-definition.yaml"));
+  assert.equal(source.with.path, ".tenant-policy-source");
+  assert.equal(source.with["sparse-checkout"], undefined);
+  const compile = job.steps.find((step) => step.id === "generated-workloads");
   const check = job.steps.find((step) => step.id === "tenant-admission");
-  assert.equal(check.if, undefined);
-  assert.equal(check["continue-on-error"], undefined);
-  assert.equal(check.shell, "bash");
-  assert.match(check.run, /kubectl kustomize deploy \| node scripts\/tenant-admission-fixtures\.mjs "\$tenant_graph" \|/);
+  assert.ok(job.steps.indexOf(source) < job.steps.indexOf(compile) && job.steps.indexOf(compile) < job.steps.indexOf(check));
+  for (const step of [compile, check]) {
+    assert.equal(step.if, undefined);
+    assert.equal(step["continue-on-error"], undefined);
+    assert.equal(step.shell, "bash");
+  }
+  assert.deepEqual(compile.env, { KRO_API_BASE: "HEAD" });
+  assert.ok(compile.run.includes('kubectl kustomize deploy > "$work/production.yaml"'));
+  assert.ok(compile.run.includes("bash .tenant-policy-source/scripts/tests/test-webapp-compiler.sh"));
+  assert.ok(compile.run.includes('--render-admission-children "$work/application.json" "$work/children.json"'));
+  assert.deepEqual(check.env, { ADMISSION_DIRECTORY: "${{ steps.generated-workloads.outputs.directory }}" });
+  assert.ok(check.run.includes('node scripts/tenant-admission-fixtures.mjs "$tenant_graph" "$ADMISSION_DIRECTORY/children.json" < "$ADMISSION_DIRECTORY/production.yaml" |'));
   assert.match(check.run, /go -C \.tenant-policy-source\/scripts\/tests\/tenant-webapp-admission run -mod=readonly \./);
   for (const policy of [
     "restrict-tenant-webapps", "validate-pod-security", "restrict-tenant-route-hostnames",
     "restrict-webapp-child-ownership", "restrict-tenant-secret-stores", "restrict-tenant-network-policies",
   ]) {
-    assert.ok(sourceFiles.includes(`/k8s/bases/infrastructure/cluster-policies/best-practices/${policy}.yaml`));
     assert.ok(check.run.includes(`"$policies/${policy}.yaml"`));
   }
   for (const aggregate of [workflow.jobs.validation, workflow.jobs.status]) {
@@ -607,6 +675,9 @@ test("the policy check is required and uses an immutable read-only Platform sour
     (job) => { job.if = false; },
     (job) => { job.permissions.contents = "write"; },
     (job) => { job.steps.find((step) => step.with?.repository === "devantler-tech/platform").with.ref = "main"; },
+    (job) => { job.steps.find((step) => step.id === "generated-workloads").if = false; },
+    (job) => { job.steps.find((step) => step.id === "generated-workloads")["continue-on-error"] = true; },
+    (job) => { job.steps.find((step) => step.id === "tenant-admission").env.ADMISSION_DIRECTORY = "fixtures"; },
     (job) => { job.steps.find((step) => step.id === "tenant-admission")["continue-on-error"] = true; },
   ]) {
     const changed = structuredClone(workflow);
