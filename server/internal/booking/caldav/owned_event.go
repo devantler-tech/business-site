@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"regexp"
@@ -26,6 +27,10 @@ var (
 	// Accept the bounded ASCII subset of RFC 9110 strong entity tags.
 	strongEventTag = regexp.MustCompile(`^"[\x21\x23-\x7e]{1,128}"$`)
 )
+
+// ErrOwnedEventConflict signals an observed resource or version that requires
+// resolution before another write. It carries no provider data.
+var ErrOwnedEventConflict = fmt.Errorf("calendar event conflicts with the saved booking (%w)", booking.ErrUnavailable)
 
 // OwnedEvent contains the persisted portal appointment identity and revision.
 // Key must be an independent server-generated value, never a browser value.
@@ -96,8 +101,11 @@ func (c *Client) readMatchingOwnedEvent(ctx context.Context, client *http.Client
 		return OwnedEventObservation{}, booking.ErrUnavailable
 	}
 	data, err := readCalendarBody(ctx, response, maxOwnedEventBytes)
-	if err != nil || !matches(data) {
+	if err != nil {
 		return OwnedEventObservation{}, booking.ErrUnavailable
+	}
+	if !matches(data) {
+		return OwnedEventObservation{}, ErrOwnedEventConflict
 	}
 	return OwnedEventObservation{Exists: true, ETag: tags[0]}, nil
 }

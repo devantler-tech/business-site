@@ -37,10 +37,11 @@ func (c *Client) writeOwnedEvent(ctx context.Context, resource, uid string, next
 	}
 	defer closeConnection()
 	targetFound := false
-	current, err := c.readMatchingOwnedEvent(ctx, client, resource, func(data []byte) bool {
+	matchesRevision := func(data []byte) bool {
 		targetFound = matchesOwnedEvent(data, uid, next)
 		return targetFound || (prior != nil && matchesOwnedEvent(data, uid, *prior))
-	})
+	}
+	current, err := c.readMatchingOwnedEvent(ctx, client, resource, matchesRevision)
 	if err != nil {
 		return OwnedEventObservation{}, err
 	}
@@ -48,7 +49,7 @@ func (c *Client) writeOwnedEvent(ctx context.Context, resource, uid string, next
 		return current, nil
 	}
 	if targetFound || (prior != nil && (!current.Exists || current.ETag != expectedTag)) {
-		return OwnedEventObservation{}, booking.ErrUnavailable
+		return OwnedEventObservation{}, ErrOwnedEventConflict
 	}
 	options := webdav.PutCalendarObjectOptions{IfNoneMatch: "*"}
 	if prior != nil {
@@ -57,9 +58,15 @@ func (c *Client) writeOwnedEvent(ctx context.Context, resource, uid string, next
 	if !c.putOwnedEvent(ctx, client, resource, newOwnedCalendarEvent(uid, stamp, next), options) {
 		return OwnedEventObservation{}, booking.ErrUnavailable
 	}
-	current, err = c.readOwnedEvent(ctx, client, resource, uid, next)
-	if err != nil || !current.Exists || current.ETag == expectedTag {
+	current, err = c.readMatchingOwnedEvent(ctx, client, resource, matchesRevision)
+	if err != nil {
+		return OwnedEventObservation{}, err
+	}
+	if !current.Exists || (!targetFound && current.ETag == expectedTag) {
 		return OwnedEventObservation{}, booking.ErrUnavailable
+	}
+	if !targetFound || current.ETag == expectedTag {
+		return OwnedEventObservation{}, ErrOwnedEventConflict
 	}
 	return current, nil
 }
