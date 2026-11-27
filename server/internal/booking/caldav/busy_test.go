@@ -157,13 +157,15 @@ func TestBusyRefusesUncertainCalendarSemantics(t *testing.T) {
 	}
 }
 
-func requireBusyRefused(t *testing.T, client *Client) error {
+func requireBusyRefused(t *testing.T, client *Client) {
 	t.Helper()
 	snapshot, err := client.Busy(t.Context(), transportCoverage())
 	if !errors.Is(err, booking.ErrUnavailable) || !reflect.DeepEqual(snapshot, booking.BusySnapshot{}) {
 		t.Fatal("an incomplete or refused report produced usable availability")
 	}
-	return err
+	if err.Error() != booking.ErrUnavailable.Error() {
+		t.Fatal("private diagnostic escaped the calendar adapter")
+	}
 }
 
 // Only the unexported fixture construction admits this owned loopback server.
