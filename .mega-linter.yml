@@ -16,6 +16,7 @@ REPOSITORY_SECRETLINT_RULES_PATH: /github/workspace
 # Private forms have mixed methods and authentication. The adapter retains every
 # target in explicit method-aware coverage; ordinary documents stay byte-identical.
 # Pace repeated requests to the same host. All failed responses still fail the scan.
+SPELL_LYCHEE_CLI_EXECUTABLE: ["bash", "/github/workspace/scripts/check-portal-links.sh"]
 SPELL_LYCHEE_ARGUMENTS:
   - "--preprocess"
   - "/github/workspace/scripts/portal-links-preprocess.sh"

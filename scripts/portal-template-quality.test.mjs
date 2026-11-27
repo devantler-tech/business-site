@@ -60,6 +60,7 @@ test('package grouping retains selected-file analysis and every HTML rule', () =
     SPELL_CSPELL_CONFIG_FILE: '.cspell.json',
     SPELL_CSPELL_RULES_PATH: '/github/workspace',
     REPOSITORY_SECRETLINT_RULES_PATH: '/github/workspace',
+    SPELL_LYCHEE_CLI_EXECUTABLE: ['bash', '/github/workspace/scripts/check-portal-links.sh'],
     SPELL_LYCHEE_ARGUMENTS: [
       '--preprocess', '/github/workspace/scripts/portal-links-preprocess.sh',
       '--host-concurrency', '2', '--host-request-interval', '500ms',
@@ -129,6 +130,65 @@ test('plain GitHub references keep the same record in the API checker', () => {
     const remap = remaps.find(({ pattern }) => pattern.test(url));
     assert.equal(remap ? url.replace(remap.pattern, remap.target) : url, expected ?? url);
   }
+});
+
+test('GitHub records are authenticated once and ordinary links still use Lychee', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'portal-link-check-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const trace = join(directory, 'trace');
+  const record = 'https://api.github.com/repos/devantler-tech/business-site/issues/659';
+  const credential = 'fixture-read-token';
+  writeFileSync(join(directory, 'lychee'), `#!/bin/bash
+set -euo pipefail
+case " $* " in
+  *" --dump "*) printf 'discover\\n' >> "$LINK_TEST_TRACE"; printf '%s\\n' "$LINK_TEST_RECORD" ;;
+  *" --exclude "*) printf 'check\\n' >> "$LINK_TEST_TRACE"; exit "$LINK_TEST_ORDINARY_STATUS" ;;
+  *) printf 'anonymous\\n' >> "$LINK_TEST_TRACE" ;;
+esac
+`, { mode: 0o700 });
+  writeFileSync(join(directory, 'curl'), `#!/bin/bash
+set -euo pipefail
+test "$1 $2 $3" = "--disable --config -"
+test -z "\${GITHUB_TOKEN:-}"
+test "\${@: -1}" = "${record}"
+case "$*" in
+  *" --proto =https "*) ;;
+  *) exit 70 ;;
+esac
+case "$*" in
+  *${credential}*|*" --location "*) exit 71 ;;
+esac
+IFS= read -r config
+test "$config" = 'header = "Authorization: Bearer ${credential}"'
+printf 'github\\n' >> "$LINK_TEST_TRACE"
+printf '%s' "$LINK_TEST_HTTP_STATUS"
+`, { mode: 0o700 });
+
+  const run = (overrides = {}) => {
+    writeFileSync(trace, '');
+    const result = spawnSync('bash', [join(root, 'scripts/check-portal-links.sh'), 'fixture.md'], {
+      cwd: root, encoding: 'utf8', timeout: 15000,
+      env: {
+        ...process.env,
+        PATH: `${directory}:${process.env.PATH}`,
+        GITHUB_TOKEN: credential,
+        LINK_TEST_TRACE: trace,
+        LINK_TEST_RECORD: `${record}\n${record}`,
+        LINK_TEST_HTTP_STATUS: '200',
+        LINK_TEST_ORDINARY_STATUS: '0',
+        ...overrides,
+      },
+    });
+    assert.ifError(result.error);
+    assert.equal(result.signal, null);
+    assert.ok(!(result.stdout + result.stderr).includes(credential));
+    return { status: result.status, trace: readFileSync(trace, 'utf8').trim().split('\n') };
+  };
+  assert.deepEqual(run(), { status: 0, trace: ['discover', 'github', 'check'] });
+  assert.deepEqual(run({ LINK_TEST_HTTP_STATUS: '404' }), { status: 1, trace: ['discover', 'github'] });
+  assert.deepEqual(run({ LINK_TEST_RECORD: 'https://example.invalid/issue/659' }), { status: 1, trace: ['discover'] });
+  assert.deepEqual(run({ LINK_TEST_ORDINARY_STATUS: '1' }), { status: 1, trace: ['discover', 'github', 'check'] });
+  assert.deepEqual(run({ GITHUB_TOKEN: '' }), { status: 0, trace: ['anonymous'] });
 });
 
 function lint(files) {
