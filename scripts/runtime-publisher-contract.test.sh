@@ -64,6 +64,7 @@ publish_valid() {
     all(.jobs.admit.steps[]|select(.run=="bash scripts/admit-runtime-release.sh"); .env.RELEASE_MODE=="release") and
     .jobs.publish.needs=="admit" and .jobs.publish.if==null and .jobs.publish.uses==null and .jobs.publish.secrets==null and
     .jobs.publish["runs-on"]=="ubuntu-latest" and
+    .jobs.publish.outputs=={"run-attempt":"\u0024{{ github.run_attempt }}"} and
     .jobs.publish.permissions=={"contents":"read","actions":"read","packages":"write","id-token":"write"} and
     .jobs.publish.concurrency["cancel-in-progress"]==false and
     (.jobs.publish.steps|type=="array" and length==2) and
@@ -79,6 +80,7 @@ publish_valid() {
     .jobs.verify.needs==["admit","publish"] and .jobs.verify.if==null and
     .jobs.verify.permissions=={"contents":"read","actions":"read","packages":"read"} and
     .jobs.verify.steps[-2].run=="bash scripts/verify-runtime-publication.sh" and
+    .jobs.verify.steps[-2].env.PUBLISHER_RUN_ATTEMPT=="\u0024{{ needs.publish.outputs.run-attempt }}" and
     (.jobs.verify.steps[-1].uses|startswith("actions/upload-artifact@")) and
     .jobs.verify.steps[-1].with=={"name":"business-site-runtime-publication","path":"\u0024{{ runner.temp }}/runtime-publication.json","if-no-files-found":"error","retention-days":30} and
     all(.jobs.verify.steps[]; .if==null and (.["continue-on-error"]==null or .["continue-on-error"]==false))
@@ -116,7 +118,8 @@ for mutation in '.on.push={tags:["v*"]}' '.jobs.admit.if="always()"' '.jobs.publ
   '.jobs.publish.steps[1].with["prebuilt-ci-run-id"]="1"' '.jobs.publish.steps[1].with["deploy-path"]="./"' \
   '.jobs.publish.steps[1].with["app-manifest"]="webapp.yaml"' \
   '.jobs.publish.steps[1].uses|=sub("@[0-9a-f]{40}$";"@main")' '.jobs.verify.needs=["admit"]' \
-  '.jobs.verify.steps[-2]["continue-on-error"]=true' \
+  '.jobs.verify.steps[-2]["continue-on-error"]=true' 'del(.jobs.publish.outputs["run-attempt"])' \
+  '.jobs.verify.steps[-2].env.PUBLISHER_RUN_ATTEMPT="\u0024{{ github.run_attempt }}"' \
   '.jobs.publish.steps[1].uses|=sub("@[0-9a-f]{40}$";"@v21.7.2")' '.jobs.publish.steps[1].uses|=sub("[0-9a-f]$";"")' \
   '.jobs.publish.steps[1].uses|=sub("^devantler-tech/";"foreign/")' \
   '.jobs.publish.steps[1].uses|=sub("actions/publish-app";"actions/aggregate-job-checks")' \

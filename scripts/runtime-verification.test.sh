@@ -127,7 +127,7 @@ reset_fixture() {
 verify() {
   (cd "$scratch/source" && env PATH="$scratch/bin:$PATH" FIXTURE="$scratch" RUNNER_TEMP="$scratch/runner" \
     GITHUB_REPOSITORY=devantler-tech/business-site GITHUB_SHA="$source" GITHUB_REF=refs/tags/v1.2.3 \
-    GITHUB_RUN_ID=999 GITHUB_RUN_ATTEMPT=1 SOURCE_SHA="$source" VERSION=1.2.3 IMAGE_DIGEST="$image" \
+    GITHUB_RUN_ID=999 GITHUB_RUN_ATTEMPT=1 PUBLISHER_RUN_ATTEMPT=1 SOURCE_SHA="$source" VERSION=1.2.3 IMAGE_DIGEST="$image" \
     MANIFESTS_DIGEST="$manifests" PUBLIC_DIGEST="$public" ORIGINAL_CI_RUN_ID=123 ORIGINAL_CI_RUN_ATTEMPT=2 \
     EXPECTED_WORKFLOW="$workflow" "$@" bash "$root/scripts/verify-runtime-publication.sh") >"$scratch/stdout" 2>"$scratch/stderr"
 }
@@ -151,6 +151,17 @@ jq -e --arg source "$source" --arg image "ghcr.io/devantler-tech/business-site@$
   .sourceRevision==$source and .image==$image and .manifests==$manifests and .version=="1.2.3" and
   .publicationRunId=="999" and .publicationRunAttempt=="1" and .ciRunId=="123" and .ciRunAttempt=="2"
 ' "$scratch/runner/runtime-publication.json" >/dev/null || fail 'verified receipt does not identify the pair'
+reset_fixture
+verify GITHUB_RUN_ATTEMPT=3 PUBLISH_ATTEMPT=3 || fail 'a verification-only retry must accept the original successful publisher attempt'
+jq -e '.publicationRunAttempt=="3" and .publisherRunAttempt=="1"' \
+  "$scratch/runner/runtime-publication.json" >/dev/null || fail 'retry receipt must bind both workflow attempts'
+for publisher_attempt in '' 0 01 2 4; do
+  reset_fixture
+  if verify GITHUB_RUN_ATTEMPT=3 PUBLISH_ATTEMPT=3 PUBLISHER_RUN_ATTEMPT="$publisher_attempt"; then
+    fail 'an invalid or mismatched publisher attempt was accepted'
+  fi
+  [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'an invalid publisher attempt left a receipt'
+done
 reset_fixture
 if verify TAG_SOURCE=1123456789abcdef0123456789abcdef01234567; then fail 'a moved Git tag with otherwise valid signatures was accepted'; fi
 [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'moved Git tag left a receipt'
