@@ -10,7 +10,6 @@ import (
 	"reflect"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/devantler-tech/business-site/server/internal/booking"
 )
@@ -30,10 +29,7 @@ func TestTransportPinsPublicAddressBeforeCredentialAndRequest(t *testing.T) {
 			f := newTransportFixture(t, selectedCalendarHost)
 			f.answer = func(context.Context) ([]netip.Addr, error) { return []netip.Addr{tc.address}, nil }
 			config := Config{Origin: "https://calendar.example.test", Calendars: []string{"/calendars/selected/"}}
-			client := transportClient(t, config, func(context.Context) (string, string, error) {
-				f.record("credential")
-				return "fictional-user", "fictional-password", nil
-			}, f.network)
+			client := transportClient(t, config, f.readCredential, f.network)
 			config.Origin = "https://other.example.test"
 			config.Calendars[0] = "/calendars/replaced/"
 			snapshot, err := client.Busy(t.Context(), transportCoverage())
@@ -123,10 +119,7 @@ func TestTransportRefusesCredentialFailureAfterResolution(t *testing.T) {
 func TestTransportRefusesWrongTLSHostname(t *testing.T) {
 	blockAmbientNetwork(t)
 	f := newTransportFixture(t, "different.example.test")
-	client := transportClient(t, Config{Origin: "https://calendar.example.test", Calendars: []string{"/calendars/selected/"}}, func(context.Context) (string, string, error) {
-		f.record("credential")
-		return "fictional-user", "fictional-password", nil
-	}, f.network)
+	client := selectedTransportClient(t, f)
 	snapshot, err := client.Busy(t.Context(), transportCoverage())
 	if !errors.Is(err, booking.ErrUnavailable) || !reflect.DeepEqual(snapshot, booking.BusySnapshot{}) || !reflect.DeepEqual(f.trace(), []string{"resolve", "credential", "dial"}) || f.requests.Load() != 0 {
 		t.Fatal("wrong TLS hostname reached an authenticated request or was never checked")
@@ -150,10 +143,7 @@ func TestTransportNeverFollowsRedirect(t *testing.T) {
 	f.handler = func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, foreign.URL+"/foreign/", http.StatusFound)
 	}
-	client := transportClient(t, Config{Origin: "https://calendar.example.test", Calendars: []string{"/calendars/selected/"}}, func(context.Context) (string, string, error) {
-		f.record("credential")
-		return "fictional-user", "fictional-password", nil
-	}, f.network)
+	client := selectedTransportClient(t, f)
 	snapshot, err := client.Busy(t.Context(), transportCoverage())
 	if !errors.Is(err, booking.ErrUnavailable) || !reflect.DeepEqual(snapshot, booking.BusySnapshot{}) || f.requests.Load() != 1 || f.dials.Load() != 1 || foreignConnections.Load() != 0 {
 		t.Fatal("redirect was not observed or reached a foreign connection")
@@ -174,10 +164,7 @@ func TestTransportIgnoresAmbientProxyAndHTTPClient(t *testing.T) {
 	t.Setenv("NO_PROXY", "")
 	t.Setenv("no_proxy", "")
 	f := newTransportFixture(t, selectedCalendarHost)
-	client := transportClient(t, Config{Origin: "https://calendar.example.test", Calendars: []string{"/calendars/selected/"}}, func(context.Context) (string, string, error) {
-		f.record("credential")
-		return "fictional-user", "fictional-password", nil
-	}, f.network)
+	client := selectedTransportClient(t, f)
 	snapshot, err := client.Busy(t.Context(), transportCoverage())
 	if err != nil || !snapshot.Complete || f.requests.Load() != 1 || proxyRequests.Load() != 0 {
 		t.Fatal("owned transport consulted an ambient proxy or could not read its selected provider", err)
@@ -247,28 +234,8 @@ func TestTransportRechecksCancellationAfterCredentialWait(t *testing.T) {
 		}
 		return "fictional-user", "fictional-password", nil
 	}, f.network)
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	done := make(chan bool, 1)
-	go func() {
-		snapshot, err := client.Busy(ctx, transportCoverage())
-		done <- errors.Is(err, booking.ErrUnavailable) && reflect.DeepEqual(snapshot, booking.BusySnapshot{})
-	}()
-	select {
-	case <-entered:
-	case <-done:
-		t.Fatal("operation refused before reaching the guarded credential boundary")
-	case <-time.After(2 * time.Second):
-		t.Fatal("operation never reached the guarded credential boundary")
-	}
-	cancel()
-	close(release)
-	select {
-	case refused := <-done:
-		if !refused || !reflect.DeepEqual(f.trace(), []string{"resolve", "credential"}) || f.dials.Load() != 0 || f.requests.Load() != 0 {
-			t.Fatal("cancelled credential wait reached dialing or an authenticated request")
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("cancelled credential boundary did not finish")
+	requireBusyCancelledDuringCredentials(t, client, entered, release)
+	if !reflect.DeepEqual(f.trace(), []string{"resolve", "credential"}) || f.dials.Load() != 0 || f.requests.Load() != 0 {
+		t.Fatal("cancelled credential wait reached dialing or an authenticated request")
 	}
 }
