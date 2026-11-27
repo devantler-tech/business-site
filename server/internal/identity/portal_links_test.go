@@ -286,6 +286,15 @@ func renderedLinkPagesFor(name string, templates *template.Template, b *browser)
 							{At: request.Submitted.Add(-time.Minute), Kind: "agent", Subject: "fictional-agent", Action: "workspaces.list", Outcome: "refused"},
 						}
 					}
+					if view.kind == "operator-audit" {
+						page := auditSearchPage{pageData: d}
+						if view.events {
+							event := auditSearchEvent{auditEntry: d.Audit[0], ID: "f0000000-0000-4000-8000-000000000001"}
+							page.Older = page.Search.pageLink(b.visible("/portal/operator/audit"), lang, "before", event)
+							page.Newer = page.Search.pageLink(b.visible("/portal/operator/audit"), lang, "after", event)
+						}
+						return templates.ExecuteTemplate(w, name, page)
+					}
 					return templates.ExecuteTemplate(w, name, d)
 				})
 				if err != nil {
@@ -660,6 +669,13 @@ func registeredLinkTarget(mux *http.ServeMux, method string, target *url.URL) er
 		case "workspace":
 			if pattern != "GET /portal/operator/invitations/new" || !validCustomerWorkspace(values[0]) {
 				return errors.New("invalid invitation workspace")
+			}
+		case "q", "actor", "outcome", "from", "to", "before", "after":
+			if pattern != "GET /portal/operator/audit" {
+				return errors.New("invalid audit search target")
+			}
+			if _, err := readAuditSearch(target.RawQuery); err != nil {
+				return errors.New("invalid audit search query")
 			}
 		default:
 			return errors.New("unexpected target query")
