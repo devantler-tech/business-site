@@ -551,8 +551,8 @@ bash ../scripts/check-portal-quality.sh
 GOTOOLCHAIN=local go test -race -p=1 ./... -list '^(Test|Example|Fuzz)' -count=1 -timeout=90s -json > test-inventory.jsonl
 # Use bash with pipefail so tee cannot hide a failing Go process.
 set -o pipefail
-GOTOOLCHAIN=local go test -race -coverprofile=coverage-core.out -p=1 ./... -count=1 -timeout=90s -json -skip '^Test(Work(Approval|Review)|Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)' | tee test-core.jsonl
-GOTOOLCHAIN=local go test -race -coverprofile=coverage-work.out -p=1 ./... -count=1 -timeout=90s -json -run '^TestWork(Approval|Review)' | tee test-work.jsonl
+GOTOOLCHAIN=local go test -race -coverprofile=coverage-core.out -p=1 ./... -count=1 -timeout=90s -json -skip '^Test(Work(Approval|Review|Eligibility|Funding|Lease|QueueRevision)|Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)' | tee test-core.jsonl
+GOTOOLCHAIN=local go test -race -coverprofile=coverage-work.out -p=1 ./... -count=1 -timeout=90s -json -run '^TestWork(Approval|Review|Eligibility|Funding|Lease|QueueRevision)' | tee test-work.jsonl
 GOTOOLCHAIN=local go test -race -coverprofile=coverage-private.out -p=1 ./... -count=1 -timeout=90s -json -run '^Test(Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)' | tee test-private.jsonl
 node ../scripts/identity-cohorts.mjs
 GOTOOLCHAIN=local go test -race -tags=contacttrialintegration ./internal/identity -run '^TestContactTrialHost' -count=1 -timeout=90s
@@ -562,10 +562,10 @@ GOTOOLCHAIN=local go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 The Go database tests and explicit trial-host integration do not require Node;
 the complete ordinary-suite evidence check uses the repository's Node 24 line.
 The ordinary suite runs in three complementary module-wide cohorts: core tests,
-the `TestWorkApproval`/`TestWorkReview` work-decision family, and the private/operator
-families named by the final command. All three retain every source file and helper.
-The private/operator family is separated because the cumulative core runtime reached
-the fixed package deadline on main; each individual deadline remains unchanged.
+work approval, review, eligibility, funding, lease and queue-revision tests, and
+the private/operator families named by the final command. All three retain every
+source file and helper. Separating the work and private/operator families keeps
+the core cohort within the same fixed package deadline.
 The current compiled inventory (including examples and fuzz seeds) must match the
 three successful executions exactly once;
 missing, duplicated, skipped, incomplete or failed results are refused. Each
