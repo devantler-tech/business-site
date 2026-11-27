@@ -25,6 +25,16 @@ for (const [route, published, revised] of cases) {
   assert.ok(page.includes(preview ? revised : published), `${route || '/'} uses the ${preview ? 'preview' : 'published'} offer`);
   assert.ok(!page.includes(preview ? published : revised), `${route || '/'} must not mix offer variants`);
 }
+for (const route of ['', 'da', 'about', 'da/about', 'projects', 'da/projects']) {
+  const page = readFileSync(resolve(directory, route, 'index.html'), 'utf8');
+  for (const tier of ['Slow Pace', 'Medium Pace', 'Fast Pace']) {
+    if (preview && (route === '' || route === 'da')) {
+      assert.ok(page.includes(tier), `${route || '/'} includes ${tier} in the revised offer`);
+    } else if (!preview) {
+      assert.ok(!page.includes(tier), `${route || '/'} must retain the current published offer`);
+    }
+  }
+}
 // The client-facing Projects page links back to Home's quality highlight; it
 // has no hosting terms to distinguish. Its inquiry label is neutral in both states.
 for (const [route, label, home] of [['projects', 'Discuss your project', '/'], ['da/projects', 'Tal om dit projekt', '/da/']]) {

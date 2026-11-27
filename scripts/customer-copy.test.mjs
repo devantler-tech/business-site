@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createBusinessCopy } from '../src/components/business/business-copy.ts';
+import { createClientCopy } from '../src/components/business/client-copy.ts';
 import { createSupportingCopy, previewSupporting } from '../src/components/business/supporting-copy.ts';
 import { publishedOffer } from '../src/components/business/published-offer.ts';
 
@@ -22,5 +23,27 @@ for (const offer of [false, true]) test(`permanent supporting invitation is inde
   for (const locale of ['en', 'da']) {
     assert.doesNotMatch(selected[locale].principles[2].text, /your business|din virksomhed/);
     assert.equal(selected[locale].engineeringScope, (offer ? previewSupporting[locale] : publishedOffer.supporting[locale]).engineeringScope);
+  }
+});
+
+test('the hosting and pace model appears only in revised offer copy', () => {
+  const liveBusiness = createBusinessCopy(true, false);
+  const previewBusiness = createBusinessCopy(true, true);
+  const previewClient = createClientCopy(true);
+  const previewAbout = createSupportingCopy(true);
+  for (const locale of ['en', 'da']) {
+    const hosting = previewBusiness[locale].hostingText;
+    assert.equal(liveBusiness[locale].hostingText, publishedOffer.copy[locale].hostingText);
+    assert.match(hosting, /Slow Pace.*Medium Pace.*Fast Pace/);
+    assert.match(hosting, locale === 'da' ? /godkender du den nye månedspris/ : /you approve the new monthly price/);
+    const relatedCopy = [
+      hosting,
+      previewBusiness[locale].qualityScope,
+      previewBusiness[locale].steps[2].text,
+      previewClient[locale].qualityScope,
+      previewAbout[locale].engineeringScope,
+      ...previewAbout[locale].principles.map(({ text }) => text),
+    ].join(' ');
+    assert.doesNotMatch(relatedCopy, /new agreement|ny aftale|before each iteration|før hver etape/i);
   }
 });
