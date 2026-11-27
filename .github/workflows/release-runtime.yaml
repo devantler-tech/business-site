@@ -17,7 +17,7 @@ permissions: {}
 
 jobs:
   admit:
-    if: ${{ github.repository == 'devantler-tech/business-site' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.mode == 'dry-run' || inputs.mode == 'release') }}
+    if: ${{ github.repository == 'devantler-tech/business-site' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.mode == 'dry-run' || (inputs.mode == 'release' && vars.RUNTIME_PUBLICATION_ENABLED == 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -49,6 +49,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_MODE: ${{ inputs.mode }}
+          RUNTIME_PUBLICATION_ENABLED: ${{ vars.RUNTIME_PUBLICATION_ENABLED }}
         run: bash scripts/admit-runtime-release.sh
       - name: Setup Cosign
         uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3

@@ -108,7 +108,7 @@ admit() {
     GITHUB_EVENT_PATH="$scratch/event.json" GITHUB_OUTPUT="$scratch/output" \
     GITHUB_REPOSITORY=devantler-tech/business-site GITHUB_SHA="$source" \
     GITHUB_REF=refs/heads/main GITHUB_EVENT_NAME=workflow_dispatch \
-    RELEASE_MODE=release EXPECTED_SOURCE="$source" \
+    RELEASE_MODE=release RUNTIME_PUBLICATION_ENABLED=true EXPECTED_SOURCE="$source" \
     "$@" bash "$root/scripts/admit-runtime-release.sh" >"$scratch/stdout" 2>"$scratch/stderr"
 }
 # A rejected context must fail and leave no outputs consumable by a privileged downstream job.
@@ -116,8 +116,17 @@ refused() {
   if admit "$@"; then fail 'forbidden source/CI/artifact context was admitted'; fi
   [[ ! -s "$scratch/output" ]] || fail 'refusal emitted reusable-job outputs'
 }
+for setting in '' false TRUE 1; do
+  reset_fixture
+  refused RUNTIME_PUBLICATION_ENABLED="$setting"
+  [[ ! -s "$scratch/calls" ]] || fail 'disabled manual release made an API request'
+  reset_fixture
+  published_event
+  refused "${release_context[@]}" RUNTIME_PUBLICATION_ENABLED="$setting"
+  [[ ! -s "$scratch/calls" ]] || fail 'disabled App release made an API request'
+done
 reset_fixture
-admit RUNTIME_PUBLICATION_ENABLED=false || fail 'the confirmed source must be admitted without the publication switch'
+admit || fail 'enabled release must admit the confirmed and verified source'
 printf 'source=%s\nci-run-id=123\nci-run-attempt=2\nimage-digest=%s\npublic-digest=%s\nversion=\n' "$source" "$image" "$public" >"$scratch/expected"
 cmp "$scratch/expected" "$scratch/output" || fail 'real admitted receipt outputs changed'
 [[ "$(grep -c '/zip$' "$scratch/calls")" == 1 ]] || fail 'valid input must download exactly one archive'
@@ -192,7 +201,7 @@ jq '.digest="sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
 refused
 reset_fixture
 printf '{"inputs":{"mode":"dry-run"}}\n' >"$scratch/event.json"
-admit RELEASE_MODE=dry-run || fail 'nonpublishing preflight must work without a source confirmation'
+admit RELEASE_MODE=dry-run RUNTIME_PUBLICATION_ENABLED=false || fail 'nonpublishing preflight must work while publication is disabled'
 reset_fixture
 published_event
 admit "${release_context[@]}" NEWER_MAIN_SOURCE="$other" || fail 'published App release must retain original CI after main advances'

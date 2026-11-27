@@ -17,6 +17,7 @@ readonly source=$GITHUB_SHA
 event=${GITHUB_EVENT_NAME:-}
 mode=${RELEASE_MODE:-}
 [[ "$mode" == release || "$mode" == dry-run ]] || fail 'release mode'
+[[ "$mode" == dry-run || "${RUNTIME_PUBLICATION_ENABLED:-}" == true ]] || fail 'runtime publication disabled'
 work="$(mktemp -d "$RUNNER_TEMP/runtime-admission.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 jq -se 'length==1 and (.[0]|type)=="object"' "$GITHUB_EVENT_PATH" >/dev/null || fail 'event document'

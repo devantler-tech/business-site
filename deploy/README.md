@@ -396,7 +396,10 @@ The dry run exercises the effective App credentials and release decision without
 creating a tag, release or registry publication. Require it to pass for the
 reviewed source before dispatching a release.
 
-Pass the full verified commit as `expected_source` to release the same source:
+Pass the full verified commit as `expected_source` to release the same source.
+The standing repository setting `RUNTIME_PUBLICATION_ENABLED` must be exactly
+`true` for both release dispatch and stable-tag publication. Leave it enabled
+between ordinary releases once production publishing has been authorized.
 
 ```sh
 gh workflow run release-runtime.yaml --ref main -f mode=release -f expected_source="$source"
