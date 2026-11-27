@@ -220,6 +220,11 @@ func TestWorkLeaseStorageRefusesWebRolePrivileges(t *testing.T) {
 	requireLeaseDatabaseError(t, err, "42501")
 	_, err = runtime.Exec(ctx, `SELECT fence FROM portal_work_leases`)
 	requireLeaseDatabaseError(t, err, "42501")
+	var canRunCreationGuard bool
+	err = runtime.QueryRow(ctx, `SELECT has_function_privilege('public.portal_require_active_work_lease()','EXECUTE')`).Scan(&canRunCreationGuard)
+	if err != nil || canRunCreationGuard {
+		t.Fatal("the web role has unexpected access to the lease creation guard", err)
+	}
 
 	migrator := migrationDB(t)
 	if _, err := migrator.Exec(ctx, `GRANT SELECT(fence) ON portal_work_leases TO portal_runtime`); err != nil {

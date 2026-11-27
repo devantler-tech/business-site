@@ -8,6 +8,44 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+func TestWorkLeaseStorageRefusesAReleaseOnCreation(t *testing.T) {
+	b, operator := approvalFixture(t)
+	savedApproval(t, b, operator)
+	db := migrationDB(t)
+	ctx := t.Context()
+	var previousFence int64
+	if err := db.QueryRow(ctx, `SELECT issued_fence FROM portal_work_lease_slot WHERE singleton`).Scan(&previousFence); err != nil {
+		t.Fatal("read the previous software fence", err)
+	}
+
+	const worker = "fictional-worker"
+	key := secret()
+	holder := beginFixtureTransaction(ctx, t, db)
+	if _, err := holder.Exec(ctx, `SELECT issued_fence FROM portal_work_lease_slot WHERE singleton FOR UPDATE`); err != nil {
+		t.Fatal("hold the slot while testing creation refusal", err)
+	}
+	refusal, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	_, err := db.Exec(refusal, `INSERT INTO portal_work_leases
+ (request_id,client_id,approval_id,approval_generation,queue_revision,actor_key,submission_key,expires_at,released_at)
+ SELECT request_id,client_id,approval_id,generation,revision,encode(sha256(convert_to($1,'UTF8')),'hex'),
+ $2,clock_timestamp()+interval '1 minute',clock_timestamp()+interval '5 seconds'
+ FROM portal_work_current CROSS JOIN portal_work_queue_revision WHERE request_id=$3`, worker, key, proposalRequestID)
+	requireLeaseDatabaseError(t, err, "55000")
+	if err := holder.Commit(ctx); err != nil {
+		t.Fatal("release the slot before retrying the claim", err)
+	}
+
+	fence, err := insertFixtureWorkLease(ctx, db, worker, key, time.Minute)
+	if err != nil || fence != previousFence+1 {
+		t.Fatalf("the refused insert consumed a fence or the submission key: next=%d prior=%d: %v", fence, previousFence, err)
+	}
+	var opened bool
+	if err := db.QueryRow(ctx, `SELECT released_at IS NULL FROM portal_work_leases WHERE fence=$1`, fence).Scan(&opened); err != nil || !opened {
+		t.Fatalf("the valid claim did not start active: %v", err)
+	}
+}
+
 func TestWorkLeaseStorageKeepsReleaseAndIdentityImmutable(t *testing.T) {
 	db, fence := activeWorkLeaseForRelease(t)
 	ctx := t.Context()
@@ -93,8 +131,9 @@ func TestWorkLeaseStoragePreservesPreUpgradeRelease(t *testing.T) {
 	db, fence := activeWorkLeaseForRelease(t)
 	ctx := t.Context()
 	if _, err := db.Exec(ctx, `DROP TRIGGER portal_guard_work_lease_release ON portal_work_leases;
- DROP FUNCTION portal_guard_work_lease_release();
- DELETE FROM portal_schema_version WHERE version=45`); err != nil {
+ DROP TRIGGER portal_admit_active_work_lease ON portal_work_leases;
+ DROP FUNCTION portal_guard_work_lease_release(),portal_require_active_work_lease();
+ DELETE FROM portal_schema_version WHERE version IN (45,46)`); err != nil {
 		t.Fatal("prepare the disposable pre-guard lease schema", err)
 	}
 	var priorRelease time.Time
