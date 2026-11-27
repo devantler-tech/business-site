@@ -48,13 +48,7 @@ func TestCreateOwnedEventReconcilesTheCanonicalResource(t *testing.T) {
 				requests = append(requests, request.Method)
 				switch request.Method {
 				case http.MethodGet:
-					if stored == "" {
-						w.WriteHeader(http.StatusNotFound)
-						return
-					}
-					w.Header().Set("Content-Type", ical.MIMEType)
-					w.Header().Set("ETag", etag)
-					_, _ = io.WriteString(w, stored)
+					writeOwnedEventFixture(w, stored, etag)
 				case http.MethodPut:
 					body, err := io.ReadAll(io.LimitReader(request.Body, 1<<15))
 					if err != nil || len(body) >= 1<<15 || request.Header.Get("If-None-Match") != "*" ||
@@ -93,4 +87,14 @@ func TestCreateOwnedEventReconcilesTheCanonicalResource(t *testing.T) {
 			}
 		})
 	}
+}
+
+func writeOwnedEventFixture(w http.ResponseWriter, data, etag string) {
+	if data == "" {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", ical.MIMEType)
+	w.Header().Set("ETag", etag)
+	_, _ = io.WriteString(w, data)
 }
