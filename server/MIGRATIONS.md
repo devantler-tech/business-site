@@ -313,6 +313,11 @@ locking the slot and revision. A missing, revoked or expired approval refuses
 the insert without consuming a fence. The worker must still select the oldest
 eligible request, validate all evidence and authenticate every operation.
 
+v43 records the first calendar creation attempt before contacting the provider.
+An unconfirmed attempt survives a restart and allows only a read of the
+reserved event on retry. Provider absence during that read leaves the attempt
+unresolved. The attempt follows retention of the immutable calendar intent.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or
