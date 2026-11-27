@@ -2,6 +2,8 @@ package identity
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -10,6 +12,66 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+func TestCalendarCreationSerializesProviderWritesForAReservation(t *testing.T) {
+	pool := fixtureDB(t)
+	reservation, _ := confirmedCalendarIntroduction(t, pool)
+	cfg := pool.Config()
+	cfg.MaxConns = 1
+	oneConnection, err := pgxpool.NewWithConfig(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer oneConnection.Close()
+	ctx, cancel := context.WithTimeout(t.Context(), 6*time.Second)
+	var workers sync.WaitGroup
+	defer func() {
+		cancel()
+		workers.Wait()
+	}()
+	entered, resume := make(chan struct{}), make(chan struct{})
+	var attempts atomic.Int32
+	const tag = `"serialized-version"`
+	create := func(ctx context.Context, _ caldav.OwnedEvent) (caldav.OwnedEventObservation, error) {
+		if attempts.Add(1) == 1 {
+			close(entered)
+			select {
+			case <-resume:
+			case <-ctx.Done():
+				return caldav.OwnedEventObservation{}, ctx.Err()
+			}
+		}
+		return caldav.OwnedEventObservation{Exists: true, ETag: tag}, nil
+	}
+	results := make(chan error, 2)
+	start := func(database *pgxpool.Pool) {
+		workers.Go(func() {
+			results <- reconcileAppointmentCalendarCreation(ctx, database, reservation, create)
+		})
+	}
+	start(oneConnection)
+	select {
+	case <-entered:
+	case <-ctx.Done():
+		t.Fatal("first worker did not reach the provider using one connection")
+	}
+	start(pool)
+	waitForFixtureDatabaseLock(ctx, t, pool, `SELECT EXISTS(SELECT 1 FROM pg_locks
+ WHERE locktype='advisory' AND database=(SELECT oid FROM pg_database WHERE datname=current_database())
+ AND objid=hashtext($1)::oid AND objsubid=2 AND NOT granted)`, reservation)
+	close(resume)
+	for range 2 {
+		if err := <-results; err != nil {
+			t.Fatal("calendar worker did not reconcile cleanly", err)
+		}
+	}
+	var observedTag string
+	err = pool.QueryRow(ctx, `SELECT provider_tag FROM portal_appointment_calendar_observations
+ WHERE reservation_id=$1 AND outcome='created'`, reservation).Scan(&observedTag)
+	if err != nil || attempts.Load() != 1 || observedTag != tag {
+		t.Fatalf("concurrent reconciliation repeated or lost the provider write: attempts=%d error=%v", attempts.Load(), err)
+	}
+}
 
 func TestCalendarCreationRecoversAfterProviderAccepts(t *testing.T) {
 	pool := fixtureDB(t)

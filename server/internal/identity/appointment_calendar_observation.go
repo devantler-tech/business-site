@@ -11,6 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const calendarReconciliationLock = 1869820526
+
 type calendarCreationCandidate struct {
 	event                              caldav.OwnedEvent
 	client, request, acceptance, order string
@@ -27,8 +29,16 @@ func reconcileAppointmentCalendarCreation(ctx context.Context, pool *pgxpool.Poo
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
+	// Take the per-reservation lock before any request, calendar or charge
+	// lock. Recheck the observation after a competing worker releases it.
+	connection, release, err := holdSessionLock(ctx, pool, calendarReconciliationLock, reservation)
+	if err != nil {
+		return creditWriteError(err)
+	}
+	defer release()
+
 	var event caldav.OwnedEvent
-	err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, connection, func(tx pgx.Tx) error {
 		candidate, err := lockPendingCalendarCreation(ctx, tx, reservation)
 		event = candidate.event
 		return err
@@ -52,7 +62,7 @@ func reconcileAppointmentCalendarCreation(ctx context.Context, pool *pgxpool.Poo
 		tag = &observation.ETag
 	}
 
-	err = pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, connection, func(tx pgx.Tx) error {
 		current, err := lockPendingCalendarCreation(ctx, tx, reservation)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil

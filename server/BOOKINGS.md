@@ -98,6 +98,11 @@ recording a match or conflict. For a consultation it also verifies settled
 funding before and after the provider call. A cancellation, withdrawal or
 funding reversal stops new creation attempts and leaves the identity available
 for event cleanup. An interrupted readback can use the original identity again.
+Workers hold a per-reservation lock from the first check through the provider
+call and observation commit. A second worker checks for a saved result before
+contacting the provider. The database transaction ends before the provider call
+starts. A lost connection can leave a write unresolved. Cleanup still needs to
+account for that possibility before treating provider absence as final.
 Retries carry that same binding across restarts and later revisions. Moving the
 calendar or changing accounts requires operator resolution. Rotating the same
 account's password preserves the binding, and each request still uses the
