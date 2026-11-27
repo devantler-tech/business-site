@@ -91,7 +91,7 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
       - name: Publish and sign the release as this repository
-        uses: devantler-tech/.github/actions/publish-app@61d8f70f25d7d5deb8bd914136b329b5a59ff43b # v22.7.4
+        uses: devantler-tech/.github/actions/publish-app@d45338f0ba120e87bdb05c1f70691afe2ec9d2ca # v22.7.5
         with:
           mode: prebuilt-webapp
           app-name: business-site
