@@ -79,6 +79,9 @@ var purgeRecords = []string{
 	`DELETE FROM portal_credit_revisions WHERE client_id=$1`,
 	`DELETE FROM portal_credit_transfers WHERE client_id=$1`,
 	`DELETE FROM portal_invoices WHERE client_id=$1`,
+	`DELETE FROM portal_hosting_period_heads WHERE client_id=$1`,
+	`DELETE FROM portal_hosting_period_revisions WHERE client_id=$1`,
+	`DELETE FROM portal_hosting_entitlements WHERE client_id=$1`,
 	`DELETE FROM portal_proposal_reviews WHERE client_id=$1`,
 	`DELETE FROM portal_proposal_acceptances WHERE client_id=$1`,
 	`DELETE FROM portal_proposal_visibility WHERE client_id=$1`,
@@ -98,7 +101,8 @@ var purgeRecords = []string{
 // tables hang off portal_orders.
 var clientTables = []string{"portal_memberships", "portal_invitations", "portal_contacts", "portal_requests", "portal_proposals",
 	"portal_proposal_visibility", "portal_proposal_reviews", "portal_proposal_acceptances", "portal_invoices", "portal_credit_transfers",
-	"portal_credit_revisions", "portal_numina_contacts", "portal_orders", "portal_work_approvals", "portal_work_revocations", "portal_work_current", "portal_launch_places", "portal_request_closures", "portal_appointment_reservations"}
+	"portal_credit_revisions", "portal_numina_contacts", "portal_orders", "portal_work_approvals", "portal_work_revocations", "portal_work_current", "portal_launch_places", "portal_request_closures", "portal_appointment_reservations",
+	"portal_hosting_entitlements"}
 
 // membershipLineages pairs every membership event with the first event of
 // its membership. An insert or baseline starts the chain, and each update or
@@ -116,7 +120,8 @@ const membershipLineages = `WITH RECURSIVE lineage(root,incarnation) AS (
 // a purge makes and which ends nothing; no other client their events name still
 // has records, so no other client loses the evidence that makes it due and no
 // membership of another client loses its history; and no remaining approval,
-// proposal share or proposal acceptance cites any of their events.
+// proposal share, proposal acceptance or hosting period revision cites any
+// of their events.
 var retentionHistory = membershipLineages + `
  SELECT l.root::text FROM lineage l JOIN portal_membership_transitions t ON t.incarnation=l.incarnation
  GROUP BY l.root
@@ -124,7 +129,8 @@ var retentionHistory = membershipLineages + `
  AND NOT bool_or(t.client_id<>$1 AND (` + clientHasRecords("t.client_id") + `))
  AND NOT bool_or(EXISTS (SELECT 1 FROM portal_work_approvals w WHERE t.incarnation IN (w.client_incarnation,w.operator_incarnation)))
  AND NOT bool_or(EXISTS (SELECT 1 FROM portal_proposal_visibility v WHERE v.operator_incarnation=t.incarnation))
- AND NOT bool_or(EXISTS (SELECT 1 FROM portal_proposal_acceptances a WHERE a.client_incarnation=t.incarnation))`
+ AND NOT bool_or(EXISTS (SELECT 1 FROM portal_proposal_acceptances a WHERE a.client_incarnation=t.incarnation))
+ AND NOT bool_or(EXISTS (SELECT 1 FROM portal_hosting_period_revisions p WHERE p.operator_incarnation=t.incarnation))`
 
 // deleteHistory deletes the whole chains that start with the events $1.
 const deleteHistory = `WITH RECURSIVE chain(incarnation) AS (
