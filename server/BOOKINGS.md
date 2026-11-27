@@ -113,3 +113,11 @@ acceptance of that agreement and a fresh calendar check. A committed appointment
 toward capacity after the provisional hold expires. A refund or dispute blocks another confirmation
 attempt. The paid appointment flag defaults off. The customer journey, provider reconciliation and
 recovery for an expired hold with a payment remain part of the activation work.
+
+## Customer appointment history
+
+The read-only appointment history shows confirmed and cancelled introductory
+calls for the signed-in customer's workspace. It displays Copenhagen time and
+lists upcoming calls before past or cancelled calls. The portal rechecks the
+original session before releasing the page. The independently default-off
+`portal-appointment-history` switch has no environment activation mapping.
