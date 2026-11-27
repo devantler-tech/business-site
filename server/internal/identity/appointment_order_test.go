@@ -106,6 +106,13 @@ func TestPaidAppointmentOrderKeepsItsSelectedSlot(t *testing.T) {
 			if err != nil || first.appointment != slot || first.MonthlyMinor != 0 {
 				t.Fatalf("exact held appointment could not be ordered: %v", err)
 			}
+			if err := pgx.BeginFunc(ctx, b.pool, func(tx pgx.Tx) error {
+				moved := selectedStart.Add(time.Hour)
+				_, err := policy.append(ctx, tx, reservation, client, slot.Revision, booking.Interval{Start: moved, End: moved.Add(30 * time.Minute)}, ref)
+				return err
+			}); !errors.Is(err, errProposalConflict) {
+				t.Fatalf("an order did not preserve its held revision: %v", err)
+			}
 			retry, err := place(slot)
 			if err != nil || retry.ID != first.ID {
 				t.Fatalf("identical retry did not keep the original order: %v", err)
@@ -140,6 +147,21 @@ func TestPaidAppointmentOrderKeepsItsSelectedSlot(t *testing.T) {
 			sent, err := readOriginalConfirmation(ctx, b.pool, proposalRequestID, client, acceptance, first.ID)
 			if err != nil || sent.State != confirmationSenderAccepted || sent.BodySHA256 != prepared.BodySHA256 {
 				t.Fatalf("sender acceptance did not retain the same appointment confirmation: %v", err)
+			}
+			for _, alreadyConfirmed := range []bool{false, true} {
+				tx := beginFixtureTransaction(ctx, t, b.pool)
+				hold := appointmentHold{PaidConfirmed: alreadyConfirmed}
+				if err := tx.QueryRow(ctx, `SELECT clock_timestamp() - interval '1 second'`).Scan(&hold.HeldUntil); err != nil {
+					t.Fatal(err)
+				}
+				err := b.svc.commitPaidAppointment(ctx, p, tx, first.Collection, hold)
+				if !alreadyConfirmed && !errors.Is(err, errProposalConflict) {
+					t.Fatalf("an expired first confirmation could still commit: %v", err)
+				}
+				if alreadyConfirmed && err != nil {
+					t.Fatalf("an expired hold blocked an already confirmed retry: %v", err)
+				}
+				rollbackProposalWrite(ctx, tx)
 			}
 			calendar := policy.provider
 			policy.provider = nil

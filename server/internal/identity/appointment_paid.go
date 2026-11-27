@@ -1,6 +1,11 @@
 package identity
 
-import "context"
+import (
+	"context"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+)
 
 // confirmPaidAppointment consumes the settled, accepted appointment order for
 // its own immutable revision. The reservation stays provisional until the
@@ -72,11 +77,30 @@ func (s *Foundation) confirmPaidAppointment(ctx context.Context, p Principal, re
 			return appointmentHold{}, err
 		}
 	}
-	if err := s.commitOrder(ctx, p, tx, func(ctx context.Context) bool {
-		return s.collectionReady(ctx, order.Collection) && s.paidAppointmentsReady(ctx)
-	}); err != nil {
+	if err := s.commitPaidAppointment(ctx, p, tx, order.Collection, hold); err != nil {
 		return appointmentHold{}, err
 	}
 	hold.PaidConfirmed = true
 	return hold, nil
+}
+
+func (s *Foundation) commitPaidAppointment(ctx context.Context, p Principal, tx pgx.Tx, collection string, hold appointmentHold) error {
+	if !s.collectionReady(ctx, collection) || !s.paidAppointmentsReady(ctx) {
+		return ErrDenied
+	}
+	return s.commitClientProposalGuarded(ctx, p, tx, time.Time{}, func() error {
+		if hold.PaidConfirmed {
+			return nil
+		}
+		// Use the database clock after the final flag evaluations. A
+		// provisional hold can expire while those evaluations are in flight.
+		var active bool
+		if err := tx.QueryRow(ctx, `SELECT $1::timestamptz > clock_timestamp()`, hold.HeldUntil).Scan(&active); err != nil {
+			return errTriageStorage
+		}
+		if !active {
+			return errProposalConflict
+		}
+		return nil
+	})
 }

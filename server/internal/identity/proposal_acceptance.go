@@ -136,8 +136,17 @@ func currentProposalReview(ctx context.Context, tx pgx.Tx, id, client string) (p
 }
 
 func (s *Foundation) commitClientProposal(ctx context.Context, p Principal, tx pgx.Tx, deadline time.Time) error {
+	return s.commitClientProposalGuarded(ctx, p, tx, deadline, nil)
+}
+
+func (s *Foundation) commitClientProposalGuarded(ctx context.Context, p Principal, tx pgx.Tx, deadline time.Time, guard func() error) error {
 	if !s.acceptanceReady(ctx) || ctx.Err() != nil || !time.Now().Before(p.expires) || (!deadline.IsZero() && !time.Now().Before(deadline)) {
 		return ErrDenied
+	}
+	if guard != nil {
+		if err := guard(); err != nil {
+			return err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return errTriageStorage

@@ -25,6 +25,7 @@ type appointmentHold struct {
 	PaidConfirmed         bool
 	cancellableUntil      *time.Time
 	recordedAt            time.Time
+	orderPlaced           bool
 }
 
 // appointmentQuoteRef identifies the immutable quote selected for a hold. A
@@ -66,7 +67,7 @@ func (holds appointmentHoldPolicy) append(ctx context.Context, tx pgx.Tx, reserv
 		prior.HeldUntil.Sub(prior.recordedAt) == appointmentHoldLifetime {
 		return prior, nil
 	}
-	if prior.Revision != expected || (prior.Revision > 0 && !prior.HeldUntil.After(now)) {
+	if prior.Revision != expected || prior.orderPlaced || (prior.Revision > 0 && !prior.HeldUntil.After(now)) {
 		return appointmentHold{}, errProposalConflict
 	}
 	if now.Add(appointmentHoldLifetime).After(slot.Start) {
@@ -204,6 +205,7 @@ func readLatestAppointmentHold(ctx context.Context, tx pgx.Tx, reservation, clie
 	err := tx.QueryRow(ctx, `SELECT v.revision,v.starts_at,v.ends_at,v.held_until,v.recorded_at,
  COALESCE(r.quote_request_id,''),COALESCE(r.quote_version,0),COALESCE(r.quote_sha256::text,''),
  i.reservation_id IS NOT NULL,c.reservation_id IS NOT NULL,i.cancellable_until,
+ EXISTS(SELECT 1 FROM portal_orders o WHERE o.appointment_reservation_id=r.id),
  EXISTS(SELECT 1 FROM portal_orders o
    JOIN portal_service_fulfillments f ON f.order_id=o.id
    JOIN portal_service_consumers c ON c.fulfillment_id=f.id AND c.service_kind='appointment'
@@ -216,7 +218,7 @@ func readLatestAppointmentHold(ctx context.Context, tx pgx.Tx, reservation, clie
  ORDER BY v.revision DESC LIMIT 1`, reservation, client).
 		Scan(&hold.Revision, &hold.Slot.Start, &hold.Slot.End, &hold.HeldUntil, &hold.recordedAt,
 			&hold.Quote.Request, &hold.Quote.Version, &hold.Quote.Hash,
-			&hold.IntroductionConfirmed, &hold.IntroductionCancelled, &hold.cancellableUntil, &hold.PaidConfirmed)
+			&hold.IntroductionConfirmed, &hold.IntroductionCancelled, &hold.cancellableUntil, &hold.orderPlaced, &hold.PaidConfirmed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return appointmentHold{}, nil
 	}

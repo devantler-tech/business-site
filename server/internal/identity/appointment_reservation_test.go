@@ -98,14 +98,15 @@ func TestAppointmentHoldsSerializeCompetingClients(t *testing.T) {
 		t.Fatal(err)
 	}
 	result := make(chan error, 1)
+	done := make(chan struct{})
 	go func() {
-		defer close(result)
+		defer close(done)
 		_, err := policy.append(ctx, second, secret(), "fictional-second-hold", 0, later, appointmentQuoteRef{})
 		result <- err
 	}()
 	defer func() {
 		cancel()
-		<-result
+		<-done
 	}()
 	waitForFixtureDatabaseLock(ctx, t, pool, `SELECT EXISTS(SELECT 1 FROM pg_locks
  WHERE pid=$1::int AND locktype='advisory' AND NOT granted)`, competingPID)
