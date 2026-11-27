@@ -152,6 +152,20 @@ func TestAppointmentCancellationRefusesSessionDeletedWhileWaiting(t *testing.T) 
 	assertNoIntroductionCancellation(t, b)
 }
 
+func TestAppointmentCancellationNeverCancelsPaidConsultations(t *testing.T) {
+	b, reservation, _ := confirmedCalendarConsultation(t)
+	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-appointment-history", "portal-appointment-cancellation"}, []any{true, true, true})
+	status, body, _ := b.request("GET", "/portal/appointments", nil, "")
+	if status != http.StatusOK || !strings.Contains(body, "Booking recorded") || strings.Contains(body, introductionCancellationPath) {
+		t.Fatalf("the paid consultation exposed the introduction action: status=%d", status)
+	}
+	form := url.Values{"csrf_token": {b.csrf("/portal/")}, "reservation": {reservation}, "revision": {"1"}}
+	if status, _, _ := b.request("POST", introductionCancellationPath, form, b.site.URL); status != http.StatusConflict {
+		t.Fatalf("the introduction action accepted a paid consultation: status=%d", status)
+	}
+	assertNoIntroductionCancellation(t, b)
+}
+
 func bookedCancellationFixture(t *testing.T) (*browserFixture, url.Values) {
 	t.Helper()
 	b, _ := appointmentHistoryFixture(t, "booked-intro-client", true)
