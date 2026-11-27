@@ -300,30 +300,30 @@
 <form class="operator-audit-search operator-panel" role="search" method="get" action="{{root}}/operator/audit">
   <input type="hidden" name="lang" value="{{.Lang}}">
   <div class="operator-audit-query">
-    <label for="audit-query">{{if eq .Lang "da"}}Søg i revisionsloggen{{else}}Search audit log{{end}}</label>
+    <label class="operator-audit-label" for="audit-query">{{if eq .Lang "da"}}Søg i revisionsloggen{{else}}Search audit log{{end}}</label>
     <input id="audit-query" name="q" type="search" value="{{.Search.Query}}" maxlength="120" aria-describedby="audit-query-help">
     <small id="audit-query-help">{{if eq .Lang "da"}}Søg efter en handling, et mål eller en aktør.{{else}}Search by action, target or actor ID.{{end}}</small>
   </div>
   <div>
-    <label for="audit-actor">{{if eq .Lang "da"}}Aktørtype{{else}}Actor type{{end}}</label>
+    <label class="operator-audit-label" for="audit-actor">{{if eq .Lang "da"}}Aktørtype{{else}}Actor type{{end}}</label>
     <select id="audit-actor" name="actor">
       <option value="">{{if eq .Lang "da"}}Alle aktører{{else}}All actors{{end}}</option>
       {{range .ActorChoices}}{{template "audit-choice" .}}{{end}}
     </select>
   </div>
   <div>
-    <label for="audit-outcome">{{if eq .Lang "da"}}Resultat{{else}}Outcome{{end}}</label>
+    <label class="operator-audit-label" for="audit-outcome">{{if eq .Lang "da"}}Resultat{{else}}Outcome{{end}}</label>
     <select id="audit-outcome" name="outcome">
       <option value="">{{if eq .Lang "da"}}Alle resultater{{else}}All outcomes{{end}}</option>
       {{range .OutcomeChoices}}{{template "audit-choice" .}}{{end}}
     </select>
   </div>
   <div>
-    <label for="audit-from">{{if eq .Lang "da"}}Fra (UTC){{else}}From (UTC){{end}}</label>
+    <label class="operator-audit-label" for="audit-from">{{if eq .Lang "da"}}Fra (UTC){{else}}From (UTC){{end}}</label>
     <input id="audit-from" name="from" type="date" value="{{.Search.From}}">
   </div>
   <div>
-    <label for="audit-to">{{if eq .Lang "da"}}Til og med (UTC){{else}}Through (UTC){{end}}</label>
+    <label class="operator-audit-label" for="audit-to">{{if eq .Lang "da"}}Til og med (UTC){{else}}Through (UTC){{end}}</label>
     <input id="audit-to" name="to" type="date" value="{{.Search.To}}">
   </div>
   <div class="operator-actions operator-audit-query">

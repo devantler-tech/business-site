@@ -760,7 +760,7 @@ main:has(> .client-home) {
   grid-column: 1 / -1;
 }
 
-.operator-audit-search > div > label,
+.operator-audit-label,
 .operator-audit-query small {
   display: block;
   margin-block-end: 0.25rem;
