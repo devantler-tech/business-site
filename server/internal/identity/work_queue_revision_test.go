@@ -13,20 +13,20 @@ import (
 func TestWorkQueueRevisionTracksCommittedChanges(t *testing.T) {
 	pool := fixtureDB(t)
 	ctx := t.Context()
-	start := fixtureQueueRevision(t, ctx, pool)
+	start := fixtureQueueRevision(ctx, t, pool)
 	tx := beginFixtureTransaction(ctx, t, pool)
 	if _, err := tx.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES
  ('https://broker.example.test','revision-client','revision-workspace','client')`); err != nil {
 		t.Fatal(err)
 	}
-	if fixtureQueueRevision(t, ctx, tx) != start {
+	if fixtureQueueRevision(ctx, t, tx) != start {
 		t.Fatal("the change was recorded before its transaction reached commit")
 	}
 	if err := tx.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}
 	// One write changes membership and its history. It advances the revision once.
-	if got := fixtureQueueRevision(t, ctx, pool); got != start+1 {
+	if got := fixtureQueueRevision(ctx, t, pool); got != start+1 {
 		t.Fatalf("one transaction left revision %d, expected %d", got, start+1)
 	}
 	tx = beginFixtureTransaction(ctx, t, pool)
@@ -36,7 +36,7 @@ func TestWorkQueueRevisionTracksCommittedChanges(t *testing.T) {
 	if err := tx.Rollback(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if got := fixtureQueueRevision(t, ctx, pool); got != start+1 {
+	if got := fixtureQueueRevision(ctx, t, pool); got != start+1 {
 		t.Fatal("an aborted change advanced the software queue revision")
 	}
 	_, err := pool.Exec(ctx, `UPDATE portal_work_queue_revision SET revision=0`)
@@ -74,7 +74,7 @@ func TestDistinctWorkQueueWritersWaitOnlyAtCommit(t *testing.T) {
 	go func() { done <- second.Commit(ctx) }()
 	waitForFixtureDatabaseLock(ctx, t, migrator,
 		`SELECT count(DISTINCT pid)=2 FROM pg_locks WHERE pid=ANY($1::integer[]) AND NOT granted`, pids)
-	if fixtureQueueRevision(t, ctx, holder) != firstRevision {
+	if fixtureQueueRevision(ctx, t, holder) != firstRevision {
 		t.Fatal("the locked revision changed before either commit")
 	}
 	if err := holder.Commit(ctx); err != nil {
@@ -85,7 +85,7 @@ func TestDistinctWorkQueueWritersWaitOnlyAtCommit(t *testing.T) {
 			t.Fatal("the deferred commit failed after release", err)
 		}
 	}
-	if got := fixtureQueueRevision(t, ctx, pool); got != firstRevision+2 {
+	if got := fixtureQueueRevision(ctx, t, pool); got != firstRevision+2 {
 		t.Fatalf("two committed writers left revision %d, expected %d", got, firstRevision+2)
 	}
 }
@@ -114,7 +114,7 @@ func TestWorkQueueRevisionCoversEligibilityWriters(t *testing.T) {
 	}
 }
 
-func fixtureQueueRevision(t *testing.T, ctx context.Context, source queryRower) int64 {
+func fixtureQueueRevision(ctx context.Context, t *testing.T, source queryRower) int64 {
 	t.Helper()
 	var revision int64
 	if err := source.QueryRow(ctx, `SELECT revision FROM portal_work_queue_revision`).Scan(&revision); err != nil {
