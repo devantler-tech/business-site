@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 )
 
 func TestProfilesRequireExactCustomerOrganizationAndIDs(t *testing.T) {
-	good := `{"userId":"user-one","details":{"resourceOwner":"customers"},"human":{"profile":{"displayName":"Ada Lovelace"},"email":{"email":"ada@example.test"}}}`
+	good := `{"userId":"user-one","state":"USER_STATE_ACTIVE","details":{"resourceOwner":"customers"},"human":{"profile":{"displayName":"Ada Lovelace"},"email":{"email":"ada@example.test","isVerified":true}}}`
 	query := map[string]any{
 		"query": map[string]any{"limit": "2"},
 		"queries": []any{
@@ -21,13 +22,15 @@ func TestProfilesRequireExactCustomerOrganizationAndIDs(t *testing.T) {
 		},
 	}
 	for _, test := range []struct {
-		name, rows string
-		refuse     bool
+		name, rows       string
+		refuse, verified bool
 	}{
-		{"matching human", good, false},
-		{"other organization", `{"userId":"user-one","details":{"resourceOwner":"staff"},"human":{}}`, true},
-		{"unexpected person", `{"userId":"user-three","details":{"resourceOwner":"customers"},"human":{}}`, true},
-		{"duplicate", good + "," + good, true},
+		{"matching human", good, false, true},
+		{"missing verification", strings.Replace(good, `,"isVerified":true`, "", 1), false, false},
+		{"inactive human", strings.Replace(good, "USER_STATE_ACTIVE", "USER_STATE_INACTIVE", 1), false, false},
+		{"other organization", `{"userId":"user-one","details":{"resourceOwner":"staff"},"human":{}}`, true, false},
+		{"unexpected person", `{"userId":"user-three","details":{"resourceOwner":"customers"},"human":{}}`, true, false},
+		{"duplicate", good + "," + good, true, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := directoryFixture(t, func(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +49,7 @@ func TestProfilesRequireExactCustomerOrganizationAndIDs(t *testing.T) {
 					t.Fatalf("unexpected account was returned: %v", err)
 				}
 			} else if err != nil || len(profiles) != 1 ||
-				profiles["user-one"] != (customeridentity.Profile{Name: "Ada Lovelace", Email: "ada@example.test"}) {
+				profiles["user-one"] != (customeridentity.Profile{Name: "Ada Lovelace", Email: "ada@example.test", EmailVerified: test.verified}) {
 				t.Fatalf("matching customer profile was not returned: %v", err)
 			}
 		})

@@ -53,7 +53,8 @@ type user struct {
 			DisplayName string `json:"displayName"`
 		} `json:"profile"`
 		Email struct {
-			Address string `json:"email"`
+			Address  string `json:"email"`
+			Verified bool   `json:"isVerified"`
 		} `json:"email"`
 	} `json:"human"`
 }
