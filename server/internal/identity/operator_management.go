@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
+	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 	"github.com/jackc/pgx/v5"
@@ -29,6 +33,12 @@ type managementPage struct {
 	Workspaces       []workspaceView
 	Invitations      []pendingInvitation
 	SupportAvailable bool
+	View, Query      string
+	Detail           *workspaceView
+	SelectedMember   *workspaceMember
+	InvitationCounts map[string]int
+	Closed           []closedCustomerWorkspace
+	Stale            []staleWorkspaceInvitations
 }
 
 func (b *browser) operatorCustomersPage(w http.ResponseWriter, r *http.Request) {
@@ -37,22 +47,54 @@ func (b *browser) operatorCustomersPage(w http.ResponseWriter, r *http.Request) 
 		if authority == nil {
 			return nil, ErrDenied
 		}
-		spaces, err := b.workspaces(ctx)
+		query, err := url.ParseQuery(r.URL.RawQuery)
 		if err != nil {
+			return nil, errOperatorInput
+		}
+		data := managementPage{pageData: b.operatorData(r, "operator-customers", client)}
+		if query.Get("view") == "cleanup-confirm" {
+			detail := cleanupPage{managementPage: data}
+			if err := b.readCleanupSelection(ctx, r, &detail); err != nil {
+				return nil, err
+			}
+			var buffer bytes.Buffer
+			err := b.templates().ExecuteTemplate(&buffer, "operator.html", detail)
+			return buffer.Bytes(), err
+		}
+		if err := b.loadCustomerWorkspacePage(ctx, &data, query); err != nil {
 			return nil, err
 		}
-		invitations, err := b.pendingInvitations(ctx)
-		if err != nil {
-			return nil, err
+		if data.View == "" {
+			b.identifyDirectoryPeople(ctx, &data, authority.principal.subject)
+			data.Workspaces = slices.DeleteFunc(data.Workspaces, func(workspace workspaceView) bool {
+				return !workspaceMatchesSearch(workspace, data.Invitations, data.Query)
+			})
 		}
-		data := managementPage{pageData: b.operatorData(r, "operator-customers", client), Workspaces: spaces, Invitations: invitations, SupportAvailable: b.foundation.supportReady(ctx)}
-		b.identifyDirectoryPeople(ctx, &data, authority.principal.subject)
+		if data.View == "workspace" || data.View == "close" || data.View == "remove" {
+			b.identifyDirectoryPeople(ctx, &data, authority.principal.subject)
+			data.Detail = &data.Workspaces[0]
+			data.Title = data.Detail.Name
+			data.Intro = ""
+			data.SupportAvailable = b.foundation.supportReady(ctx)
+		}
+		if data.View == "remove" {
+			subject := query.Get("member")
+			for i := range data.Detail.Members {
+				member := &data.Detail.Members[i]
+				if member.Role == "client" && member.Subject == subject {
+					data.SelectedMember = member
+				}
+			}
+			if data.SelectedMember == nil {
+				return nil, errOperatorInput
+			}
+		}
 		var buffer bytes.Buffer
 		err = b.templates().ExecuteTemplate(&buffer, "operator.html", data)
 		return buffer.Bytes(), err
 	})
 	if status != http.StatusOK {
-		if status != http.StatusServiceUnavailable {
+		if status != http.StatusServiceUnavailable && status != http.StatusBadRequest {
 			status = http.StatusForbidden
 		}
 		b.render(w, r, status, "unavailable", "", "")
@@ -103,7 +145,20 @@ func managementFields(r *http.Request, fields ...string) (managementInput, error
 }
 
 func (b *browser) revokeCustomerInvitation(ctx context.Context, r *http.Request) (any, error) {
-	input, err := managementFields(r, "subject")
+	var input managementInput
+	var expires *time.Time
+	var err error
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") && r.ParseForm() == nil && r.PostForm.Has("expires") {
+		var expiresText string
+		err = decodeOperatorInput(r, nil, map[string]*string{"subject": &input.Subject, "workspace": &input.Workspace, "expires": &expiresText})
+		at, dateErr := time.Parse(time.RFC3339Nano, expiresText)
+		if err != nil || dateErr != nil || !validCustomerWorkspace(input.Workspace) {
+			return nil, errOperatorInput
+		}
+		expires = &at
+	} else {
+		input, err = managementFields(r, "subject")
+	}
 	if err != nil || input.Subject == "" || len(input.Subject) > 512 || strings.ContainsFunc(input.Subject, unicode.IsControl) || !b.foundation.canInvite(input.Subject, "client") {
 		return nil, errOperatorInput
 	}
@@ -119,8 +174,14 @@ func (b *browser) revokeCustomerInvitation(ctx context.Context, r *http.Request)
 	if !b.operatorMutationAllowed(ctx, tx) {
 		return nil, ErrDenied
 	}
-	result, err := tx.Exec(ctx, `UPDATE portal_invitations SET revoked=true WHERE issuer=$1 AND subject=$2 AND role='client' AND NOT revoked AND expires_at>now()`, b.foundation.broker.issuer, input.Subject)
-	if err != nil || result.RowsAffected() != 1 {
+	result, err := tx.Exec(ctx, `UPDATE portal_invitations SET revoked=true
+ WHERE issuer=$1 AND subject=$2 AND role='client' AND NOT revoked AND expires_at>now()
+ AND ($3='' OR client_id=$3) AND ($4::timestamptz IS NULL OR expires_at=$4)`,
+		b.foundation.broker.issuer, input.Subject, input.Workspace, expires)
+	if err != nil {
+		return nil, err
+	}
+	if result.RowsAffected() != 1 {
 		return nil, ErrDenied
 	}
 	if !b.operatorMutationAllowed(ctx, tx) {
@@ -133,6 +194,17 @@ func (b *browser) revokeCustomerInvitation(ctx context.Context, r *http.Request)
 }
 
 func (b *browser) createCustomerWorkspace(ctx context.Context, r *http.Request) (any, error) {
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") && r.ParseForm() == nil && r.PostForm.Has("display_name") {
+		var displayName string
+		if err := decodeOperatorInput(r, nil, map[string]*string{"display_name": &displayName}); err != nil {
+			return nil, err
+		}
+		name := strings.TrimSpace(displayName)
+		if !validWorkspaceDisplayName(name) {
+			return nil, errOperatorInput
+		}
+		return b.createNamedWorkspace(ctx, name)
+	}
 	input, err := managementFields(r, "workspace")
 	if err != nil || !validCustomerWorkspace(input.Workspace) {
 		return nil, errOperatorInput
@@ -166,11 +238,74 @@ func (b *browser) createCustomerWorkspace(ctx context.Context, r *http.Request) 
 	if !b.operatorMutationAllowed(ctx, tx) {
 		return nil, ErrDenied
 	}
-	if err = tx.Commit(ctx); err != nil {
+	members, err := b.workspaceMembers(ctx, tx, input.Workspace)
+	if err != nil {
 		return nil, err
 	}
-	members, err := b.membersOfWorkspace(ctx, input.Workspace)
-	return workspaceView{ID: input.Workspace, Name: name, Members: members}, err
+	if !b.operatorMutationAllowed(ctx, tx) {
+		return nil, ErrDenied
+	}
+	return workspaceView{ID: input.Workspace, Name: name, Members: members}, tx.Commit(ctx)
+}
+
+// Display names can be reused after closure. The new workspace has a different
+// identity, so invitations never expose records retained for the previous one.
+func (b *browser) createNamedWorkspace(ctx context.Context, name string) (any, error) {
+	if humanOperatorAuthority(ctx) == nil {
+		return nil, ErrDenied
+	}
+	tx, err := b.foundation.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	const nameLock = 1869820526
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1::int,hashtext(lower($2)))`, nameLock, name); err != nil {
+		return nil, err
+	}
+	rows, err := tx.Query(ctx, `WITH inventory AS (`+activeWorkspaceInventory+`)
+ SELECT i.id,COALESCE(w.display_name,i.id) FROM inventory i
+ LEFT JOIN portal_workspace_settings w ON w.workspace_id=i.id
+ WHERE lower(COALESCE(w.display_name,i.id))=lower($2) AND w.closed_at IS NULL
+ LIMIT 2`, b.foundation.broker.issuer, name)
+	if err != nil {
+		return nil, err
+	}
+	type named struct{ ID, Name string }
+	matching, err := pgx.CollectRows(rows, pgx.RowToStructByPos[named])
+	if err != nil {
+		return nil, err
+	}
+	if len(matching) > 1 {
+		return nil, errOperatorInput
+	}
+	if len(matching) == 1 {
+		if !validCustomerWorkspace(matching[0].ID) {
+			return nil, errOperatorInput
+		}
+		setOperatorTarget(ctx, matching[0].ID)
+		return workspaceView{ID: matching[0].ID, Name: matching[0].Name}, nil
+	}
+	if !b.operatorMutationAllowed(ctx, tx) {
+		return nil, ErrDenied
+	}
+	id := "ws-" + strings.ToLower(secret())
+	setOperatorTarget(ctx, id)
+	if _, err = tx.Exec(ctx, `INSERT INTO portal_workspaces(id) VALUES($1)`, id); err != nil {
+		return nil, fmt.Errorf("create workspace: %w", err)
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO portal_workspace_settings(workspace_id,display_name) VALUES($1,$2)`, id, name); err != nil {
+		return nil, fmt.Errorf("name workspace: %w", err)
+	}
+	if !b.operatorMutationAllowed(ctx, tx) {
+		return nil, ErrDenied
+	}
+	return workspaceView{ID: id, Name: name, Members: []workspaceMember{}}, tx.Commit(ctx)
+}
+
+func validWorkspaceDisplayName(name string) bool {
+	return name != "" && strings.TrimSpace(name) == name && utf8.ValidString(name) &&
+		utf8.RuneCountInString(name) <= 100 && !strings.ContainsFunc(name, unicode.IsControl)
 }
 
 func (b *browser) customerWorkspaceMembers(ctx context.Context, r *http.Request) (any, error) {
@@ -183,7 +318,13 @@ func (b *browser) customerWorkspaceMembers(ctx context.Context, r *http.Request)
 }
 
 func (b *browser) membersOfWorkspace(ctx context.Context, workspace string) ([]workspaceMember, error) {
-	rows, err := b.foundation.pool.Query(ctx, `SELECT subject,role,revoked FROM portal_memberships WHERE issuer=$1 AND client_id=$2
+	return b.workspaceMembers(ctx, b.foundation.pool, workspace)
+}
+
+func (b *browser) workspaceMembers(ctx context.Context, db interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}, workspace string) ([]workspaceMember, error) {
+	rows, err := db.Query(ctx, `SELECT subject,role,revoked FROM portal_memberships WHERE issuer=$1 AND client_id=$2
  AND NOT EXISTS (SELECT 1 FROM portal_workspace_settings WHERE workspace_id=$2 AND closed_at IS NOT NULL)
  ORDER BY role,subject LIMIT $3`, b.foundation.broker.issuer, workspace, operatorListLimit+1)
 	if err != nil {

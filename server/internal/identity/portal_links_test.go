@@ -11,10 +11,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
+	"unicode"
 
 	"golang.org/x/net/html"
 
@@ -50,7 +52,7 @@ func TestPortalLinkPreprocessor(t *testing.T) {
 		}
 		return
 	}
-	for name, want := range map[string]int{"portal.html": 24, "contact.html": 12, "requests.html": 38, "triage.html": 24, "work-review.html": 18, "operator.html": 14} {
+	for name, want := range map[string]int{"portal.html": 24, "contact.html": 12, "requests.html": 38, "triage.html": 24, "work-review.html": 18, "operator.html": 26} {
 		t.Run(name, func(t *testing.T) {
 			pages, err := renderedLinkPages(name)
 			if err != nil || len(pages) != want {
@@ -203,7 +205,11 @@ func preprocessLinkInput(source string) ([]byte, error) {
 	if err != nil || !bytes.Equal(data, embedded) {
 		return nil, errors.New("input differs from the compiled source")
 	}
-	pages, err := renderedLinkPages(name)
+	renderedName := name
+	if name == "operator-workspaces.html" {
+		renderedName = "operator.html"
+	}
+	pages, err := renderedLinkPages(renderedName)
 	if err != nil {
 		return nil, err
 	}
@@ -280,6 +286,11 @@ func renderedLinkPagesFor(name string, templates *template.Template, b *browser)
 							Requests: []supportRequest{{Product: "website", Submitted: request.Submitted, ProposalShared: true}},
 						})
 					}
+					if view.kind == "operator-invite" {
+						return templates.ExecuteTemplate(w, name, managementPage{
+							pageData: d, Workspaces: []workspaceView{{ID: "fictional-workspace", Name: "Fictional workspace", Manageable: true}},
+						})
+					}
 					if view.events {
 						d.Audit = []auditEntry{
 							{At: request.Submitted, Kind: "operator", Subject: "fictional-operator", Action: "invitations.create", Target: "fictional-workspace", Outcome: "allowed"},
@@ -287,6 +298,22 @@ func renderedLinkPagesFor(name string, templates *template.Template, b *browser)
 						}
 					}
 					return templates.ExecuteTemplate(w, name, d)
+				})
+				if err != nil {
+					return nil, err
+				}
+			}
+			for _, view := range []string{"workspace", "close", "remove", "closed", "cleanup", "cleanup-confirm"} {
+				err := add(customerWorkspacePath, func(w *httptest.ResponseRecorder, r *http.Request) error {
+					d := b.operatorData(r, "operator-customers", "fictional-operator")
+					d.CSRF = "fictional-csrf"
+					member := workspaceMember{Subject: "fictional-member", Role: "client"}
+					detail := workspaceView{ID: "fictional-workspace", Name: "Fictional workspace", Manageable: true, Members: []workspaceMember{member}}
+					data := managementPage{pageData: d, View: view, Detail: &detail, SelectedMember: &member, SupportAvailable: true,
+						Invitations: []pendingInvitation{{Subject: "fictional-invitation", Workspace: detail.ID, Expires: request.Submitted}},
+						Stale:       []staleWorkspaceInvitations{{Workspace: detail.ID, Name: detail.Name, Count: 1}},
+					}
+					return templates.ExecuteTemplate(w, name, cleanupPage{managementPage: data, CleanupCount: 1, CleanupFingerprint: "fictional-preview"})
 				})
 				if err != nil {
 					return nil, err
@@ -658,8 +685,34 @@ func registeredLinkTarget(mux *http.ServeMux, method string, target *url.URL) er
 				return errors.New("invalid target funding review")
 			}
 		case "workspace":
-			if pattern != "GET /portal/operator/invitations/new" || !validCustomerWorkspace(values[0]) {
-				return errors.New("invalid invitation workspace")
+			switch pattern {
+			case "GET /portal/operator/invitations/new", "GET /portal/operator/customers":
+				if validCustomerWorkspace(values[0]) || pattern == "GET /portal/operator/customers" && values[0] == operatorWorkspace {
+					continue
+				}
+			}
+			return errors.New("invalid target workspace")
+		case "view":
+			switch values[0] {
+			case "closed", "cleanup", "cleanup-confirm", "close", "remove":
+				if pattern == "GET /portal/operator/customers" {
+					continue
+				}
+			}
+			return errors.New("invalid workspace view")
+		case "member":
+			if pattern != "GET /portal/operator/customers" || query.Get("view") != "remove" ||
+				values[0] == "" || len(values[0]) > 512 || strings.ContainsFunc(values[0], unicode.IsControl) {
+				return errors.New("invalid workspace member")
+			}
+		case "focus":
+			if values[0] != "workspace" || !slices.Contains([]string{
+				"POST /portal/operator/api/invitations", "POST /portal/operator/api/invitations/revoke",
+				"POST /portal/operator/api/workspaces/rename", "POST /portal/operator/api/workspaces/delete",
+				"POST /portal/operator/api/members/deactivate", "POST /portal/operator/api/members/reactivate",
+				"POST /portal/operator/api/members/remove",
+			}, pattern) {
+				return errors.New("invalid workspace action return")
 			}
 		default:
 			return errors.New("unexpected target query")

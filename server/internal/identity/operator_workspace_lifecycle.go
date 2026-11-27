@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strings"
 	"unicode"
-	"unicode/utf8"
 
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 	"github.com/jackc/pgx/v5"
@@ -45,8 +44,7 @@ func (b *browser) renameCustomerWorkspace(ctx context.Context, r *http.Request) 
 	}
 	fields := map[string]*string{"workspace": &input.Workspace, "name": &input.Name}
 	if err := decodeOperatorInput(r, &input, fields); err != nil || !validCustomerWorkspace(input.Workspace) ||
-		input.Name == "" || strings.TrimSpace(input.Name) != input.Name || !utf8.ValidString(input.Name) ||
-		utf8.RuneCountInString(input.Name) > 100 || strings.ContainsFunc(input.Name, unicode.IsControl) {
+		!validWorkspaceDisplayName(input.Name) {
 		return nil, errOperatorInput
 	}
 	return b.changeWorkspace(ctx, input.Workspace, func(tx pgx.Tx, _ string, closed bool) (any, error) {

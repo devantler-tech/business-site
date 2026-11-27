@@ -317,7 +317,7 @@ func (s *Foundation) Begin(ctx context.Context) (Attempt, error) {
 // row key is a random digest that is never shown.
 // Operators are never invited: they come from the server configuration.
 func (s *Foundation) Invite(ctx context.Context, i Invitation) error {
-	return s.invite(ctx, i, func(ctx context.Context) (pgx.Tx, error) {
+	return s.invite(ctx, i, false, func(ctx context.Context) (pgx.Tx, error) {
 		return s.pool.Begin(ctx)
 	}, nil)
 }
@@ -330,7 +330,7 @@ const invitationIdentityAvailable = `NOT EXISTS (
 
 // invite retains the control-plane rules and permits the operator API to bind
 // its final commit to the original caller on its already locked connection.
-func (s *Foundation) invite(ctx context.Context, i Invitation, begin func(context.Context) (pgx.Tx, error), checkpoint func(pgx.Tx) error) error {
+func (s *Foundation) invite(ctx context.Context, i Invitation, existingWorkspace bool, begin func(context.Context) (pgx.Tx, error), checkpoint func(pgx.Tx) error) error {
 	if i.ClientID == previewWorkspace || i.Subject == previewSubject {
 		return ErrDenied
 	}
@@ -358,6 +358,15 @@ func (s *Foundation) invite(ctx context.Context, i Invitation, begin func(contex
 	}
 	if !open {
 		return ErrDenied
+	}
+	if existingWorkspace {
+		found, err := workspaceAcceptsInvitations(ctx, tx, i.Issuer, i.ClientID)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return errOperatorInput
+		}
 	}
 	result, err := tx.Exec(ctx, `INSERT INTO portal_invitations(token_digest,issuer,subject,client_id,role,expires_at)
  SELECT $3,$1,$2,$4,$5,$6 WHERE `+invitationIdentityAvailable, i.Issuer, i.Subject, digest(secret()), i.ClientID, i.Role, i.Expires)

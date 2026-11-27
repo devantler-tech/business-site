@@ -151,26 +151,27 @@ func TestOperatorManagementPageUsesNativeActions(t *testing.T) {
 	b := newOperatorBrowserFixture(t)
 	b.invite("pending-customer", "client-a", "client")
 	for lang, labels := range map[string]struct{ heading, searchLabel string }{
-		"en": {"Customers and workspaces", "Find a workspace or member"},
-		"da": {"Kunder og arbejdsområder", "Find et arbejdsområde eller et medlem"},
+		"en": {"Customers and workspaces", "Find a workspace, customer or invitation"},
+		"da": {"Kunder og arbejdsområder", "Find et arbejdsområde, en kunde eller en invitation"},
 	} {
 		status, body, _ := b.request("GET", "/portal/operator/customers?lang="+lang, nil, "")
-		if status != http.StatusOK || !strings.Contains(body, labels.heading) || !strings.Contains(body, "pending-customer") {
+		if status != http.StatusOK || !strings.Contains(body, labels.heading) || !strings.Contains(body, "client-a") {
 			t.Fatalf("management page unavailable in %s: %d", lang, status)
 		}
-		if !strings.Contains(body, "data-workspace-directory") ||
-			!strings.Contains(body, `data-directory-search hidden`) ||
-			!strings.Contains(body, `for="operator-directory-query">`+labels.searchLabel) ||
-			!strings.Contains(body, `id="operator-directory-query" type="search"`) {
+		if !strings.Contains(body, `role="search" method="get"`) ||
+			!strings.Contains(body, `for="directory-query">`+labels.searchLabel) ||
+			!strings.Contains(body, `id="directory-query" name="q" type="search"`) {
 			t.Fatalf("accessible workspace search is missing in %s", lang)
 		}
-		for _, action := range []string{"/invitations/revoke", "/workspaces", "/workspaces/rename", "/workspaces/delete"} {
-			if !strings.Contains(body, `method="post" action="`+operatorAPIRoot+action+`?lang=`+lang+`"`) {
+		_, detail, _ := b.request("GET", "/portal/operator/customers?lang="+lang+"&workspace=client-a", nil, "")
+		_, closePage, _ := b.request("GET", "/portal/operator/customers?lang="+lang+"&workspace=client-a&view=close", nil, "")
+		for action, page := range map[string]string{"/invitations/revoke": detail, "/workspaces": body, "/workspaces/rename": detail, "/workspaces/delete": closePage} {
+			if !strings.Contains(page, `method="post" action="`+operatorAPIRoot+action+`?lang=`+lang) || !csrfInput.MatchString(page) {
 				t.Fatalf("%s native action missing in %s", action, lang)
 			}
 		}
-		if !csrfInput.MatchString(body) {
-			t.Fatal("management page has no CSRF token")
+		if strings.Contains(body, "<details") || strings.Contains(detail, "<details") {
+			t.Fatal("workspace management still hides rows in disclosures")
 		}
 	}
 }

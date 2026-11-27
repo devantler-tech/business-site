@@ -19,6 +19,7 @@ import (
 
 func TestOperatorCanStartAnInvitationWithoutClientPreview(t *testing.T) {
 	b := newOperatorBrowserFixture(t)
+	b.invite("pending-customer", "fixture-customer", "client")
 	b.atRoot()
 	checkOperatorWorkspaceActions(t, b, false)
 }
@@ -37,7 +38,7 @@ func checkOperatorWorkspaceActions(t *testing.T, b *browserFixture, previewAvail
 			}
 		}
 		status, page, _ := b.request(http.MethodGet, invitePath, nil, "")
-		if status != http.StatusOK || !strings.Contains(page, `action="/operator/api/invitations?lang=`+lang+`"`) {
+		if status != http.StatusOK || !strings.Contains(page, `action="/operator/api/invitations?lang=`+lang+`&amp;focus=workspace"`) && !strings.Contains(page, "#new-workspace") {
 			t.Fatalf("operator could not reach the invitation form (%s), status=%d", lang, status)
 		}
 	}

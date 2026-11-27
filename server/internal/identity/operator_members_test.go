@@ -172,13 +172,13 @@ func TestOperatorRetriesDeactivationWithoutRestoringAccess(t *testing.T) {
 	if status, _, _ := b.request("POST", operatorAPIRoot+"/members/deactivate", form, b.site.URL); status != http.StatusServiceUnavailable {
 		t.Fatal("the failed provider did not retain its failure", status)
 	}
-	status, body, _ := b.request("GET", "/portal/operator/customers?lang=en", nil, "")
+	status, body, _ := b.request("GET", "/portal/operator/customers?lang=en&workspace=client-a", nil, "")
 	if status != http.StatusOK || !strings.Contains(body, "Retry deactivation") {
 		t.Fatal("disabled member has no deactivation retry in the inventory", status)
 	}
-	form = workNativeForm(t, body, `members/deactivate\?lang=en`)
-	status, headers := managementNativeRequest(b, operatorAPIRoot+"/members/deactivate?lang=en", form)
-	if status != http.StatusSeeOther || headers.Get("Location") != "/portal/operator/customers?lang=en" {
+	form = workNativeForm(t, body, `members/deactivate\?lang=en&amp;focus=workspace`)
+	status, headers := managementNativeRequest(b, operatorAPIRoot+"/members/deactivate?lang=en&focus=workspace", form)
+	if status != http.StatusSeeOther || headers.Get("Location") != "/portal/operator/customers?lang=en&workspace=client-a" {
 		t.Fatal("native deactivation retry did not complete", status)
 	}
 	var revoked bool

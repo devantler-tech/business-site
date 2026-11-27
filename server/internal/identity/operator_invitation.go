@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -22,6 +23,8 @@ type customerInvitationInput struct {
 	Email     string `json:"email"`
 	Workspace string `json:"workspace"`
 }
+
+var errInvitationAccess = errors.New("invitation conflicts with existing access")
 
 func validCustomerWorkspace(workspace string) bool {
 	return workspace != "" && workspace != operatorWorkspace && workspace != previewWorkspace && len(workspace) <= 100 && strings.TrimSpace(workspace) == workspace && utf8.ValidString(workspace) && !strings.ContainsFunc(workspace, unicode.IsControl)
@@ -76,7 +79,11 @@ func (b *browser) createCustomerInvitation(ctx context.Context, r *http.Request)
 	if b.foundation.customers == nil || !b.operatorMutationAllowed(ctx, b.foundation.pool) {
 		return nil, ErrDenied
 	}
+	selected := r.URL.Query().Get("focus") == "workspace"
 	open, err := workspaceOpen(ctx, b.foundation.pool, input.Workspace)
+	if err == nil && open && selected {
+		open, err = workspaceAcceptsInvitations(ctx, b.foundation.pool, b.foundation.broker.issuer, input.Workspace)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -90,54 +97,88 @@ func (b *browser) createCustomerInvitation(ctx context.Context, r *http.Request)
 	subject := customeridentity.DexSubject(userID, customeridentity.ZitadelConnectorID)
 	invitation := Invitation{b.foundation.broker.issuer, subject, input.Workspace, "client", time.Now().Add(7 * 24 * time.Hour)}
 	setOperatorTarget(ctx, input.Workspace)
-	if err := b.issueDirectoryInvitation(ctx, invitation, userID); err != nil {
+	expires, err := b.issueDirectoryInvitation(ctx, invitation, userID, selected)
+	if err != nil {
 		return nil, err
 	}
-	return pendingInvitation{Subject: subject, Workspace: input.Workspace, Role: "client", Expires: invitation.Expires}, nil
+	return pendingInvitation{Subject: subject, Workspace: input.Workspace, Role: "client", Expires: expires}, nil
 }
 
-func (b *browser) issueDirectoryInvitation(ctx context.Context, invitation Invitation, userID string) error {
+func (b *browser) issueDirectoryInvitation(ctx context.Context, invitation Invitation, userID string, selected bool) (time.Time, error) {
 	if invitation.Subject == "" || !b.foundation.canInvite(invitation.Subject, "client") {
-		return ErrDenied
+		return time.Time{}, ErrDenied
 	}
 	connection, release, err := b.foundation.customerIdentityConnection(ctx, invitation.Subject)
 	if err != nil {
-		return err
+		return time.Time{}, err
 	}
 	defer release()
 	if !b.operatorMutationAllowed(ctx, connection) {
-		return ErrDenied
+		return time.Time{}, ErrDenied
 	}
 	var available bool
 	if err := connection.QueryRow(ctx, `SELECT `+invitationIdentityAvailable, invitation.Issuer, invitation.Subject).Scan(&available); err != nil {
-		return err
+		return time.Time{}, err
 	}
 	if !available {
-		return ErrDenied
+		if selected {
+			var expires time.Time
+			err := connection.QueryRow(ctx, `SELECT i.expires_at FROM portal_invitations i
+ WHERE i.issuer=$1 AND i.subject=$2 AND i.client_id=$3 AND i.role='client' AND NOT i.revoked AND i.expires_at>now()
+ AND NOT EXISTS (SELECT 1 FROM portal_workspace_settings w WHERE w.workspace_id=$3 AND w.closed_at IS NOT NULL)
+ AND NOT EXISTS (SELECT 1 FROM portal_memberships m WHERE m.issuer=$1 AND m.subject=$2)`,
+				invitation.Issuer, invitation.Subject, invitation.ClientID).Scan(&expires)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return time.Time{}, errInvitationAccess
+			}
+			return expires, err
+		}
+		return time.Time{}, ErrDenied
 	}
 	// Confirm the exact account under the lock shared with account changes.
 	// The workspace stays available during this provider call.
 	if err := b.foundation.customers.VerifyUser(ctx, userID); err != nil {
-		return err
+		return time.Time{}, err
 	}
-	return b.foundation.invite(ctx, invitation, connection.Begin, func(tx pgx.Tx) error {
+	err = b.foundation.invite(ctx, invitation, selected, connection.Begin, func(tx pgx.Tx) error {
 		if !b.operatorMutationAllowed(ctx, tx) {
 			return ErrDenied
 		}
 		return nil
 	})
+	return invitation.Expires, err
+}
+
+func workspaceAcceptsInvitations(ctx context.Context, query queryRower, issuer, workspace string) (bool, error) {
+	var found bool
+	err := query.QueryRow(ctx, `WITH inventory AS (`+activeWorkspaceInventory+`)
+ SELECT EXISTS (SELECT FROM inventory WHERE id=$2)
+ AND NOT EXISTS (SELECT FROM portal_memberships WHERE client_id=$2 AND role='operator')`, issuer, workspace).Scan(&found)
+	return found, err
 }
 
 // operatorInvitationPage uses the API's exact authorization and audit boundary.
 // Native forms POST to that API; their success returns to the customer inventory.
 func (b *browser) operatorInvitationPage(w http.ResponseWriter, r *http.Request) {
-	status, result := b.operatorCall(r, "invitations.view", func(_ context.Context, client string) ([]byte, error) {
-		d := b.operatorData(r, "operator-invite", client)
+	status, result := b.operatorCall(r, "invitations.view", func(ctx context.Context, client string) ([]byte, error) {
+		if humanOperatorAuthority(ctx) == nil {
+			return nil, ErrDenied
+		}
+		d := managementPage{pageData: b.operatorData(r, "operator-invite", client)}
+		spaces, err := b.workspaces(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, workspace := range spaces {
+			if workspace.Manageable {
+				d.Workspaces = append(d.Workspaces, workspace)
+			}
+		}
 		if workspace := r.URL.Query().Get("workspace"); validCustomerWorkspace(workspace) {
 			d.InviteWorkspace = workspace
 		}
 		var buffer bytes.Buffer
-		err := b.templates().ExecuteTemplate(&buffer, "operator.html", d)
+		err = b.templates().ExecuteTemplate(&buffer, "operator.html", d)
 		return buffer.Bytes(), err
 	})
 	if status != http.StatusOK && status != http.StatusServiceUnavailable {

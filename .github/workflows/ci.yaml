@@ -397,9 +397,6 @@ jobs:
       - name: Test actual served request-character controls
         working-directory: .
         run: node --test scripts/portal-request-limits.test.mjs
-      - name: Test the served operator directory search
-        working-directory: .
-        run: node --test scripts/operator-directory.test.mjs
       - name: Provision isolated test database roles
         env:
           PGPASSWORD: fixture-only
