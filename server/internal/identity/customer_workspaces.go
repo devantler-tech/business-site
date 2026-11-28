@@ -145,6 +145,11 @@ func (b *browser) openCustomerWorkspace(w http.ResponseWriter, r *http.Request) 
 // token, so this request cannot issue another token from its stale snapshot.
 func (b *browser) switchCustomerWorkspace(w http.ResponseWriter, r *http.Request, account customerAccountSession, incarnation string) error {
 	ctx := r.Context()
+	tx, err := b.customerIdentityTransaction(ctx, account.subject)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
 	if !b.foundation.ready(ctx) {
 		return ErrDenied
 	}
@@ -167,13 +172,17 @@ func (b *browser) switchCustomerWorkspace(w http.ResponseWriter, r *http.Request
 	token := secret() + secret()
 	key := base64.RawURLEncoding.EncodeToString(digest(token))
 	var expiry time.Time
-	err = b.foundation.pool.QueryRow(ctx, `WITH original AS (
- DELETE FROM portal_sessions WHERE token=$1 AND data=$2 AND expiry>clock_timestamp() RETURNING expiry
+	err = tx.QueryRow(ctx, `WITH original AS (
+ DELETE FROM portal_sessions WHERE token=$3 AND data=$4 AND expiry>clock_timestamp()
+ AND NOT `+customerDeletionExists+` RETURNING expiry
 ) INSERT INTO portal_sessions(token,data,expiry)
- SELECT $4,$5,LEAST(expiry,$3::timestamptz) FROM original
- WHERE LEAST(expiry,$3::timestamptz)>clock_timestamp() RETURNING expiry`,
-		account.key, account.data, deadline, key, data).Scan(&expiry)
+ SELECT $6,$7,LEAST(expiry,$5::timestamptz) FROM original
+ WHERE LEAST(expiry,$5::timestamptz)>clock_timestamp() RETURNING expiry`,
+		account.issuer, account.subject, account.key, account.data, deadline, key, data).Scan(&expiry)
 	if err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
 	// Leave the middleware's loaded context untouched so its save step cannot

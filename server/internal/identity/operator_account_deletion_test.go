@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
+	"github.com/jackc/pgx/v5"
 )
 
 type fixtureAccountDeletion struct {
@@ -117,4 +118,48 @@ func TestDeleteCustomerAccountRequiresVerifiedProviderRemoval(t *testing.T) {
 	b.signOut()
 	b.as(subject)
 	b.refused(b.start())
+}
+
+func TestWorkspaceSwitchRefusesAnAccountDeletedAfterMembershipRead(t *testing.T) {
+	b := newBrowserFixture(t)
+	subject := customeridentity.DexSubject("fixture-switch-deletion", customeridentity.ZitadelConnectorID)
+	b.as(subject)
+	b.finish(b.startInvited(subject, "first", "client"))
+	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_memberships(issuer,subject,client_id,role)
+ VALUES($1,$2,'second','client')`, b.f.issuer, subject); err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{"workspace": {"second"}, "csrf_token": {b.csrf("/portal/workspaces?lang=en")}}
+	pause := installCompletedRead(t, b, "SELECT m.incarnation::text FROM portal_memberships")
+	resume := onceRelease(pause.release)
+	defer resume()
+	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
+	defer cancel()
+	response := make(chan int, 1)
+	go func() {
+		status, _, _ := b.request("POST", "/portal/workspaces/open?lang=en", form, b.site.URL)
+		response <- status
+	}()
+	select {
+	case <-pause.blocked:
+	case <-ctx.Done():
+		t.Fatal("the workspace switch did not read the membership")
+	}
+	if err := pgx.BeginFunc(ctx, b.pool, func(tx pgx.Tx) error {
+		if err := lockIdentity(ctx, tx, b.f.issuer, subject); err != nil {
+			return err
+		}
+		return stageCustomerAccountAccessRemoval(ctx, tx, b.f.issuer, subject)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	resume()
+	select {
+	case status := <-response:
+		if status != http.StatusForbidden {
+			t.Fatalf("switching a deleted account returned %d", status)
+		}
+	case <-ctx.Done():
+		t.Fatal("the workspace switch did not finish")
+	}
 }
