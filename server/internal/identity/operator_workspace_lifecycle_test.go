@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -199,6 +200,79 @@ func TestRemovingLegacyBlockedMemberRestoresOnlySignIn(t *testing.T) {
 			}
 			assertCustomerCanSignInWithoutWorkspace(t, b, tc.subject)
 		})
+	}
+}
+
+func TestConcurrentWorkspaceClosuresRecordFinalCustomerRemoval(t *testing.T) {
+	f := fixtureBroker(t)
+	pool := fixtureDB(t)
+	svc := enabled(t, pool, f)
+	subject := customeridentity.DexSubject("concurrent-close", customeridentity.ZitadelConnectorID)
+	_ = enroll(t, svc, f, subject, "first", "client")
+	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
+	defer cancel()
+	if _, err := pool.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role)
+ VALUES($1,$2,'second','client')`, f.issuer, subject); err != nil {
+		t.Fatal(err)
+	}
+	remove := func(workspace string) (pgx.Tx, []string) {
+		t.Helper()
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
+		var incarnation string
+		if err := tx.QueryRow(ctx, `DELETE FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND client_id=$3
+ RETURNING incarnation::text`, f.issuer, subject, workspace).Scan(&incarnation); err != nil {
+			t.Fatal(err)
+		}
+		return tx, []string{incarnation}
+	}
+	first, firstEvents := remove("first")
+	second, secondEvents := remove("second")
+	if err := recordClosedCustomerAccounts(ctx, first, f.issuer, "first", firstEvents); err != nil {
+		t.Fatal(err)
+	}
+	secondResult := make(chan error, 1)
+	go func() {
+		secondResult <- recordClosedCustomerAccounts(ctx, second, f.issuer, "second", secondEvents)
+	}()
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+waiting:
+	for {
+		select {
+		case err := <-secondResult:
+			t.Fatalf("second removal recorded its decision before the first committed: %v", err)
+		case <-ctx.Done():
+			t.Fatal("second removal did not wait for the first")
+		case <-tick.C:
+			var waiting bool
+			if err := pool.QueryRow(ctx, `SELECT EXISTS (
+ SELECT 1 FROM pg_locks WHERE locktype='advisory' AND classid=$1::oid AND NOT granted)`, customerClosureLock).Scan(&waiting); err != nil {
+				t.Fatal(err)
+			}
+			if waiting {
+				break waiting
+			}
+		}
+	}
+	if err := first.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-secondResult; err != nil {
+		t.Fatal(err)
+	}
+	if err := second.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	var workspace string
+	if err := pool.QueryRow(ctx, `SELECT count(*),COALESCE(min(h.client_id),'') FROM portal_customer_account_closures c
+ JOIN portal_membership_transitions h ON h.incarnation=c.membership_event
+ WHERE h.issuer=$1 AND h.subject=$2`, f.issuer, subject).Scan(&count, &workspace); err != nil || count != 1 || workspace != "second" {
+		t.Fatalf("expected one removal deadline from the final membership, got %d for %q: %v", count, workspace, err)
 	}
 }
 

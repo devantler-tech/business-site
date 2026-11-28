@@ -13,6 +13,7 @@ import (
 )
 
 const workspaceLock = 1869820525
+const customerClosureLock = 1869820527
 
 // Take the identity lock, if needed, before this lock. A workspace deletion
 // never waits on an identity lock. Both precede invitation and membership writes.
@@ -175,8 +176,27 @@ func recordClosedCustomerAccounts(ctx context.Context, tx pgx.Tx, issuer, worksp
 	if len(closedAccounts) == 0 {
 		return nil
 	}
+	// Two different workspaces can close for the same customer. Serialize the
+	// final-access check after the membership writes, then read it in a fresh
+	// statement. These locks never precede an identity or workspace lock.
+	rows, err := tx.Query(ctx, `SELECT DISTINCT hashtext(h.issuer || ' ' || h.subject) AS lock_key
+ FROM portal_membership_transitions h
+ WHERE h.issuer=$1 AND h.client_id=$2 AND h.role='client' AND h.kind='delete'
+ AND h.previous_incarnation=ANY($3::uuid[]) ORDER BY lock_key`, issuer, workspace, closedAccounts)
+	if err != nil {
+		return err
+	}
+	keys, err := pgx.CollectRows(rows, pgx.RowTo[int32])
+	if err != nil {
+		return err
+	}
+	for _, key := range keys {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1::int,$2::int)`, customerClosureLock, key); err != nil {
+			return err
+		}
+	}
 	var recorded bool
-	err := tx.QueryRow(ctx, `WITH removed AS (
+	err = tx.QueryRow(ctx, `WITH removed AS (
  SELECT h.incarnation,h.recorded_at,h.subject FROM portal_membership_transitions h
  JOIN unnest($3::text[]) AS prior(incarnation) ON h.previous_incarnation=prior.incarnation::uuid
  WHERE h.issuer=$1 AND h.client_id=$2 AND h.role='client' AND h.kind='delete'
