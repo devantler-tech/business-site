@@ -432,10 +432,6 @@ func (b *browser) operatorSignIn(w http.ResponseWriter, r *http.Request) {
 // subject instead. A current member goes home, so a link here cannot sign anyone
 // out. A browser that keeps being refused gets one static page, never a loop.
 func (b *browser) startSignIn(w http.ResponseWriter, r *http.Request, connector string) {
-	if b.signedInCustomer(r.Context()) {
-		http.Redirect(w, r, "/portal/?lang="+language(r), http.StatusSeeOther)
-		return
-	}
 	switch _, _, err := b.foundation.membership(r.Context(), b.principal(r.Context())); {
 	case err == nil:
 		http.Redirect(w, r, "/portal/?lang="+language(r), http.StatusSeeOther)

@@ -62,6 +62,10 @@ type user struct {
 // call never follows redirects or returns a provider's diagnostic body. The
 // projected credential is read for each call so rotation needs no process restart.
 func (c *Client) call(ctx context.Context, method, path string, body, result any, allowed func() bool) (int, error) {
+	return c.callBounded(ctx, method, path, body, result, allowed, 64<<10)
+}
+
+func (c *Client) callBounded(ctx context.Context, method, path string, body, result any, allowed func() bool, maxBytes int64) (int, error) {
 	encoded, err := json.Marshal(body)
 	if err != nil {
 		return 0, ErrUnavailable
@@ -91,8 +95,8 @@ func (c *Client) call(ctx context.Context, method, path string, body, result any
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		return res.StatusCode, ErrUnavailable
 	}
-	data, err := io.ReadAll(io.LimitReader(res.Body, 65537))
-	if err != nil || len(data) > 65536 || json.Unmarshal(data, result) != nil {
+	data, err := io.ReadAll(io.LimitReader(res.Body, maxBytes+1))
+	if err != nil || int64(len(data)) > maxBytes || json.Unmarshal(data, result) != nil {
 		return res.StatusCode, ErrUnavailable
 	}
 	return res.StatusCode, nil

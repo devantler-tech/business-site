@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 )
@@ -21,6 +22,13 @@ func TestCustomerAccountCanSignInWithoutWorkspace(t *testing.T) {
 		if status, _, _ := b.request("GET", path, nil, ""); status < 400 {
 			t.Fatalf("an account without membership opened %s: %d", path, status)
 		}
+	}
+	if err := b.svc.Invite(t.Context(), Invitation{Issuer: b.f.issuer, Subject: subject, ClientID: "new-workspace", Role: "client", Expires: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	b.finish(b.start())
+	if status, _, _ := b.request("GET", "/portal/contact", nil, ""); status != http.StatusOK {
+		t.Fatalf("a signed-in customer could not accept an invitation received later: %d", status)
 	}
 	b.signOut()
 	if status, _, _ := b.request("GET", "/portal/", nil, ""); status != http.StatusSeeOther {

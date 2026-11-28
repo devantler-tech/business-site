@@ -58,8 +58,10 @@ func TestProfilesRequireExactCustomerOrganizationAndIDs(t *testing.T) {
 
 func TestSearchAccountsScopesAndPagesHumanCustomers(t *testing.T) {
 	rows := make([]string, 0, customeridentity.AccountPageSize+1)
+	// Four profile fields may contain 200 non-ASCII characters each.
+	name := strings.Repeat("😀", 200)
 	for i := 0; i <= customeridentity.AccountPageSize; i++ {
-		rows = append(rows, fmt.Sprintf(`{"userId":"user-%d","state":"USER_STATE_INACTIVE","details":{"resourceOwner":"customers"},"human":{"profile":{"displayName":"Ada Example"}}}`, i))
+		rows = append(rows, fmt.Sprintf(`{"userId":"user-%d","state":"USER_STATE_INACTIVE","details":{"resourceOwner":"customers"},"human":{"profile":{"displayName":%q,"firstName":%q,"lastName":%q,"nickName":%q}}}`, i, name, name, name, name))
 	}
 	const organization = `"organizationIdQuery":{"organizationId":"customers"}`
 	const searchEmail = `"emailQuery":{"emailAddress":"ada@example.test","method":"TEXT_QUERY_METHOD_CONTAINS_IGNORE_CASE"}`

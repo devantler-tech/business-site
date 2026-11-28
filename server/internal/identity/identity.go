@@ -473,7 +473,7 @@ func (s *Foundation) completeSignInProof(ctx context.Context, nonce, raw string,
 		}
 		// A verified customer account carries no workspace authority until a
 		// current membership incarnation is bound to the session.
-		if !operatorAccount && ctx.Err() == nil && time.Now().Before(p.expires) {
+		if !operatorAccount && s.ready(ctx) && ctx.Err() == nil && time.Now().Before(p.expires) {
 			return p, nil
 		}
 	}

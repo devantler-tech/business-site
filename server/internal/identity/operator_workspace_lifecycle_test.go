@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -152,6 +153,26 @@ func assertCustomerCanSignInWithoutWorkspace(t *testing.T, b *browserFixture) {
 	if status, body, _ := b.request("GET", "/portal/?lang=en", nil, ""); status != http.StatusOK || !strings.Contains(body, "No workspaces yet") {
 		t.Fatalf("ending workspace access left the customer unable to sign in: %d", status)
 	}
+}
+
+func TestRemovingLegacyBlockedMemberRestoresOnlySignIn(t *testing.T) {
+	var restored atomic.Bool
+	b := managementMemberFixture(t, func(_ context.Context, _ string, active bool) error {
+		restored.Store(active)
+		return nil
+	})
+	if _, err := b.pool.Exec(t.Context(), `UPDATE portal_memberships SET revoked=true WHERE subject=$1`, customerSubject); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_operator_audit(actor_issuer,actor_subject,actor_kind,action,target,outcome)
+ VALUES ($1,$2,'operator','members.deactivate',$3,'allowed')`, b.f.issuer, operatorSubject, customerSubject); err != nil {
+		t.Fatal(err)
+	}
+	form := operatorMembershipForm(b, customerSubject, "client-a")
+	if status, _, _ := b.request("POST", operatorAPIRoot+"/members/remove", form, b.site.URL); status != http.StatusOK || !restored.Load() {
+		t.Fatalf("removing a legacy-blocked customer returned %d", status)
+	}
+	assertCustomerCanSignInWithoutWorkspace(t, b)
 }
 
 func TestOperatorWorkspaceDeletionSerializesWithInvitation(t *testing.T) {

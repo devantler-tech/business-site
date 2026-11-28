@@ -94,7 +94,7 @@ func (c *Client) SearchAccounts(ctx context.Context, nameOrEmail string, offset 
 	var found struct {
 		Result []user `json:"result"`
 	}
-	if _, err := c.call(ctx, http.MethodPost, "/v2/users", query, &found, nil); err != nil || len(found.Result) > limit {
+	if _, err := c.callBounded(ctx, http.MethodPost, "/v2/users", query, &found, nil, 512<<10); err != nil || len(found.Result) > limit {
 		return nil, false, ErrUnavailable
 	}
 	accounts := make([]customeridentity.Account, 0, len(found.Result))
