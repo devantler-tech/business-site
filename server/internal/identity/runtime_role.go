@@ -134,10 +134,10 @@ func checkWorkspaceRole(ctx context.Context, pool queryRower) error {
  AND has_column_privilege(current_user,'portal_customer_deletions','confirmed_at','UPDATE')
  AND NOT EXISTS (SELECT 1 FROM pg_roles r
    WHERE (r.rolname=current_user OR pg_has_role(current_user,r.oid,'MEMBER')) AND (
-     EXISTS (SELECT 1 FROM pg_attribute a
-       WHERE a.attrelid='public.portal_customer_deletions'::regclass
-         AND a.attnum>0 AND NOT a.attisdropped AND a.attname<>'confirmed_at'
-         AND has_column_privilege(r.oid,a.attrelid,a.attnum,'UPDATE'))
+     EXISTS (SELECT 1 FROM information_schema.columns c
+       WHERE c.table_schema='public' AND c.table_name='portal_customer_deletions'
+         AND c.column_name<>'confirmed_at'
+         AND has_column_privilege(r.oid,'public.portal_customer_deletions'::regclass,c.column_name::text,'UPDATE'))
      OR has_any_column_privilege(r.oid,'portal_customer_deletions','REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,UPDATE WITH GRANT OPTION')
      OR has_table_privilege(r.oid,'portal_customer_deletions','DELETE,TRUNCATE,TRIGGER,MAINTAIN')))`).Scan(&allowed)
 	if err != nil || !allowed {
