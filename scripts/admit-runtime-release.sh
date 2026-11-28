@@ -3,8 +3,10 @@
 set -euo pipefail
 export LC_ALL=C
 readonly repo=devantler-tech/business-site
-readonly release_publisher='botantler-1[bot]'
-readonly release_publisher_id=185060876
+# Either botantler App may publish: the GitHub token broker (devantler-tech/monorepo ADR 0020)
+# mints each release token from whichever App has more rate limit left. Each login is pinned
+# to its own numeric id, so a look-alike login or a borrowed id is refused.
+readonly release_publishers='[{"login":"botantler-1[bot]","id":185060876},{"login":"botantler-2[bot]","id":296234498}]'
 # Refuse admission without writing reusable-job outputs or disclosing untrusted payloads.
 fail() {
   printf 'runtime release: refused %s\n' "$1" >&2
@@ -42,6 +44,8 @@ positive_id() { [[ "$1" =~ ^[1-9][0-9]{0,14}$ ]]; }
 version=''
 tag=''
 release_id=''
+release_publisher=''
+release_publisher_id=''
 case "$event" in
 workflow_dispatch)
   [[ "${GITHUB_REF:-}" == refs/heads/main ]] || fail 'manual main context'
@@ -55,13 +59,19 @@ release)
   tag=${GITHUB_REF#refs/tags/}
   [[ "${GITHUB_REF:-}" == refs/tags/* && "$tag" =~ ^v(0|[1-9][0-9]{0,14})\.(0|[1-9][0-9]{0,14})\.(0|[1-9][0-9]{0,14})$ ]] || fail 'stable semantic-version tag'
   version=${tag#v}
-  jq -e --arg tag "$tag" --arg publisher "$release_publisher" --argjson publisher_id "$release_publisher_id" '
+  # One accepted App both authored and published the release.
+  jq -e --arg tag "$tag" --argjson publishers "$release_publishers" '
     .action=="published" and .release.tag_name==$tag and .release.draft==false and
     .release.prerelease==false and (.release.published_at|type)=="string" and
-    all([.sender,.release.author][]; .id==$publisher_id and .login==$publisher and .type=="Bot")
+    all([.sender,.release.author][]; .type=="Bot" and ({id,login} as $who | any($publishers[]; .==$who))) and
+    .sender.id==.release.author.id and .sender.login==.release.author.login
   ' "$GITHUB_EVENT_PATH" >/dev/null || fail 'published stable App release'
   release_id="$(jq -er '.release.id|tostring' "$GITHUB_EVENT_PATH")"
   positive_id "$release_id" || fail 'release identity'
+  # Bind every later release read to the App that published this release.
+  release_publisher="$(jq -er '.release.author.login' "$GITHUB_EVENT_PATH")"
+  release_publisher_id="$(jq -er '.release.author.id|tostring' "$GITHUB_EVENT_PATH")"
+  positive_id "$release_publisher_id" || fail 'release publisher identity'
   read_json "releases/$release_id" "$work/release-before.json"
   jq -e --arg tag "$tag" --argjson id "$release_id" --arg publisher "$release_publisher" --argjson publisher_id "$release_publisher_id" '
     .id==$id and .tag_name==$tag and .draft==false and .prerelease==false and (.published_at|type)=="string" and

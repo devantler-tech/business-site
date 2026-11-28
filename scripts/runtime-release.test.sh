@@ -283,6 +283,59 @@ published_event
 jq '.author.id=9001' "$scratch/release.json" >"$scratch/release-after.json"
 refused "${release_context[@]}"
 [[ -f "$scratch/downloaded" ]] || fail 'changed publisher did not exercise post-download readback'
+# Either botantler App may publish (devantler-tech/monorepo ADR 0020), each pinned to its own id.
+readonly second_publisher='botantler-2[bot]'
+readonly second_publisher_id=296234498
+# Set the fixture release author to an exact login/id pair before deriving the event.
+release_author() {
+  jq --arg login "$1" --argjson id "$2" '.author={id:$id,login:$login,type:"Bot"}' \
+    "$scratch/release.json" >"$scratch/changed"
+  mv "$scratch/changed" "$scratch/release.json"
+}
+reset_fixture
+release_author "$second_publisher" "$second_publisher_id"
+published_event
+admit "${release_context[@]}" || fail 'a release published by the second botantler App was refused'
+grep -qx 'version=1.2.3' "$scratch/output" || fail 'second App release version output is incorrect'
+[[ "$(grep -c '/zip$' "$scratch/calls")" == 1 ]] || fail 'second App release must download exactly one archive'
+# Unlisted bots, look-alike logins and borrowed ids are refused before any API read.
+denied_logins=('another-app[bot]' 'dependabot[bot]' 'botantler-3[bot]' 'botantler-2' 'Botantler-2[bot]'
+  'botantler-2[bot] ' 'xbotantler-2[bot]' 'botantler-2[bot]x' 'botantler-[12][bot]' 'botantler-2[bot]' 'botantler-1[bot]')
+denied_ids=(9001 49699333 296234498 296234498 296234498
+  296234498 296234498 296234498 296234498 "$publisher_id" "$second_publisher_id")
+[[ "${#denied_logins[@]}" == "${#denied_ids[@]}" ]] || fail 'look-alike fixture pairs are misaligned'
+for index in "${!denied_logins[@]}"; do
+  reset_fixture
+  release_author "${denied_logins[$index]}" "${denied_ids[$index]}"
+  published_event
+  refused "${release_context[@]}"
+  [[ ! -s "$scratch/calls" ]] || fail "unaccepted publisher made network requests: ${denied_logins[$index]}"
+done
+# One accepted App must both author and publish; a string id or a user account is refused.
+for mutation in '.sender={id:185060876,login:"botantler-1[bot]",type:"Bot"}' \
+  '.release.author={id:185060876,login:"botantler-1[bot]",type:"Bot"}' \
+  '.sender.id="296234498"' '.release.author.type="User"'; do
+  reset_fixture
+  release_author "$second_publisher" "$second_publisher_id"
+  published_event
+  jq "$mutation" "$scratch/event.json" >"$scratch/changed"
+  mv "$scratch/changed" "$scratch/event.json"
+  refused "${release_context[@]}"
+  [[ ! -s "$scratch/calls" ]] || fail "mixed or malformed App release made network requests: $mutation"
+done
+# The current release must stay authored by the App the event names, before and after download.
+reset_fixture
+published_event
+release_author "$second_publisher" "$second_publisher_id"
+refused "${release_context[@]}"
+[[ ! -f "$scratch/downloaded" ]] || fail 'release author swapped to the other App allowed download'
+reset_fixture
+release_author "$second_publisher" "$second_publisher_id"
+published_event
+jq --argjson id "$publisher_id" --arg login "$publisher" '.author.id=$id|.author.login=$login' \
+  "$scratch/release.json" >"$scratch/release-after.json"
+refused "${release_context[@]}"
+[[ -f "$scratch/downloaded" ]] || fail 'App swap did not exercise post-download readback'
 reset_fixture
 published_event
 admit "${release_context[@]}" ANNOTATED_TAG=true || fail 'correctly peeled annotated tag was refused'
