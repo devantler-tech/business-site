@@ -107,7 +107,7 @@ func TestLateSessionCommitCannotAdoptReplacementMembership(t *testing.T) {
 	}
 	b.signOut()
 	b.finish(b.start())
-	if status, _, _ := b.request("GET", "/portal/", nil, ""); status != http.StatusOK {
+	if status, _, _ := b.request("GET", "/portal/contact", nil, ""); status != http.StatusOK {
 		t.Fatal("a genuinely new sign-in could not use the replacement membership", status)
 	}
 }

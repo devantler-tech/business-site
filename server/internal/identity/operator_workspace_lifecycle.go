@@ -221,9 +221,10 @@ func (b *browser) removeCustomerMember(ctx context.Context, r *http.Request) (an
 	}
 	issuer := b.foundation.broker.issuer
 	var incarnation string
+	var revoked bool
 	err = tx.QueryRow(ctx, `DELETE FROM portal_memberships
- WHERE issuer=$1 AND subject=$2 AND client_id=$3 AND role='client' RETURNING incarnation::text`,
-		issuer, input.Subject, input.Workspace).Scan(&incarnation)
+ WHERE issuer=$1 AND subject=$2 AND client_id=$3 AND role='client' RETURNING incarnation::text,revoked`,
+		issuer, input.Subject, input.Workspace).Scan(&incarnation, &revoked)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errOperatorInput
 	}
@@ -235,7 +236,12 @@ func (b *browser) removeCustomerMember(ctx context.Context, r *http.Request) (an
 		issuer, input.Subject, input.Workspace); err != nil {
 		return nil, err
 	}
-	if customeridentity.DexUser(input.Subject, customeridentity.ZitadelConnectorID) != "" {
+	if user := customeridentity.DexUser(input.Subject, customeridentity.ZitadelConnectorID); user != "" {
+		if revoked {
+			if err := b.restoreSignInForRemovedLegacyMember(ctx, tx, issuer, input.Subject, incarnation, user); err != nil {
+				return nil, err
+			}
+		}
 		if err := recordClosedCustomerAccounts(ctx, tx, issuer, input.Workspace, []string{incarnation}); err != nil {
 			return nil, err
 		}
@@ -244,4 +250,22 @@ func (b *browser) removeCustomerMember(ctx context.Context, r *http.Request) (an
 		return nil, ErrDenied
 	}
 	return map[string]bool{"removed": true}, tx.Commit(ctx)
+}
+
+// Undo only blocks recorded by the former portal deactivation action after the
+// membership's current revocation. Provider security controls stay independent.
+func (b *browser) restoreSignInForRemovedLegacyMember(ctx context.Context, tx pgx.Tx, issuer, subject, incarnation, user string) error {
+	var portalBlocked bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (
+ SELECT 1 FROM portal_membership_transitions h JOIN portal_operator_audit a
+   ON a.target=h.subject AND a.actor_issuer=h.issuer AND a.at>=h.recorded_at
+ WHERE h.incarnation::text=$3 AND h.issuer=$1 AND h.subject=$2 AND h.revoked
+   AND a.action='members.deactivate' AND a.outcome='allowed')`, issuer, subject, incarnation).Scan(&portalBlocked)
+	if err != nil || !portalBlocked {
+		return err
+	}
+	if b.foundation.customers == nil {
+		return errTriageStorage
+	}
+	return b.foundation.customers.ReactivateUser(ctx, user, func() bool { return b.operatorMutationAllowed(ctx, tx) })
 }
