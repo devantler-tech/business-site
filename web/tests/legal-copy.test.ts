@@ -21,6 +21,23 @@ test("the terms do not depend on the portal flag", () => {
   for (const locale of ["en", "da"] as const) assert.deepEqual(legalPage("terms", locale, true), legalPage("terms", locale, false));
 });
 
+test("add-on terms follow the coordinated add-on release", () => {
+  for (const locale of ["en", "da"] as const) {
+    const heading = locale === "da" ? "Ønsker og tilvalg" : "Feature requests and add-ons";
+    const published = legalPage("terms", locale, false);
+    const off = legalPage("terms", locale, true, false);
+    const on = legalPage("terms", locale, false, true);
+    assert.deepEqual(off, published, "portal privacy cannot activate add-on terms");
+    assert.ok(!flat(published).includes(heading), `${locale} draft add-on terms leaked`);
+    assert.ok(flat(on).includes(heading), `${locale} enabled add-on terms missing`);
+    assert.match(flat(on), locale === "da" ? /mål, ikke garantier/ : /targets, not guarantees/);
+    assert.deepEqual(on.sections.filter(section => section.title !== heading), published.sections,
+      "activation changes only the add-on section, retaining the published hosting terms");
+    assert.deepEqual(legalPage("privacy", locale, true, true), legalPage("privacy", locale, true),
+      "add-on terms cannot change portal privacy");
+  }
+});
+
 test("the portal support notice states the purpose, basis, retention and right to object in both languages", () => {
   const cases = [
     { locale: "en", title: "Portal support", text: [/record your request/, /read-only/, /legitimate interest/, /90 days/, /can object/] },

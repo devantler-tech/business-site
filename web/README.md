@@ -57,6 +57,12 @@ HTML documents; shared data, scripts and unrelated routes must never carry it. L
 fictional addresses. `PUBLIC_CONTENT_PROFILE=production-template` retains the existing Go runtime's
 escaped address placeholders. Invalid profiles fail. Revised-offer copy remains separately gated.
 
+`FEATURE_ADDONS` is the server-only, default-off build setting shared by the add-on
+listing and its English/Danish terms. Ordinary and production-template runtime packages pin it off,
+including when the invoking environment enables it. Preview builds may set it to `true`.
+Coordinated add-on activation and live bilingual verification precede its retirement in
+[#632](https://github.com/devantler-tech/business-site/issues/632).
+
 The approved VAT-inclusive guide prices, public/private customer invitation, six-tool catalogue
 and bilingual content are permanent. The old frontend variable has no effect. Unsupported old
 preview/client/featured presentation combinations fail rather than silently changing the result.
