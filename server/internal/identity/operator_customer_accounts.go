@@ -176,19 +176,15 @@ func (b *browser) loadCustomerAccounts(ctx context.Context, data *customerAccoun
 		data.Title = data.Account.Name
 		target.Set("account", subject)
 		canDelete := b.foundation.customerDeletion != nil && subject != previewSubject
-		if view == "delete-account" && !canDelete {
-			return errOperatorInput
-		}
-		if view == "delete-account" {
+		switch view {
+		case "delete-account":
+			if !canDelete {
+				return errOperatorInput
+			}
 			data.ConfirmDeletion = true
 			data.BackURL = base + target.Encode()
 			target.Set("view", view)
-		} else if canDelete && view == "" {
-			target.Set("view", "delete-account")
-			data.DeleteURL = base + target.Encode()
-			target.Del("view")
-		}
-		if view == "remove" {
+		case "remove":
 			for _, candidate := range data.Account.Workspaces {
 				if !candidate.Invited && (candidate.ID == workspace || workspace == "" && len(data.Account.Workspaces) == 1) {
 					data.Remove = &candidate
@@ -200,7 +196,11 @@ func (b *browser) loadCustomerAccounts(ctx context.Context, data *customerAccoun
 			data.BackURL = base + target.Encode()
 			target.Set("view", "remove")
 			target.Set("workspace", data.Remove.ID)
-		} else if view == "" {
+		case "":
+			if canDelete {
+				target.Set("view", "delete-account")
+				data.DeleteURL = base + target.Encode()
+			}
 			target.Set("view", "remove")
 			for i := range data.Account.Workspaces {
 				candidate := &data.Account.Workspaces[i]
