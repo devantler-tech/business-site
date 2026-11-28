@@ -264,7 +264,7 @@
         <div><dt>{{if eq $.Lang "da"}}Opbevaring udløber{{else}}Retention ends{{end}}</dt><dd><time datetime="{{.RetentionDate}}">{{.RetentionDate}}</time></dd></div>
       </dl>
       {{if eq .PurgeState "eligible"}}
-      <a class="operator-secondary" href="{{root}}/operator/customers?lang={{$.Lang}}&amp;view=purge-confirm&amp;workspace={{.ID}}" aria-label="{{if eq $.Lang "da"}}Slet permanent – {{.Name}}{{else}}Delete permanently – {{.Name}}{{end}}">{{if eq $.Lang "da"}}Slet permanent{{else}}Delete permanently{{end}}</a>
+      <a class="operator-secondary" href="{{root}}/operator/customers?lang={{$.Lang}}&amp;view=purge-confirm&amp;workspace={{.ID}}" aria-label="{{if eq $.Lang `da`}}Slet permanent – {{.Name}}{{else}}Delete permanently – {{.Name}}{{end}}">{{if eq $.Lang "da"}}Slet permanent{{else}}Delete permanently{{end}}</a>
       {{else if eq .PurgeState "access"}}
       <span class="operator-help">{{if eq $.Lang "da"}}Adgang er stadig åben{{else}}Access is still open{{end}}</span>
       {{else if eq .PurgeState "records"}}
