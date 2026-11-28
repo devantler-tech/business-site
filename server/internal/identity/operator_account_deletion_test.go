@@ -16,23 +16,49 @@ import (
 
 type fixtureAccountDeletion struct {
 	CustomerDirectory
-	calls int
-	err   error
+	journal *fixtureDeletionJournal
+	current CustomerDeletionTarget
+	calls   int
+	err     error
+}
+
+type fixtureDeletionJournal struct {
+	issuer string
+	target CustomerDeletionTarget
+	err    error
+}
+
+func (j *fixtureDeletionJournal) RecordDeletionIntent(_ context.Context, issuer string, target CustomerDeletionTarget) error {
+	if j.err != nil {
+		return j.err
+	}
+	if j.issuer != "" && (j.issuer != issuer || j.target != target) {
+		return errors.New("fixture journal refused an altered deletion target")
+	}
+	j.issuer, j.target = issuer, target
+	return nil
+}
+
+func fixtureDeletionTarget(id string) CustomerDeletionTarget {
+	return CustomerDeletionTarget{
+		UserID: id, Organization: "fixture-customers",
+		CreatedAt: time.Date(2021, time.November, 1, 12, 0, 0, 123456789, time.UTC),
+	}
 }
 
 func (*fixtureAccountDeletion) Account(_ context.Context, id string) (customeridentity.Account, error) {
 	return customeridentity.Account{ID: id, Profile: customeridentity.Profile{Name: "Fixture Customer", Email: "fixture@example.test"}}, nil
 }
 
-func (f *fixtureAccountDeletion) AuthorizeDeletion(_ context.Context, id string) error {
-	if id != "fixture-deletion" {
-		return ErrDenied
+func (f *fixtureAccountDeletion) AuthorizeDeletion(_ context.Context, id string) (CustomerDeletionTarget, error) {
+	if id != f.current.UserID {
+		return CustomerDeletionTarget{}, ErrDenied
 	}
-	return nil
+	return f.current, nil
 }
 
-func (f *fixtureAccountDeletion) DeleteCustomerAccount(_ context.Context, id string, allowed func() bool) error {
-	if id != "fixture-deletion" || !allowed() {
+func (f *fixtureAccountDeletion) DeleteCustomerAccount(_ context.Context, target CustomerDeletionTarget, allowed func() bool) error {
+	if target != f.current || f.journal.target != target || !allowed() {
 		return ErrDenied
 	}
 	f.calls++
@@ -53,9 +79,17 @@ func TestDeleteCustomerAccountRequiresVerifiedProviderRemoval(t *testing.T) {
 	b.finish(b.start())
 	customerJar := b.client.Jar
 	b.client.Jar = operatorJar
-	provider := &fixtureAccountDeletion{CustomerDirectory: &managementDirectory{}, err: errors.New("fixture provider unavailable")}
+	journal := &fixtureDeletionJournal{err: errors.New("fixture journal unavailable")}
+	original := fixtureDeletionTarget("fixture-deletion")
+	provider := &fixtureAccountDeletion{
+		CustomerDirectory: &managementDirectory{}, journal: journal, current: original,
+		err: errors.New("fixture provider unavailable"),
+	}
 	if err := b.svc.LinkCustomerDirectory(provider); err != nil {
 		t.Fatal(err)
+	}
+	if err := b.svc.LinkCustomerAccountDeletion(provider, nil); !errors.Is(err, ErrDenied) {
+		t.Fatalf("account deletion was linked without independent recovery: %v", err)
 	}
 	detail := customerAccountsPath + "?lang=en&account=" + subject
 	if status, page, _ := b.request("GET", detail, nil, ""); status != http.StatusOK || strings.Contains(page, "Delete customer account") {
@@ -66,7 +100,7 @@ func TestDeleteCustomerAccountRequiresVerifiedProviderRemoval(t *testing.T) {
 	if status, _, _ := b.request("POST", path, form, b.site.URL); status == http.StatusOK {
 		t.Fatal("the default directory admitted provider deletion")
 	}
-	if err := b.svc.LinkCustomerAccountDeletion(provider); err != nil {
+	if err := b.svc.LinkCustomerAccountDeletion(provider, journal); err != nil {
 		t.Fatal(err)
 	}
 	if status, page, _ := b.request("GET", detail+"&view=delete-account", nil, ""); status != http.StatusOK ||
@@ -87,7 +121,17 @@ func TestDeleteCustomerAccountRequiresVerifiedProviderRemoval(t *testing.T) {
 	if status, _, _ := b.request("POST", path, badConfirmation, b.site.URL); status != http.StatusBadRequest || provider.calls != 0 {
 		t.Fatalf("incorrect account confirmation reached provider removal: %d", status)
 	}
-	if status, _, _ := b.request("POST", path, form, b.site.URL); status != http.StatusServiceUnavailable || provider.calls != 1 {
+	if status, _, _ := b.request("POST", path, form, b.site.URL); status != http.StatusServiceUnavailable || provider.calls != 0 {
+		t.Fatalf("unrecorded deletion reached the sign-in provider: %d", status)
+	}
+	journal.err = nil
+	provider.current.CreatedAt = original.CreatedAt.Add(time.Nanosecond)
+	if status, _, _ := b.request("POST", path, form, b.site.URL); status != http.StatusServiceUnavailable || provider.calls != 0 || journal.target != original {
+		t.Fatalf("retry under a reused identity did not preserve the original deletion target: %d", status)
+	}
+	provider.current = original
+	if status, _, _ := b.request("POST", path, form, b.site.URL); status != http.StatusServiceUnavailable || provider.calls != 1 ||
+		journal.issuer != b.f.issuer || journal.target != original {
 		t.Fatalf("unconfirmed provider removal appeared successful: %d", status)
 	}
 	var accessEnded bool
@@ -122,7 +166,8 @@ func TestDeleteCustomerAccountRequiresVerifiedProviderRemoval(t *testing.T) {
 
 func TestWorkspaceSwitchRefusesAnAccountDeletedAfterMembershipRead(t *testing.T) {
 	b := newBrowserFixture(t)
-	subject := customeridentity.DexSubject("fixture-switch-deletion", customeridentity.ZitadelConnectorID)
+	target := fixtureDeletionTarget("fixture-switch-deletion")
+	subject := customeridentity.DexSubject(target.UserID, customeridentity.ZitadelConnectorID)
 	b.as(subject)
 	b.finish(b.startInvited(subject, "first", "client"))
 	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_memberships(issuer,subject,client_id,role)
@@ -149,7 +194,7 @@ func TestWorkspaceSwitchRefusesAnAccountDeletedAfterMembershipRead(t *testing.T)
 		if err := lockIdentity(ctx, tx, b.f.issuer, subject); err != nil {
 			return err
 		}
-		return stageCustomerAccountAccessRemoval(ctx, tx, b.f.issuer, subject)
+		return stageCustomerAccountAccessRemoval(ctx, tx, b.f.issuer, subject, target)
 	}); err != nil {
 		t.Fatal(err)
 	}

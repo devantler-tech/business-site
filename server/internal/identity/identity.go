@@ -135,8 +135,9 @@ type Foundation struct {
 	previewStoreCheck               func(context.Context) error
 	previewStoreVerified            atomic.Bool
 	// customers is the optional organization-scoped provider for operator actions.
-	customers        CustomerDirectory
-	customerDeletion CustomerAccountDeletion
+	customers               CustomerDirectory
+	customerDeletion        CustomerAccountDeletion
+	customerDeletionJournal CustomerAccountDeletionJournal
 	// agents is immutable policy and a distinct verifier, installed at startup.
 	agents *agentAccess
 }
