@@ -44,6 +44,10 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 	}
 	cases := []privilegeCase{
 		{"restricted", "SET ROLE portal_runtime", true},
+		{"editable provider organization", "GRANT UPDATE(provider_organization) ON portal_customer_deletions TO portal_runtime; SET ROLE portal_runtime", false},
+		{"editable provider creation time", "GRANT UPDATE(provider_created_at) ON portal_customer_deletions TO portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable provider organization", "CREATE ROLE portal_fixture_delete_mutator NOLOGIN; GRANT UPDATE(provider_organization) ON portal_customer_deletions TO portal_fixture_delete_mutator; GRANT portal_fixture_delete_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"assumable provider creation time", "CREATE ROLE portal_fixture_delete_mutator NOLOGIN; GRANT UPDATE(provider_created_at) ON portal_customer_deletions TO portal_fixture_delete_mutator; GRANT portal_fixture_delete_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"missing revision lock", "REVOKE EXECUTE ON FUNCTION public.portal_lock_work_queue_revision(bigint) FROM portal_runtime; SET ROLE portal_runtime", false},
 		{"public revision lock", "GRANT EXECUTE ON FUNCTION public.portal_lock_work_queue_revision(bigint) TO PUBLIC; SET ROLE portal_runtime", false},
 		{"delegated revision lock", "GRANT EXECUTE ON FUNCTION public.portal_lock_work_queue_revision(bigint) TO portal_runtime WITH GRANT OPTION; SET ROLE portal_runtime", false},
