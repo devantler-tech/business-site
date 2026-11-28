@@ -250,7 +250,9 @@ func (s *Foundation) enrollOperator(ctx context.Context, p Principal) error {
 	if err = lockIdentity(ctx, tx, p.issuer, p.subject); err != nil {
 		return err
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES($1,$2,$3,'operator') ON CONFLICT(issuer,subject) DO NOTHING`, p.issuer, p.subject, operatorWorkspace); err != nil {
+	if _, err = tx.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role)
+ SELECT $1,$2,$3,'operator' WHERE NOT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2)
+ ON CONFLICT DO NOTHING`, p.issuer, p.subject, operatorWorkspace); err != nil {
 		return fmt.Errorf("create operator: %w", err)
 	}
 	if err = tx.Commit(ctx); err != nil {
@@ -543,7 +545,9 @@ func (s *Foundation) redeem(ctx context.Context, p Principal) error {
 	}
 	// An existing identity cannot gain a new client or revive revoked membership.
 	// No email matching, implicit account linking or entitlement transfer occurs.
-	result, err := tx.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES($1,$2,$3,$4) ON CONFLICT(issuer,subject) DO NOTHING`, p.issuer, p.subject, client, role)
+	result, err := tx.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role)
+ SELECT $1,$2,$3,$4 WHERE NOT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2)
+ ON CONFLICT DO NOTHING`, p.issuer, p.subject, client, role)
 	if err != nil {
 		return fmt.Errorf("create membership: %w", err)
 	}
@@ -597,7 +601,8 @@ func (s *Foundation) membershipState(ctx context.Context, p Principal) (string, 
 		return "", "", "", ErrDenied
 	}
 	var own, role, incarnation string
-	err := s.pool.QueryRow(ctx, `SELECT client_id,role,incarnation::text FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND NOT revoked AND ($3='' OR incarnation::text=$3)`, p.issuer, p.subject, p.membershipIncarnation).Scan(&own, &role, &incarnation)
+	err := s.pool.QueryRow(ctx, `SELECT client_id,role,incarnation::text FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND NOT revoked AND ($3='' OR incarnation::text=$3)
+ ORDER BY client_id LIMIT 1`, p.issuer, p.subject, p.membershipIncarnation).Scan(&own, &role, &incarnation)
 	// SQL completion is not authority to release expired or cancelled reads.
 	if ctx.Err() != nil || !time.Now().Before(p.expires) {
 		return "", "", "", ErrDenied
