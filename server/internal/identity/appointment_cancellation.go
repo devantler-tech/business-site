@@ -98,7 +98,7 @@ func (b *browser) cancelAppointmentWithAuthority(ctx context.Context, snapshot d
 			if err != nil {
 				return err
 			}
-			if !matches[0] || (s.previewAuthority == nil && !lockBrowserSession(ctx, tx, snapshot)) {
+			if !matches[0] || (s.previewAuthority == nil && lockBrowserSession(ctx, tx, snapshot).IsZero()) {
 				return ErrDenied
 			}
 			// The reservation and authority locks can wait. Recheck all gates

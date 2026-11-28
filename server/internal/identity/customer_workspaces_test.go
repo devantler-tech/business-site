@@ -3,6 +3,7 @@ package identity
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -79,6 +80,52 @@ func TestWorkspaceInvitationStaysPendingWhenPortalIsDisabledDuringRedemption(t *
 	checkInterruptedWorkspaceInvitation(t, func(b *browserFixture) { setFlag(t, b.flags, false) })
 }
 
+func TestWorkspaceInvitationStaysPendingWhenSessionExpiresDuringFinalEvaluation(t *testing.T) {
+	b := newBrowserFixture(t)
+	subject := customeridentity.DexSubject("expiring-invitation-session", customeridentity.ZitadelConnectorID)
+	b.as(subject)
+	b.finish(b.startInvited(subject, "workspace-one", "client"))
+	b.invite(subject, "workspace-two", "client")
+	key := base64.RawURLEncoding.EncodeToString(digest(b.cookie().Value))
+	p := Principal{issuer: b.f.issuer, subject: subject, expires: time.Now().Add(time.Minute)}
+	snapshot := durableResponseSnapshot{
+		key:      key,
+		original: contactAuthority{principal: p, deadline: p.expires},
+	}
+	deadline := time.Now().Add(time.Second)
+	if err := b.pool.QueryRow(t.Context(), `UPDATE portal_sessions SET expiry=$2 WHERE token=$1 RETURNING data`,
+		key, deadline).Scan(&snapshot.data); err != nil {
+		t.Fatal(err)
+	}
+	provider := installReadProvider(t, b, "portal-identity", 1)
+	release := onceRelease(provider.release)
+	defer release()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- b.svc.redeem(ctx, p, "workspace-two", &snapshot) }()
+	select {
+	case <-provider.blocked:
+	case <-ctx.Done():
+		t.Fatal("redemption did not reach the final evaluation")
+	}
+	select {
+	case <-time.After(time.Until(deadline)):
+	case <-ctx.Done():
+		t.Fatal("the fixture session did not expire within the test")
+	}
+	release()
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrDenied) {
+			t.Fatalf("redemption with an expired session returned %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("redemption did not complete after the session expired")
+	}
+	assertWorkspaceInvitationPending(t, b, subject)
+}
+
 func checkInterruptedWorkspaceInvitation(t *testing.T, interrupt func(*browserFixture)) {
 	t.Helper()
 	b := newBrowserFixture(t)
@@ -111,6 +158,11 @@ func checkInterruptedWorkspaceInvitation(t *testing.T, interrupt func(*browserFi
 	case <-time.After(5 * time.Second):
 		t.Fatal("the interrupted request did not complete")
 	}
+	assertWorkspaceInvitationPending(t, b, subject)
+}
+
+func assertWorkspaceInvitationPending(t *testing.T, b *browserFixture, subject string) {
+	t.Helper()
 	if got := b.memberships(subject, "client"); got != 1 {
 		t.Fatalf("the interrupted request created a new membership: %d total", got)
 	}

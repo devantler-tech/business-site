@@ -233,15 +233,15 @@ const customerAccountAccessSQL = `WITH access AS (
  SELECT a.*,COALESCE(w.display_name,a.client_id) AS name FROM access a
  LEFT JOIN portal_workspace_settings w ON w.workspace_id=a.client_id WHERE w.closed_at IS NULL
 ), former AS (
- SELECT DISTINCT ON (h.subject) h.subject,h.incarnation,c.remove_by
+ SELECT h.subject,max(c.remove_by) AS remove_by
  FROM portal_membership_transitions h
  LEFT JOIN portal_customer_account_closures c ON c.membership_event=h.incarnation
  WHERE h.issuer=$1 AND h.subject=ANY($2::text[]) AND h.role='client' AND h.kind='delete' AND h.client_id NOT IN ($3,$4)
- ORDER BY h.subject,h.recorded_at DESC,h.incarnation
+ GROUP BY h.subject
 )
  SELECT person.subject, COALESCE(a.client_id,''),COALESCE(a.name,''),
  COALESCE(a.invited,false),COALESCE(a.revoked,false),
- h.incarnation IS NOT NULL, h.remove_by
+ h.subject IS NOT NULL, h.remove_by
  FROM unnest($2::text[]) AS person(subject)
  LEFT JOIN open_access a ON a.subject=person.subject
  LEFT JOIN former h ON h.subject=person.subject
