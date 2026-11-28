@@ -258,6 +258,8 @@ test("the hosted preview keeps its application and schema migration private", ()
     "--runtime-role", "portal_preview_web",
   ]);
   assert.equal(pod.volumes.find((volume) => volume.name === "migration").secret.secretName, "business-site-dev-migration");
+  const practice = yaml.loadAll(render(path.join(root, "deploy/practice")));
+  assert.deepEqual(practice, [job], "the practice overlay contains only the same migration Job");
 });
 
 test("the rendered network policy allows only the two billing APIs on HTTPS", () => {
@@ -559,6 +561,9 @@ test("the migration Job and retention CronJob run whatever image the publisher p
     const rendered = yaml.loadAll(render(fixture));
     const job = rendered.find((d) => d?.kind === "Job");
     assert.equal(job.spec.template.spec.containers[0].image, pinned);
+    const practice = yaml.loadAll(render(path.join(fixture, "practice")));
+    assert.deepEqual(practice.map((resource) => resource.kind), ["Job"]);
+    assert.equal(practice[0].spec.template.spec.containers[0].image, pinned);
     const cron = rendered.find((d) => d?.kind === "CronJob");
     assert.equal(cron.spec.jobTemplate.spec.template.spec.containers[0].image, pinned);
     const cronSource = yaml.load(readFileSync(path.join(root, "deploy/prod/cronjob-portal-retention.yaml"), "utf8"));
