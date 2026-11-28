@@ -84,4 +84,11 @@ func TestOperatorReadsOnlyTheGoverningHostingRevision(t *testing.T) {
 	insert(future, 2, "-80 days", "-40 days", "Past period", "agreed")
 	insert(current, 6, "-30 days", "-1 day", "Old scope", "agreed")
 	read(workspace, operator, "ended", "")
+
+	insert(current, 7, "-20 days", "20 days", "Protected maintenance scope", "agreed")
+	setFixturePortalFlags(t, b, flags, []any{true, true, true, true})
+	status, page := requestAfterReadRevocation(t, b, "LATERAL public.portal_operator_hosting_coverage", url, "proposal-operator")
+	if status != http.StatusForbidden || strings.Contains(page, "Protected maintenance scope") {
+		t.Fatalf("hosting coverage survived operator revocation after the read: %d", status)
+	}
 }
