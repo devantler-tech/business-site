@@ -39,11 +39,18 @@ func TestOperatorRecordsPeriodFromAcceptedHostingTerms(t *testing.T) {
 	if err := b.pool.QueryRow(t.Context(), "SELECT id FROM portal_proposal_acceptances WHERE request_id=$1", proposalRequestID).Scan(&acceptance); err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now().UTC().Truncate(time.Minute)
+	now := time.Now().UTC().Truncate(time.Minute).Add(123456 * time.Microsecond)
+	initialStart, initialEnd := now.Add(-time.Hour), now.Add(time.Hour)
+	const clockFormat = "15:04:05.999999"
 	form := url.Values{
 		"csrf_token": {field("csrf_token")}, "period_id": {field("period_id")}, "acceptance_id": {acceptance},
-		"starts_at": {now.Add(-time.Hour).Format("2006-01-02T15:04")}, "ends_at": {now.Add(time.Hour).Format("2006-01-02T15:04")},
+		"start_date": {initialStart.Format(time.DateOnly)}, "start_time": {initialStart.Format(clockFormat)},
+		"end_date": {initialEnd.Format(time.DateOnly)}, "end_time": {initialEnd.Format(clockFormat)},
 		"confirm": {"yes"}, "lang": {"en"},
+	}
+	setEnd := func(end time.Time) {
+		form.Set("end_date", end.Format(time.DateOnly))
+		form.Set("end_time", end.Format(clockFormat))
 	}
 	post := func(want int) {
 		t.Helper()
@@ -57,15 +64,19 @@ func TestOperatorRecordsPeriodFromAcceptedHostingTerms(t *testing.T) {
 	form.Set("confirm", "no")
 	post(http.StatusBadRequest)
 	form.Set("confirm", "yes")
+	form.Set("start_time", initialStart.Format(clockFormat)+"9")
+	post(http.StatusBadRequest)
+	form.Set("start_time", initialStart.Format(clockFormat))
 	post(http.StatusSeeOther)
 	post(http.StatusSeeOther)
-	form.Set("ends_at", now.Add(2*time.Hour).Format("2006-01-02T15:04"))
+	setEnd(now.Add(2 * time.Hour))
 	post(http.StatusConflict)
-	form.Set("ends_at", now.Add(time.Hour).Format("2006-01-02T15:04"))
+	setEnd(initialEnd)
 	form.Set("period_id", secret())
 	post(http.StatusConflict)
-	form.Set("starts_at", form.Get("ends_at"))
-	form.Set("ends_at", now.Add(2*time.Hour).Format("2006-01-02T15:04"))
+	form.Set("start_date", form.Get("end_date"))
+	form.Set("start_time", form.Get("end_time"))
+	setEnd(now.Add(2 * time.Hour))
 	post(http.StatusSeeOther)
 
 	owner := migrationDB(t)
@@ -73,11 +84,17 @@ func TestOperatorRecordsPeriodFromAcceptedHostingTerms(t *testing.T) {
 	if err := owner.QueryRow(t.Context(), `SELECT count(*) FILTER (WHERE scope='Hosting and routine maintenance' AND acceptance_id=$1), count(*) FROM portal_hosting_period_revisions`, acceptance).Scan(&exact, &total); err != nil || exact != 2 || total != 2 {
 		t.Fatalf("expected exactly two periods with accepted terms, got %d/%d: %v", exact, total, err)
 	}
+	var savedStart, savedEnd time.Time
+	if err := owner.QueryRow(t.Context(), `SELECT starts_at,ends_at FROM portal_hosting_period_revisions
+ WHERE request_id=$1 ORDER BY starts_at LIMIT 1`, proposalRequestID).Scan(&savedStart, &savedEnd); err != nil || !savedStart.Equal(initialStart) || !savedEnd.Equal(initialEnd) {
+		t.Fatalf("agreed microseconds were not preserved: %s to %s, error=%v", savedStart, savedEnd, err)
+	}
 	if _, err := b.pool.Exec(t.Context(), "SELECT 1 FROM portal_hosting_period_revisions"); err == nil {
 		t.Fatal("runtime can read the raw hosting ledger")
 	}
 	if status, page, _ := b.request(http.MethodGet, detail+"?lang=da", nil, ""); status != http.StatusOK ||
-		!strings.Contains(page, "Registrér hostingperiode") || !strings.Contains(page, "Hosting and routine maintenance") {
+		!strings.Contains(page, "Registrér hostingperiode") || !strings.Contains(page, "Hosting and routine maintenance") ||
+		!strings.Contains(page, initialStart.Format("2006-01-02 "+clockFormat)) {
 		t.Fatalf("saved coverage or the Danish operator form was unavailable: %d", status)
 	}
 	setFixturePortalFlags(t, b, flags, []any{true, true, true, true, true, true, false})

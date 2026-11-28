@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -14,13 +15,26 @@ type hostingPeriodInput struct {
 	start, end     time.Time
 }
 
+var hostingClock = regexp.MustCompile(`^[0-9]{2}:[0-9]{2}(:[0-9]{2}(\.[0-9]{1,6})?)?$`)
+
+func parseHostingBound(date, clock string) (time.Time, bool) {
+	if !hostingClock.MatchString(clock) {
+		return time.Time{}, false
+	}
+	if len(clock) == len("15:04") {
+		clock += ":00"
+	}
+	bound, err := time.Parse("2006-01-02 15:04:05", date+" "+clock)
+	return bound, err == nil && bound.Year() > 0
+}
+
 func parseHostingPeriod(r *http.Request) (hostingPeriodInput, bool) {
 	if err := r.ParseForm(); err != nil {
 		return hostingPeriodInput{}, false
 	}
 	for field, values := range r.PostForm {
 		switch field {
-		case "period_id", "acceptance_id", "starts_at", "ends_at", "confirm", "csrf_token", "lang":
+		case "period_id", "acceptance_id", "start_date", "start_time", "end_date", "end_time", "confirm", "csrf_token", "lang":
 			if len(values) != 1 {
 				return hostingPeriodInput{}, false
 			}
@@ -29,12 +43,11 @@ func parseHostingPeriod(r *http.Request) (hostingPeriodInput, bool) {
 		}
 	}
 	d := hostingPeriodInput{id: r.PostForm.Get("period_id"), acceptance: r.PostForm.Get("acceptance_id")}
-	const layout = "2006-01-02T15:04"
-	start, startErr := time.Parse(layout, r.PostForm.Get("starts_at"))
-	end, endErr := time.Parse(layout, r.PostForm.Get("ends_at"))
+	start, startOK := parseHostingBound(r.PostForm.Get("start_date"), r.PostForm.Get("start_time"))
+	end, endOK := parseHostingBound(r.PostForm.Get("end_date"), r.PostForm.Get("end_time"))
 	d.start, d.end = start, end
 	return d, opaqueRequestID.MatchString(d.id) && opaqueRequestID.MatchString(d.acceptance) &&
-		startErr == nil && endErr == nil && d.start.Before(d.end) && r.PostForm.Get("confirm") == "yes"
+		startOK && endOK && d.start.Before(d.end) && r.PostForm.Get("confirm") == "yes"
 }
 
 func (b *browser) submitHostingPeriod(w http.ResponseWriter, r *http.Request) {
