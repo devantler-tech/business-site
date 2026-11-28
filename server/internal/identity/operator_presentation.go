@@ -41,6 +41,11 @@ func (b *browser) operatorData(r *http.Request, kind, client string) pageData {
 		if d.Lang == "da" {
 			d.Title = "Arbejdsområder"
 		}
+	case "operator-customer-accounts":
+		d.Title = "Customers"
+		if d.Lang == "da" {
+			d.Title = "Kunder"
+		}
 	case "operator-invite":
 		d.Title = "Invite a customer"
 		if d.Lang == "da" {

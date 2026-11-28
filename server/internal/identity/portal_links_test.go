@@ -53,7 +53,7 @@ func TestPortalLinkPreprocessor(t *testing.T) {
 		}
 		return
 	}
-	for name, want := range map[string]int{"portal.html": 24, "contact.html": 12, "requests.html": 38, "triage.html": 24, "work-review.html": 18, "operator.html": 32} {
+	for name, want := range map[string]int{"portal.html": 24, "contact.html": 12, "requests.html": 38, "triage.html": 24, "work-review.html": 18, "operator.html": 40} {
 		t.Run(name, func(t *testing.T) {
 			pages, err := renderedLinkPages(name)
 			if err != nil || len(pages) != want {
@@ -207,7 +207,7 @@ func preprocessLinkInput(source string) ([]byte, error) {
 		return nil, errors.New("input differs from the compiled source")
 	}
 	renderedName := name
-	if name == "operator-workspaces.html" {
+	if name == "operator-workspaces.html" || name == "operator-customers.html" {
 		renderedName = "operator.html"
 	}
 	pages, err := renderedLinkPages(renderedName)
@@ -255,6 +255,33 @@ func renderedLinkPagesFor(name string, templates *template.Template, b *browser)
 		}
 		switch name {
 		case "operator.html":
+			for _, view := range []string{"list", "active", "former", "remove"} {
+				err := add(customerAccountsPath, func(w *httptest.ResponseRecorder, r *http.Request) error {
+					d := b.operatorData(r, "operator-customer-accounts", "fictional-operator")
+					d.CSRF = "fictional-csrf"
+					index := b.visible(customerAccountsPath) + "?lang=" + lang
+					account := customerAccountRow{Subject: customeridentity.DexSubject("fictional-customer", customeridentity.ZitadelConnectorID), Name: "Ada Example", Email: "ada@example.test",
+						Workspace: "fictional-workspace", WorkspaceName: "Fictional workspace", Status: "active", ManageAccess: true}
+					account.URL = index + "&account=" + account.Subject
+					page := customerAccountsPage{pageData: d, Query: "Ada", BackURL: index,
+						Confirmation: account.URL + "&view=remove", Previous: index + "&page=1", Next: index + "&page=3"}
+					if view == "list" {
+						page.Accounts = []customerAccountRow{account}
+					} else {
+						page.Account = &account
+						page.Title = account.Name
+						page.ConfirmRemoval = view == "remove"
+						if view == "former" {
+							account.Status = view
+							account.ManageAccess = false
+						}
+					}
+					return templates.ExecuteTemplate(w, name, page)
+				})
+				if err != nil {
+					return nil, err
+				}
+			}
 			for _, view := range []struct {
 				path, kind     string
 				triage, events bool
@@ -707,6 +734,9 @@ func registeredLinkTarget(mux *http.ServeMux, method string, target *url.URL) er
 			}
 			return errors.New("invalid target workspace")
 		case "view":
+			if pattern == "GET "+customerAccountsPath && values[0] == "remove" && customerAccountID(query.Get("account")) != "" {
+				continue
+			}
 			switch values[0] {
 			case "closed", "cleanup", "cleanup-confirm", "purge-confirm", "close", "remove", "new", "support":
 				if pattern == "GET /portal/operator/customers" {
@@ -720,6 +750,9 @@ func registeredLinkTarget(mux *http.ServeMux, method string, target *url.URL) er
 				return errors.New("invalid workspace member")
 			}
 		case "focus":
+			if values[0] == "customer" && pattern == "POST /portal/operator/api/members/remove" {
+				continue
+			}
 			if values[0] != "workspace" || !slices.Contains([]string{
 				"POST /portal/operator/api/invitations", "POST /portal/operator/api/invitations/revoke",
 				"POST /portal/operator/api/workspaces/rename", "POST /portal/operator/api/workspaces/delete",
@@ -728,7 +761,22 @@ func registeredLinkTarget(mux *http.ServeMux, method string, target *url.URL) er
 			}, pattern) {
 				return errors.New("invalid workspace action return")
 			}
-		case "q", "actor", "outcome", "from", "to", "before", "after":
+		case "account":
+			if pattern != "GET "+customerAccountsPath || customerAccountID(values[0]) == "" {
+				return errors.New("invalid target customer account")
+			}
+		case "page", "q":
+			if pattern == "GET "+customerAccountsPath {
+				if _, _, err := readCustomerSearch(query); err != nil {
+					return errors.New("invalid customer search query")
+				}
+				continue
+			}
+			if values := query["page"]; len(values) != 0 {
+				return errors.New("invalid target customer page")
+			}
+			fallthrough
+		case "actor", "outcome", "from", "to", "before", "after":
 			if pattern != "GET /portal/operator/audit" {
 				return errors.New("invalid audit search target")
 			}

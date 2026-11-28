@@ -50,7 +50,7 @@ func templateFuncs(root, site string) template.FuncMap {
 // when the portal shares a host with the public site, "" when it has its own host;
 // links to the public website use {{public .Lang}}.
 func pages(root, site string) *template.Template {
-	return template.Must(template.New("portal").Funcs(templateFuncs(root, site)).ParseFS(browserFiles, "web/portal.html", "web/operator.html", "web/operator-workspaces.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/work-review.html"))
+	return template.Must(template.New("portal").Funcs(templateFuncs(root, site)).ParseFS(browserFiles, "web/portal.html", "web/operator.html", "web/operator-workspaces.html", "web/operator-customers.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/work-review.html"))
 }
 
 // internalRoot is where every private route is registered and gated.
@@ -325,6 +325,7 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /portal/operator/audit", b.operatorAuditPage)
 	mux.HandleFunc("GET /portal/operator/calendar-conflicts", b.operatorCalendarConflicts)
 	mux.HandleFunc("GET /portal/operator/customers", b.operatorCustomersPage)
+	mux.HandleFunc("GET "+customerAccountsPath, b.operatorCustomerAccountsPage)
 	mux.HandleFunc("POST /portal/operator/customers/cleanup", b.operatorAPI(operatorRoute{
 		method: "POST", action: "invitations.cleanup", run: (*browser).cleanupCustomerInvitations,
 	}))
@@ -617,7 +618,7 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 	if contactFlow {
 		p, err = b.foundation.confirmContact(ctx, b.principal(r.Context()), binding, raw, nonce)
 	} else {
-		p, err = b.foundation.completeProof(ctx, nonce, raw)
+		p, err = b.foundation.completeSignInProof(ctx, nonce, raw, true)
 	}
 	if err != nil {
 		switch {
@@ -639,6 +640,7 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 	b.sessions.Put(r.Context(), "subject", p.subject)
 	b.sessions.Put(r.Context(), "expires", p.expires.Unix())
 	b.sessions.Put(r.Context(), "membership_incarnation", p.membershipIncarnation)
+	b.sessions.Put(r.Context(), "customer_signed_in", b.foundation.isCustomerSignIn(p.subject))
 	b.sessions.Put(r.Context(), "lang", lang)
 	deadline := time.Now().Add(30 * time.Minute)
 	if p.expires.Before(deadline) {
@@ -667,6 +669,15 @@ func (b *browser) principal(ctx context.Context) Principal {
 	)
 }
 
+// This session marker records a verified customer login only. Workspace and
+// operator handlers still require a current membership-bound principal.
+func (b *browser) signedInCustomer(ctx context.Context) bool {
+	return b.sessions.GetBool(ctx, "customer_signed_in") &&
+		b.sessions.GetString(ctx, "issuer") == b.foundation.broker.issuer &&
+		time.Now().Before(time.Unix(b.sessions.GetInt64(ctx, "expires"), 0)) &&
+		b.foundation.isCustomerSignIn(b.sessions.GetString(ctx, "subject"))
+}
+
 func (b *browser) sessionPrincipal(issuer, subject, incarnation string, expiry int64, previewIncarnation string) Principal {
 	if incarnation == "" {
 		// Legacy authenticated payloads must sign in again; pre-authentication
@@ -690,6 +701,14 @@ func (b *browser) home(w http.ResponseWriter, r *http.Request) {
 	p := b.principal(ctx)
 	client, role, err := b.foundation.membership(ctx, p)
 	if err != nil {
+		if b.signedInCustomer(ctx) {
+			if errors.Is(err, ErrDenied) {
+				b.render(w, r, http.StatusOK, "no-workspaces", "", nosurf.Token(r))
+			} else {
+				b.render(w, r, http.StatusServiceUnavailable, "unavailable", "", "")
+			}
+			return
+		}
 		// Opening the portal without a membership goes straight to the login;
 		// signIn shows the unavailable page instead if the lookup itself failed.
 		b.signIn(w, r)
