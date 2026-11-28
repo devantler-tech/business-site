@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -198,6 +199,152 @@ func TestRemovingLegacyBlockedMemberRestoresOnlySignIn(t *testing.T) {
 				t.Fatalf("removing a legacy-blocked customer did not restore provider sign-in: %d", status)
 			}
 			assertCustomerCanSignInWithoutWorkspace(t, b, tc.subject)
+		})
+	}
+}
+
+func TestConcurrentWorkspaceClosuresRecordFinalCustomerRemoval(t *testing.T) {
+	f := fixtureBroker(t)
+	pool := fixtureDB(t)
+	svc := enabled(t, pool, f)
+	subject := customeridentity.DexSubject("concurrent-close", customeridentity.ZitadelConnectorID)
+	_ = enroll(t, svc, f, subject, "first", "client")
+	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
+	defer cancel()
+	if _, err := pool.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role)
+ VALUES($1,$2,'second','client')`, f.issuer, subject); err != nil {
+		t.Fatal(err)
+	}
+	remove := func(workspace string) (pgx.Tx, []string) {
+		t.Helper()
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
+		var incarnation string
+		if err := tx.QueryRow(ctx, `DELETE FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND client_id=$3
+ RETURNING incarnation::text`, f.issuer, subject, workspace).Scan(&incarnation); err != nil {
+			t.Fatal(err)
+		}
+		return tx, []string{incarnation}
+	}
+	// The last removal began first, so its closure event is stamped earlier.
+	second, secondEvents := remove("second")
+	first, firstEvents := remove("first")
+	if err := recordClosedCustomerAccounts(ctx, first, f.issuer, "first", firstEvents); err != nil {
+		t.Fatal(err)
+	}
+	secondResult := make(chan error, 1)
+	go func() {
+		secondResult <- recordClosedCustomerAccounts(ctx, second, f.issuer, "second", secondEvents)
+	}()
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+waiting:
+	for {
+		select {
+		case err := <-secondResult:
+			t.Fatalf("second removal recorded its decision before the first committed: %v", err)
+		case <-ctx.Done():
+			t.Fatal("second removal did not wait for the first")
+		case <-tick.C:
+			var waiting bool
+			if err := pool.QueryRow(ctx, `SELECT EXISTS (
+ SELECT 1 FROM pg_locks WHERE locktype='advisory' AND classid=$1::oid AND NOT granted)`, customerClosureLock).Scan(&waiting); err != nil {
+				t.Fatal(err)
+			}
+			if waiting {
+				break waiting
+			}
+		}
+	}
+	if err := first.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-secondResult; err != nil {
+		t.Fatal(err)
+	}
+	if err := second.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	var workspace string
+	if err := pool.QueryRow(ctx, `SELECT count(*),COALESCE(min(h.client_id),'') FROM portal_customer_account_closures c
+ JOIN portal_membership_transitions h ON h.incarnation=c.membership_event
+ WHERE h.issuer=$1 AND h.subject=$2`, f.issuer, subject).Scan(&count, &workspace); err != nil || count != 1 || workspace != "second" {
+		t.Fatalf("expected one removal deadline from the final membership, got %d for %q: %v", count, workspace, err)
+	}
+	rows, err := pool.Query(ctx, customerAccountAccessSQL, f.issuer, []string{subject}, operatorWorkspace, previewWorkspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	access, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByPos[customerWorkspaceAccess])
+	if err != nil || !access.Former || access.Deadline == nil {
+		t.Fatalf("the directory did not show the recorded retention deadline: %v", err)
+	}
+}
+
+func TestCustomerDeadlineSurvivesAnInvitationWithoutMembership(t *testing.T) {
+	b := newOperatorBrowserFixture(t)
+	for _, ending := range []string{"expires", "revoked", "workspace-closed"} {
+		t.Run(ending, func(t *testing.T) {
+			id := "pending-" + ending
+			subject := customeridentity.DexSubject(id, customeridentity.ZitadelConnectorID)
+			memberWorkspace := id + "-member"
+			inviteWorkspace := id + "-invite"
+			if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_memberships(issuer,subject,client_id,role)
+ VALUES($1,$2,$3,'client')`, b.f.issuer, subject, memberWorkspace); err != nil {
+				t.Fatal(err)
+			}
+			b.invite(subject, inviteWorkspace, "client")
+			form := operatorMembershipForm(b, subject, memberWorkspace)
+			if status, _, _ := b.request("POST", operatorAPIRoot+"/members/remove", form, b.site.URL); status != http.StatusOK {
+				t.Fatalf("removing the last membership returned %d", status)
+			}
+			readAccount := func() customerAccountRow {
+				t.Helper()
+				rows, err := b.pool.Query(t.Context(), customerAccountAccessSQL, b.f.issuer, []string{subject}, operatorWorkspace, previewWorkspace)
+				if err != nil {
+					t.Fatal(err)
+				}
+				access, err := pgx.CollectRows(rows, pgx.RowToStructByPos[customerWorkspaceAccess])
+				if err != nil || len(access) == 0 {
+					t.Fatalf("could not read the customer directory: %v", err)
+				}
+				return accountRow(customeridentity.Account{ID: id}, access, "en")
+			}
+			if account := readAccount(); account.Status != "invited" || account.Deadline != nil {
+				t.Fatalf("a pending invitation should take precedence in the directory, got %s", account.Status)
+			}
+			switch ending {
+			case "expires":
+				_, err := b.pool.Exec(t.Context(), `UPDATE portal_invitations SET expires_at=now()-interval '1 minute'
+ WHERE issuer=$1 AND subject=$2 AND client_id=$3`, b.f.issuer, subject, inviteWorkspace)
+				if err != nil {
+					t.Fatal(err)
+				}
+			case "revoked":
+				var expires time.Time
+				err := b.pool.QueryRow(t.Context(), `SELECT expires_at FROM portal_invitations
+ WHERE issuer=$1 AND subject=$2 AND client_id=$3`, b.f.issuer, subject, inviteWorkspace).Scan(&expires)
+				if err != nil {
+					t.Fatal(err)
+				}
+				revoke := url.Values{"workspace": {inviteWorkspace}, "subject": {subject},
+					"expires": {expires.Format(time.RFC3339Nano)}, "csrf_token": form["csrf_token"]}
+				if status, _, _ := b.request("POST", operatorAPIRoot+"/invitations/revoke?focus=workspace", revoke, b.site.URL); status != http.StatusOK {
+					t.Fatalf("revoking the invitation returned %d", status)
+				}
+			case "workspace-closed":
+				closeForm := url.Values{"workspace": {inviteWorkspace}, "confirm": {inviteWorkspace}, "csrf_token": form["csrf_token"]}
+				if status, _, _ := b.request("POST", operatorAPIRoot+"/workspaces/delete", closeForm, b.site.URL); status != http.StatusOK {
+					t.Fatalf("closing the workspace with the pending invitation returned %d", status)
+				}
+			}
+			if account := readAccount(); account.Status != "former" || account.Deadline == nil {
+				t.Fatalf("the former customer's retention deadline was lost after %s", ending)
+			}
 		})
 	}
 }
