@@ -40,7 +40,8 @@ admission_valid() {
     .jobs.admit.outputs["public-digest"]=="\u0024{{ steps.admit.outputs.public-digest }}"
   ' >/dev/null
 }
-# Admit a main-only manual release with a default dry run and narrowly forwarded App credential.
+# Admit a main-only manual release with a default dry run and no forwarded credential: the shared
+# release workflow gets its token from the GitHub token broker with this job's OIDC identity.
 release_valid() {
   jq -e '
     (.on|keys)==["workflow_dispatch"] and
@@ -51,7 +52,7 @@ release_valid() {
     .jobs.release.needs=="admit" and .jobs.release.if==null and
     (.jobs.release.uses|test("^devantler-tech/\\.github/\\.github/workflows/create-release\\.yaml@[0-9a-f]{40}$")) and
     .jobs.release.permissions=={"contents":"read","id-token":"write"} and
-    .jobs.release.secrets=={"APP_PRIVATE_KEY":"\u0024{{ secrets.APP_PRIVATE_KEY }}"} and
+    .jobs.release.secrets==null and
     .jobs.release.with=={"disable-issue-side-effects":true,"warn-missing-breaking-bang":true,"dry-run":"\u0024{{ github.event_name == \u0027workflow_dispatch\u0027 && inputs.mode == \u0027dry-run\u0027 }}"}
   ' >/dev/null
 }
@@ -107,6 +108,8 @@ for mutation in '.jobs.admit.if="always()"' '.on.workflow_dispatch.inputs.mode.d
   '.jobs.admit.if|=sub("vars.RUNTIME_PUBLICATION_ENABLED";"vars.UNRELATED_VARIABLE")' \
   'del(.on.workflow_dispatch.inputs.expected_source)' \
   '.jobs.release.with["dry-run"]=false' '.jobs.release.secrets="inherit"' '.jobs.release.needs=null' \
+  '.jobs.release.secrets={"APP_PRIVATE_KEY":"\u0024{{ secrets.APP_PRIVATE_KEY }}"}' \
+  'del(.jobs.release.permissions["id-token"])' \
   '.jobs.release.permissions.contents="write"' '.jobs.release.permissions.issues="write"' \
   '.jobs.release.uses|=sub("@[0-9a-f]{40}$";"@main")' '.jobs.release.uses|=sub("@[0-9a-f]{40}$";"@v20.1.19")' \
   '.jobs.release.uses|=sub("[0-9a-f]$";"")' '.jobs.release.uses|=sub("^devantler-tech/";"foreign/")' \
