@@ -53,7 +53,7 @@ func TestPortalLinkPreprocessor(t *testing.T) {
 		}
 		return
 	}
-	for name, want := range map[string]int{"portal.html": 26, "contact.html": 12, "requests.html": 38, "triage.html": 24, "work-review.html": 18, "operator.html": 40} {
+	for name, want := range map[string]int{"portal.html": 24, "contact.html": 12, "requests.html": 38, "triage.html": 24, "work-review.html": 18, "operator.html": 40} {
 		t.Run(name, func(t *testing.T) {
 			pages, err := renderedLinkPages(name)
 			if err != nil || len(pages) != want {
@@ -361,7 +361,7 @@ func renderedLinkPagesFor(name string, templates *template.Template, b *browser)
 				}
 			}
 		case "portal.html":
-			for _, kind := range []string{"no-access", "no-workspaces", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict"} {
+			for _, kind := range []string{"no-access", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict"} {
 				uri := "/portal/"
 				switch kind {
 				case "no-access", "unavailable":

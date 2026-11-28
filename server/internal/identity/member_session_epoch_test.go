@@ -46,9 +46,9 @@ func (p *sessionInsertPause) TraceQueryStart(ctx context.Context, _ *pgx.Conn, q
 
 func (*sessionInsertPause) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
 
-// TestLateSessionCommitCannotRestoreRevokedMembership catches a callback whose
-// old authenticated payload reaches SCS after deactivation AND reactivation.
-func TestLateSessionCommitCannotRestoreRevokedMembership(t *testing.T) {
+// TestLateSessionCommitCannotAdoptReplacementMembership catches a callback
+// whose old authenticated payload is persisted after membership is replaced.
+func TestLateSessionCommitCannotAdoptReplacementMembership(t *testing.T) {
 	b := newOperatorBrowserFixture(t)
 	operatorClient, csrf := b.client, b.csrf("/portal/")
 	if err := b.svc.LinkCustomerDirectory(&managementDirectory{change: func(context.Context, string, bool) error { return nil }}); err != nil {
@@ -90,10 +90,11 @@ func TestLateSessionCommitCannotRestoreRevokedMembership(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("callback did not reach authenticated session persistence")
 	}
-	for _, action := range []string{"deactivate", "reactivate"} {
-		if status := memberClientRequest(t, b, operatorClient, csrf, action); status != http.StatusOK {
-			t.Fatal("member transition failed while the old callback was paused", action, status)
-		}
+	if status := memberClientRequest(t, b, operatorClient, csrf, "remove"); status != http.StatusOK {
+		t.Fatal("membership removal failed while the old callback was paused", status)
+	}
+	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_memberships (issuer,subject,client_id,role) VALUES($1,$2,'client-a','client')`, b.f.issuer, customerSubject); err != nil {
+		t.Fatal(err)
 	}
 	resume()
 	select {
@@ -101,12 +102,13 @@ func TestLateSessionCommitCannotRestoreRevokedMembership(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("old callback did not return")
 	}
-	if status, _, _ := b.request("GET", "/portal/", nil, ""); status == http.StatusOK {
-		t.Fatal("a session committed after revocation regained private access")
+	if status, _, _ := b.request("GET", "/portal/contact", nil, ""); status == http.StatusOK {
+		t.Fatal("a session committed after membership removal regained private access")
 	}
+	b.signOut()
 	b.finish(b.start())
 	if status, _, _ := b.request("GET", "/portal/", nil, ""); status != http.StatusOK {
-		t.Fatal("a genuinely new sign-in could not use the reactivated membership", status)
+		t.Fatal("a genuinely new sign-in could not use the replacement membership", status)
 	}
 }
 

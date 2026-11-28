@@ -465,9 +465,15 @@ func (s *Foundation) completeSignInProof(ctx context.Context, nonce, raw string,
 		_, _, p.membershipIncarnation, err = s.membershipState(ctx, p)
 	}
 	if errors.Is(err, ErrDenied) && allowCustomerWithoutWorkspace && s.isCustomerSignIn(p.subject) && ctx.Err() == nil && time.Now().Before(p.expires) {
+		var operatorAccount bool
+		if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='operator')`, p.issuer, p.subject).Scan(&operatorAccount); err != nil {
+			return Principal{}, fmt.Errorf("check existing operator identity: %w", err)
+		}
 		// A verified customer account carries no workspace authority until a
 		// current membership incarnation is bound to the session.
-		return p, nil
+		if !operatorAccount && ctx.Err() == nil && time.Now().Before(p.expires) {
+			return p, nil
+		}
 	}
 	if err != nil {
 		return Principal{}, err
