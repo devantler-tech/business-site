@@ -229,8 +229,9 @@ func TestConcurrentWorkspaceClosuresRecordFinalCustomerRemoval(t *testing.T) {
 		}
 		return tx, []string{incarnation}
 	}
-	first, firstEvents := remove("first")
+	// The last removal began first, so its closure event is stamped earlier.
 	second, secondEvents := remove("second")
+	first, firstEvents := remove("first")
 	if err := recordClosedCustomerAccounts(ctx, first, f.issuer, "first", firstEvents); err != nil {
 		t.Fatal(err)
 	}
@@ -273,6 +274,14 @@ waiting:
  JOIN portal_membership_transitions h ON h.incarnation=c.membership_event
  WHERE h.issuer=$1 AND h.subject=$2`, f.issuer, subject).Scan(&count, &workspace); err != nil || count != 1 || workspace != "second" {
 		t.Fatalf("expected one removal deadline from the final membership, got %d for %q: %v", count, workspace, err)
+	}
+	rows, err := pool.Query(ctx, customerAccountAccessSQL, f.issuer, []string{subject}, operatorWorkspace, previewWorkspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	access, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByPos[customerWorkspaceAccess])
+	if err != nil || !access.Former || access.Deadline == nil {
+		t.Fatalf("the directory did not show the recorded retention deadline: %v", err)
 	}
 }
 

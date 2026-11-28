@@ -561,10 +561,17 @@ func (s *Foundation) redeem(ctx context.Context, p Principal, selected string, s
 	if result.RowsAffected() != 1 {
 		return ErrDenied
 	}
-	if session != nil && !lockBrowserSession(ctx, tx, *session) {
-		return ErrDenied
+	deadline := p.expires
+	if session != nil {
+		sessionDeadline := lockBrowserSession(ctx, tx, *session)
+		if sessionDeadline.IsZero() {
+			return ErrDenied
+		}
+		if sessionDeadline.Before(deadline) {
+			deadline = sessionDeadline
+		}
 	}
-	if ctx.Err() != nil || !time.Now().Before(p.expires) || !s.ready(ctx) {
+	if !s.ready(ctx) || ctx.Err() != nil || !time.Now().Before(deadline) {
 		return ErrDenied
 	}
 	if err = tx.Commit(ctx); err != nil {
