@@ -258,9 +258,9 @@ func (b *browser) restoreSignInForRemovedLegacyMember(ctx context.Context, tx pg
 	var portalBlocked bool
 	err := tx.QueryRow(ctx, `SELECT EXISTS (
  SELECT 1 FROM portal_membership_transitions h JOIN portal_operator_audit a
-   ON a.target=h.subject AND a.actor_issuer=h.issuer AND a.at>=h.recorded_at
+   ON a.target=$4 AND a.actor_issuer=h.issuer AND a.at>=h.recorded_at
  WHERE h.incarnation::text=$3 AND h.issuer=$1 AND h.subject=$2 AND h.revoked
-   AND a.action='members.deactivate' AND a.outcome='allowed')`, issuer, subject, incarnation).Scan(&portalBlocked)
+   AND a.action='members.deactivate' AND a.outcome='allowed')`, issuer, subject, incarnation, operatorAuditTarget(subject)).Scan(&portalBlocked)
 	if err != nil || !portalBlocked {
 		return err
 	}
