@@ -105,11 +105,8 @@ func (j *Journal) registration() (string, []byte) {
 
 // RecordDeletionIntent verifies a durable record before the provider mutation.
 func (j *Journal) RecordDeletionIntent(ctx context.Context, issuer string, target identity.CustomerDeletionTarget) error {
-	key, expected, err := j.binding(issuer, target)
+	key, expected, err := j.registeredBinding(ctx, issuer, target)
 	if err != nil {
-		return err
-	}
-	if err := j.verifyRegistration(ctx); err != nil {
 		return err
 	}
 	return j.write(ctx, key+intent, expected)
@@ -117,11 +114,8 @@ func (j *Journal) RecordDeletionIntent(ctx context.Context, issuer string, targe
 
 // RecordDeletionConfirmation requires the existing intent and writes its distinct confirmation.
 func (j *Journal) RecordDeletionConfirmation(ctx context.Context, issuer string, target identity.CustomerDeletionTarget) error {
-	key, expected, err := j.binding(issuer, target)
+	key, expected, err := j.registeredBinding(ctx, issuer, target)
 	if err != nil {
-		return err
-	}
-	if err := j.verifyRegistration(ctx); err != nil {
 		return err
 	}
 	found, err := j.matches(ctx, key+intent, expected)
@@ -129,6 +123,18 @@ func (j *Journal) RecordDeletionConfirmation(ctx context.Context, issuer string,
 		return ErrUnconfirmed
 	}
 	return j.write(ctx, key+confirmed, expected)
+}
+
+// registeredBinding derives the record for one account and requires the store's registration.
+func (j *Journal) registeredBinding(ctx context.Context, issuer string, target identity.CustomerDeletionTarget) (string, []byte, error) {
+	key, expected, err := j.binding(issuer, target)
+	if err != nil {
+		return "", nil, err
+	}
+	if err := j.verifyRegistration(ctx); err != nil {
+		return "", nil, err
+	}
+	return key, expected, nil
 }
 
 func (j *Journal) binding(issuer string, target identity.CustomerDeletionTarget) (string, []byte, error) {
