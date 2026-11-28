@@ -350,6 +350,14 @@ before deleting its agreements and preserves operator history referenced by
 remaining hosting periods. The portal's authorization and period locking are
 required before a workflow begins writing real hosting periods.
 
+The workspace early-deletion migration grants execution of two owner-controlled
+functions only. They report eligibility and delete ordinary records of one exact
+closed workspace without granting runtime table DELETE. The deletion function
+rechecks the closure timestamp, current operator membership and protected records,
+leaves the identity closure history intact, and records the outcome in its transaction.
+Both functions pin their search path. Runtime startup verifies ownership and refuses
+public execution or delegated grants.
+
 Workspace invitation emails have one queued notice and one delivery receipt
 per pending invitation. The runtime can read and append both rows and update
 only the timestamp of the last delivery attempt. Acceptance and invitation

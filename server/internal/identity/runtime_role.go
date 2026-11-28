@@ -110,6 +110,18 @@ func checkWorkspaceRole(ctx context.Context, pool queryRower) error {
  AND has_table_privilege(current_user,'portal_workspace_settings','INSERT')
  AND has_column_privilege(current_user,'portal_workspace_settings','display_name','UPDATE')
  AND has_column_privilege(current_user,'portal_workspace_settings','closed_at','UPDATE')
+ AND (SELECT count(*)=2
+  FROM pg_proc p JOIN pg_class w ON w.oid='public.portal_workspaces'::regclass
+  WHERE p.oid IN ('public.portal_workspace_purge_state(text)'::regprocedure,
+                 'public.portal_purge_closed_workspace(text,timestamptz,text,text,text)'::regprocedure)
+    AND has_function_privilege(current_user,p.oid,'EXECUTE')
+    AND p.proowner=w.relowner AND p.prokind='f' AND p.prosecdef
+    AND p.proconfig=ARRAY['search_path=pg_catalog, pg_temp']
+    AND NOT EXISTS (SELECT 1 FROM aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) acl
+                    WHERE acl.grantee=0 AND acl.privilege_type='EXECUTE')
+    AND NOT EXISTS (SELECT 1 FROM pg_roles r
+     WHERE (r.rolname=current_user OR pg_has_role(current_user,r.oid,'MEMBER'))
+       AND has_function_privilege(r.oid,p.oid,'EXECUTE WITH GRANT OPTION')))
  AND NOT EXISTS (
   SELECT 1 FROM pg_roles r WHERE (r.rolname=current_user OR pg_has_role(current_user,r.oid,'MEMBER')) AND (
    has_column_privilege(r.oid,'portal_workspace_settings','workspace_id','UPDATE')

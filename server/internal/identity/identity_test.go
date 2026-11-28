@@ -184,6 +184,7 @@ GRANT SELECT,INSERT ON portal_service_fulfillments,portal_service_consumers TO p
 GRANT SELECT,INSERT ON portal_appointment_reservations,portal_appointment_revisions,portal_appointment_introductions,portal_appointment_introduction_cancellations,portal_appointment_calendar_intents,portal_appointment_calendar_observations,portal_customer_account_closures,portal_appointment_calendar_attempts,portal_appointment_calendar_removals TO portal_runtime;
 GRANT SELECT ON portal_schema_version,portal_work_queue_revision TO portal_runtime;
 GRANT EXECUTE ON FUNCTION public.portal_lock_work_queue_revision(bigint) TO portal_runtime;
+GRANT EXECUTE ON FUNCTION public.portal_workspace_purge_state(text),public.portal_purge_closed_workspace(text,timestamptz,text,text,text) TO portal_runtime;
 REVOKE ALL ON portal_preview_receipts FROM portal_runtime;
 DELETE FROM portal_preview_receipts;
 DELETE FROM portal_operator_audit;

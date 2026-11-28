@@ -328,6 +328,9 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("POST /portal/operator/customers/cleanup", b.operatorAPI(operatorRoute{
 		method: "POST", action: "invitations.cleanup", run: (*browser).cleanupCustomerInvitations,
 	}))
+	mux.HandleFunc("POST /portal/operator/customers/purge", b.operatorAPI(operatorRoute{
+		method: "POST", action: "workspaces.purge", run: (*browser).purgeClosedWorkspace,
+	}))
 	mux.HandleFunc("POST /portal/operator/support", b.operatorSupportPage)
 	mux.HandleFunc("GET /portal/operator/invitations/new", b.operatorInvitationPage)
 	if b.foundation.previewAvailable() {
@@ -839,7 +842,7 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	if kind == "proposal-invalid" || kind == "proposal-conflict" || kind == "sharing-invalid" || kind == "sharing-conflict" {
 		path = "/portal/operator/requests"
 	}
-	if kind == "operator-action-error" || kind == "operator-workspace-billing-error" || kind == "operator-support" {
+	if kind == "operator-action-error" || kind == "operator-workspace-billing-error" || kind == "operator-workspace-purge-error" || kind == "operator-support" {
 		path = "/portal/operator/customers"
 	}
 	if kind == "operator-invitation-error" {
