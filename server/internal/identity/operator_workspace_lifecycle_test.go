@@ -285,6 +285,70 @@ waiting:
 	}
 }
 
+func TestCustomerDeadlineSurvivesAnInvitationWithoutMembership(t *testing.T) {
+	b := newOperatorBrowserFixture(t)
+	for _, ending := range []string{"expires", "revoked", "workspace-closed"} {
+		t.Run(ending, func(t *testing.T) {
+			id := "pending-" + ending
+			subject := customeridentity.DexSubject(id, customeridentity.ZitadelConnectorID)
+			memberWorkspace := id + "-member"
+			inviteWorkspace := id + "-invite"
+			if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_memberships(issuer,subject,client_id,role)
+ VALUES($1,$2,$3,'client')`, b.f.issuer, subject, memberWorkspace); err != nil {
+				t.Fatal(err)
+			}
+			b.invite(subject, inviteWorkspace, "client")
+			form := operatorMembershipForm(b, subject, memberWorkspace)
+			if status, _, _ := b.request("POST", operatorAPIRoot+"/members/remove", form, b.site.URL); status != http.StatusOK {
+				t.Fatalf("removing the last membership returned %d", status)
+			}
+			readAccount := func() customerAccountRow {
+				t.Helper()
+				rows, err := b.pool.Query(t.Context(), customerAccountAccessSQL, b.f.issuer, []string{subject}, operatorWorkspace, previewWorkspace)
+				if err != nil {
+					t.Fatal(err)
+				}
+				access, err := pgx.CollectRows(rows, pgx.RowToStructByPos[customerWorkspaceAccess])
+				if err != nil || len(access) == 0 {
+					t.Fatalf("could not read the customer directory: %v", err)
+				}
+				return accountRow(customeridentity.Account{ID: id}, access, "en")
+			}
+			if account := readAccount(); account.Status != "invited" || account.Deadline != nil {
+				t.Fatalf("a pending invitation should take precedence in the directory, got %s", account.Status)
+			}
+			switch ending {
+			case "expires":
+				_, err := b.pool.Exec(t.Context(), `UPDATE portal_invitations SET expires_at=now()-interval '1 minute'
+ WHERE issuer=$1 AND subject=$2 AND client_id=$3`, b.f.issuer, subject, inviteWorkspace)
+				if err != nil {
+					t.Fatal(err)
+				}
+			case "revoked":
+				var expires time.Time
+				err := b.pool.QueryRow(t.Context(), `SELECT expires_at FROM portal_invitations
+ WHERE issuer=$1 AND subject=$2 AND client_id=$3`, b.f.issuer, subject, inviteWorkspace).Scan(&expires)
+				if err != nil {
+					t.Fatal(err)
+				}
+				revoke := url.Values{"workspace": {inviteWorkspace}, "subject": {subject},
+					"expires": {expires.Format(time.RFC3339Nano)}, "csrf_token": form["csrf_token"]}
+				if status, _, _ := b.request("POST", operatorAPIRoot+"/invitations/revoke?focus=workspace", revoke, b.site.URL); status != http.StatusOK {
+					t.Fatalf("revoking the invitation returned %d", status)
+				}
+			case "workspace-closed":
+				close := url.Values{"workspace": {inviteWorkspace}, "confirm": {inviteWorkspace}, "csrf_token": form["csrf_token"]}
+				if status, _, _ := b.request("POST", operatorAPIRoot+"/workspaces/delete", close, b.site.URL); status != http.StatusOK {
+					t.Fatalf("closing the workspace with the pending invitation returned %d", status)
+				}
+			}
+			if account := readAccount(); account.Status != "former" || account.Deadline == nil {
+				t.Fatalf("the former customer's retention deadline was lost after %s", ending)
+			}
+		})
+	}
+}
+
 func TestOperatorWorkspaceDeletionSerializesWithInvitation(t *testing.T) {
 	b := newOperatorBrowserFixture(t)
 	b.invite("existing-customer", "fixture-workspace", "client")

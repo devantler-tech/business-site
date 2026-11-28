@@ -195,6 +195,8 @@ func recordClosedCustomerAccounts(ctx context.Context, tx pgx.Tx, issuer, worksp
 			return err
 		}
 	}
+	// An invitation does not extend an existing membership. Keep its last
+	// access date so the directory can show the deadline once the invite ends.
 	var recorded bool
 	err = tx.QueryRow(ctx, `WITH removed AS (
  SELECT h.incarnation,h.recorded_at,h.subject FROM portal_membership_transitions h
@@ -203,7 +205,6 @@ func recordClosedCustomerAccounts(ctx context.Context, tx pgx.Tx, issuer, worksp
 ), eligible AS (
  SELECT h.incarnation,h.recorded_at FROM removed h
  WHERE NOT EXISTS (SELECT 1 FROM portal_memberships m WHERE m.issuer=$1 AND m.subject=h.subject AND NOT m.revoked)
- AND NOT EXISTS (SELECT 1 FROM portal_invitations i WHERE i.issuer=$1 AND i.subject=h.subject AND NOT i.revoked AND i.expires_at>now())
 ), recorded AS (
  INSERT INTO portal_customer_account_closures(membership_event,closed_at,remove_by)
  SELECT incarnation,recorded_at,recorded_at+interval '720 hours' FROM eligible
