@@ -61,6 +61,7 @@ func profileFor(account user) customeridentity.Profile {
 	}
 }
 
+// Account reads one human from the configured customer organization.
 func (c *Client) Account(ctx context.Context, id string) (customeridentity.Account, error) {
 	account, err := c.readHuman(ctx, id)
 	if err != nil || account.State == "USER_STATE_DELETED" {
