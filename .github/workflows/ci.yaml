@@ -410,11 +410,6 @@ jobs:
       - name: Verify retained Go contact HTTP and post-wait authority
         working-directory: .
         run: bash scripts/check-go-contact.sh
-      - name: Verify dependencies and formatting
-        run: |
-          go mod verify
-          test -z "$(gofmt -l .)"
-          go vet ./...
       # -p=1 below keeps packages that share the test database from running at
       # once, but it also builds one package at a time. Compiling both race
       # variants here, in parallel and without running anything, fills the build
@@ -436,6 +431,35 @@ jobs:
         run: go test -race -coverprofile=coverage-private.out -p=1 ./... -count=1 -timeout=90s -json -run '^Test(Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)' | tee test-private.jsonl
       - name: Verify every ordinary test ran exactly once
         run: node ../scripts/identity-cohorts.mjs
+
+  # Checks that need no test database run beside the serialized database job,
+  # so they do not spend its fixed budget (business-site#873).
+  test-portal-go-static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: server
+    env:
+      LC_ALL: C
+      GOTOOLCHAIN: local
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: Verify dependencies and formatting
+        run: |
+          go mod verify
+          test -z "$(gofmt -l .)"
+          go vet ./...
       - name: Scan reachable Go vulnerabilities
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
@@ -657,6 +681,7 @@ jobs:
       - drift-check-active-projects
       - test-repository-contracts
       - test-portal-identity
+      - test-portal-go-static
       - test-portal-quality
       - test-tenant-admission
       - test-combined-runtime
@@ -673,6 +698,7 @@ jobs:
             ${{ needs.drift-check-active-projects.result }}
             ${{ needs.test-repository-contracts.result }}
             ${{ needs.test-portal-identity.result }}
+            ${{ needs.test-portal-go-static.result }}
             ${{ needs.test-portal-quality.result }}
             ${{ needs.test-tenant-admission.result }}
             ${{ needs.test-combined-runtime.result }}
@@ -692,6 +718,7 @@ jobs:
       - drift-check-active-projects
       - test-repository-contracts
       - test-portal-identity
+      - test-portal-go-static
       - test-portal-quality
       - test-tenant-admission
       - test-combined-runtime
@@ -711,6 +738,7 @@ jobs:
             ${{ needs.drift-check-active-projects.result }}
             ${{ needs.test-repository-contracts.result }}
             ${{ needs.test-portal-identity.result }}
+            ${{ needs.test-portal-go-static.result }}
             ${{ needs.test-portal-quality.result }}
             ${{ needs.test-tenant-admission.result }}
             ${{ needs.test-combined-runtime.result }}
