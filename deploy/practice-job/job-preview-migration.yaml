@@ -1,3 +1,5 @@
+# The dev and production overlays scope the practice migrator to their own
+# namespace, Secret and signed runtime image.
 apiVersion: batch/v1
 kind: Job
 metadata:

@@ -65,8 +65,8 @@ test("generated workload inventory is complete and ownership controls are explic
   const result = admissionFixtures(source, tenantFixtureLabels, objects);
   assert.equal(result.status, 0, result.stderr);
   const fixtures = result.stdout.trim().split("\n").map((line) => JSON.parse(line));
-  assert.equal(fixtures.length, 74);
-  assert.equal(new Set(fixtures.map(({ label }) => label)).size, 74);
+  assert.equal(fixtures.length, 78);
+  assert.equal(new Set(fixtures.map(({ label }) => label)).size, fixtures.length);
   const generated = fixtures.filter(({ label }) => label.startsWith("generated-"));
   assert.equal(generated.length, 26);
   for (const object of objects) {
@@ -115,23 +115,25 @@ test("admission uses each rendered workload and an isolated refusal control", ()
   assert.equal(result.status, 0, result.stderr);
   const fixtures = result.stdout.trim().split("\n").map((line) => JSON.parse(line))
     .filter((fixture) => /^(WebApp|Job|CronJob)-/.test(fixture.label));
-  assert.equal(fixtures.length, 12);
-  assert.equal(new Set(fixtures.map((f) => f.label)).size, 12);
-  for (const [kind, policy, deny] of [
-    ["WebApp", "restrict-tenant-webapps", (object) => { object.spec.name = "fictional-other-tenant"; }],
-    ["Job", "validate-pod-security", (object) => { object.spec.template.spec.containers[0].securityContext.privileged = true; }],
-    ["CronJob", "validate-pod-security", (object) => {
+  assert.equal(fixtures.length, 16);
+  assert.equal(new Set(fixtures.map((f) => f.label)).size, 16);
+  const denyJob = (object) => { object.spec.template.spec.containers[0].securityContext.privileged = true; };
+  for (const [kind, name, policy, deny] of [
+    ["WebApp", "business-site", "restrict-tenant-webapps", (object) => { object.spec.name = "fictional-other-tenant"; }],
+    ["Job", "business-site-portal-migration", "validate-pod-security", denyJob],
+    ["Job", "business-site-practice-migration", "validate-pod-security", denyJob],
+    ["CronJob", "business-site-portal-retention", "validate-pod-security", (object) => {
       object.spec.jobTemplate.spec.template.spec.containers[0].securityContext.privileged = true;
     }],
   ]) {
-    const object = documents.find((doc) => doc?.kind === kind);
+    const object = documents.find((doc) => doc?.kind === kind && doc.metadata.name === name);
     const negative = structuredClone(object);
     deny(negative);
     const oldObject = structuredClone(object);
     oldObject.metadata.annotations = { ...oldObject.metadata.annotations, "fixture.example/previous": "true" };
     for (const operation of ["CREATE", "UPDATE"]) {
       for (const [expected, target] of [["pass", object], ["fail", negative]]) {
-        const label = `${kind}-${operation}-${expected}`;
+        const label = `${kind}-${name}-${operation}-${expected}`;
         assert.deepEqual(fixtures.find((f) => f.label === label), {
           label,
           object: target,
@@ -153,8 +155,8 @@ test("direct tenant resources carry their rendered objects and actual namespace 
   assert.equal(result.status, 0, result.stderr);
   const fixtures = result.stdout.trim().split("\n").map((line) => JSON.parse(line))
     .filter(({ label }) => !label.startsWith("generated-"));
-  assert.equal(fixtures.length, 48);
-  assert.equal(new Set(fixtures.map((fixture) => fixture.label)).size, 48);
+  assert.equal(fixtures.length, 52);
+  assert.equal(new Set(fixtures.map((fixture) => fixture.label)).size, fixtures.length);
   const namespace = { apiVersion: "v1", kind: "Namespace", metadata: {
     name: "business-site", labels: tenantFixtureLabels,
   } };
@@ -260,6 +262,29 @@ test("the hosted preview keeps its application and schema migration private", ()
   assert.equal(pod.volumes.find((volume) => volume.name === "migration").secret.secretName, "business-site-dev-migration");
   const practice = yaml.loadAll(render(path.join(root, "deploy/practice")));
   assert.deepEqual(practice, [job], "the practice overlay contains only the same migration Job");
+});
+
+test("the signed tenant package migrates practice with its own isolated inputs", () => {
+  const documents = yaml.loadAll(render());
+  const app = documents.find((document) => document.kind === "WebApp");
+  const jobs = documents.filter((document) => document.kind === "Job");
+  assert.deepEqual(jobs.map((job) => job.metadata.name).sort(), [
+    "business-site-portal-migration", "business-site-practice-migration",
+  ]);
+  const practiceJob = jobs.find((job) => job.metadata.name === "business-site-practice-migration");
+  const pod = practiceJob.spec.template.spec;
+  assert.equal(practiceJob.metadata.namespace, "business-site");
+  assert.equal(practiceJob.spec.template.metadata.labels["app.kubernetes.io/name"], "business-site-practice-migration");
+  assert.equal(pod.automountServiceAccountToken, false);
+  assert.equal(pod.containers[0].image, app.spec.image);
+  assert.deepEqual(pod.containers[0].args, [
+    "--migrate", "--migration-database-projection", "/run/portal-migration/database-url",
+    "--runtime-role", "portal_preview_web",
+  ]);
+  assert.deepEqual(pod.volumes.filter((volume) => volume.secret).map((volume) => volume.secret.secretName), [
+    "business-site-practice-migration",
+  ]);
+  assert.ok(app.spec.secretProjections.every((projection) => projection.secretName !== "business-site-practice-migration"));
 });
 
 test("the rendered network policy allows only the two billing APIs on HTTPS", () => {
@@ -487,6 +512,11 @@ for (const [name, mutate] of [
   ["a migration Job Flux cannot recreate", (d) => { delete d[9].metadata.annotations; }],
   ["a migration pod labelled as the web workload", (d) => { d[9].spec.template.metadata.labels["app.kubernetes.io/name"] = "business-site"; }],
   ["a migration container that does not itself refuse root", (d) => { delete d[9].spec.template.spec.containers[0].securityContext.runAsNonRoot; }],
+  ["a missing practice migration", (d) => { d.splice(11, 1); }],
+  ["a practice migration outside the tenant", (d) => { d[11].metadata.namespace = "business-site-dev"; }],
+  ["a practice migration granting the ordinary portal role", (d) => { d[11].spec.template.spec.containers[0].args[4] = "portal_web"; }],
+  ["a practice migration mounting the ordinary portal credentials", (d) => { d[11].spec.template.spec.volumes[0].secret.secretName = "business-site-portal-db-migration"; }],
+  ["a practice migration with a service-account token", (d) => { d[11].spec.template.spec.automountServiceAccountToken = true; }],
   ["a retention container that does not itself refuse root", (d) => { delete d[10].spec.jobTemplate.spec.template.spec.containers[0].securityContext.runAsNonRoot; }],
   ["a missing retention CronJob", (d) => { d.splice(10, 1); }],
   ["a retention CronJob on another image", (d) => { d[10].spec.jobTemplate.spec.template.spec.containers[0].image = `ghcr.io/devantler-tech/business-site@sha256:${"a".repeat(64)}`; }],
@@ -512,8 +542,9 @@ for (const [name, mutate] of [
     for (const name of ["business-site-portal", "business-site-public"]) docs.push(named("HTTPRoute", name));
     // The billing synchronizations follow at indexes 7 (Numina) and 8 (Stripe).
     for (const name of ["business-site-numina", "business-site-stripe"]) docs.push(named("ExternalSecret", name));
-    // The migration Job follows at index 9 and the retention CronJob at 10.
-    docs.push(named("Job", "business-site-portal-migration"), named("CronJob", "business-site-portal-retention"));
+    // The migration Jobs are at indexes 9 and 11 and the retention CronJob is at 10.
+    docs.push(named("Job", "business-site-portal-migration"), named("CronJob", "business-site-portal-retention"),
+      named("Job", "business-site-practice-migration"));
     assert.equal(check(docs.map((d) => yaml.dump(d)).join("---\n")).status, 0,
       "each refusal must start from a complete accepted package");
     mutate(docs);
@@ -534,7 +565,7 @@ test("every package pod passes the cluster's pod-security admission rule", () =>
     ...docs.filter((d) => d?.kind === "Job").map((d) => d.spec.template.spec),
     ...docs.filter((d) => d?.kind === "CronJob").map((d) => d.spec.jobTemplate.spec.template.spec),
   ];
-  assert.equal(pods.length, 2, "the migration Job and the retention CronJob");
+  assert.equal(pods.length, 3, "both migration Jobs and the retention CronJob");
   for (const pod of pods) {
     assert.ok(["RuntimeDefault", "Localhost"].includes(pod.securityContext?.seccompProfile?.type));
     for (const c of [...(pod.initContainers ?? []), ...pod.containers]) {
@@ -547,9 +578,7 @@ test("every package pod passes the cluster's pod-security admission rule", () =>
   }
 });
 
-test("the migration Job and retention CronJob run whatever image the publisher pins in the WebApp", () => {
-  // The shared publisher pins the WebApp image. The production overlay copies
-  // that image into both jobs.
+test("both migrations and retention run the image the publisher pins in the WebApp", () => {
   const fixture = mkdtempSync(path.join(tmpdir(), "tenant-package-"));
   try {
     cpSync(path.join(root, "deploy"), fixture, { recursive: true });
@@ -559,8 +588,8 @@ test("the migration Job and retention CronJob run whatever image the publisher p
     app.spec.image = pinned;
     writeFileSync(appManifest, yaml.dump(app));
     const rendered = yaml.loadAll(render(fixture));
-    const job = rendered.find((d) => d?.kind === "Job");
-    assert.equal(job.spec.template.spec.containers[0].image, pinned);
+    const jobs = rendered.filter((d) => d?.kind === "Job");
+    assert.deepEqual(jobs.map((job) => job.spec.template.spec.containers[0].image), [pinned, pinned]);
     const practice = yaml.loadAll(render(path.join(fixture, "practice")));
     assert.deepEqual(practice.map((resource) => resource.kind), ["Job"]);
     assert.equal(practice[0].spec.template.spec.containers[0].image, pinned);
