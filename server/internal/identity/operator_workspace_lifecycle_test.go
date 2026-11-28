@@ -337,8 +337,8 @@ func TestCustomerDeadlineSurvivesAnInvitationWithoutMembership(t *testing.T) {
 					t.Fatalf("revoking the invitation returned %d", status)
 				}
 			case "workspace-closed":
-				close := url.Values{"workspace": {inviteWorkspace}, "confirm": {inviteWorkspace}, "csrf_token": form["csrf_token"]}
-				if status, _, _ := b.request("POST", operatorAPIRoot+"/workspaces/delete", close, b.site.URL); status != http.StatusOK {
+				closeForm := url.Values{"workspace": {inviteWorkspace}, "confirm": {inviteWorkspace}, "csrf_token": form["csrf_token"]}
+				if status, _, _ := b.request("POST", operatorAPIRoot+"/workspaces/delete", closeForm, b.site.URL); status != http.StatusOK {
 					t.Fatalf("closing the workspace with the pending invitation returned %d", status)
 				}
 			}
