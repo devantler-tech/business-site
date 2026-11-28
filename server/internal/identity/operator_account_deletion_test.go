@@ -204,37 +204,17 @@ func TestWorkspaceSwitchRefusesAnAccountDeletedAfterMembershipRead(t *testing.T)
  VALUES($1,$2,'second','client')`, b.f.issuer, subject); err != nil {
 		t.Fatal(err)
 	}
-	form := url.Values{"workspace": {"second"}, "csrf_token": {b.csrf("/portal/workspaces?lang=en")}}
-	pause := installCompletedRead(t, b, "SELECT m.incarnation::text FROM portal_memberships")
-	resume := onceRelease(pause.release)
-	defer resume()
-	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
-	defer cancel()
-	response := make(chan int, 1)
-	go func() {
-		status, _, _ := b.request("POST", "/portal/workspaces/open?lang=en", form, b.site.URL)
-		response <- status
-	}()
-	select {
-	case <-pause.blocked:
-	case <-ctx.Done():
-		t.Fatal("the workspace switch did not read the membership")
-	}
-	if err := pgx.BeginFunc(ctx, b.pool, func(tx pgx.Tx) error {
-		if err := lockIdentity(ctx, tx, b.f.issuer, subject); err != nil {
-			return err
+	status := switchWorkspaceAfterRead(t, b, "second", "SELECT m.incarnation::text FROM portal_memberships", func(ctx context.Context) {
+		if err := pgx.BeginFunc(ctx, b.pool, func(tx pgx.Tx) error {
+			if err := lockIdentity(ctx, tx, b.f.issuer, subject); err != nil {
+				return err
+			}
+			return stageCustomerAccountAccessRemoval(ctx, tx, b.f.issuer, subject, target)
+		}); err != nil {
+			t.Fatal(err)
 		}
-		return stageCustomerAccountAccessRemoval(ctx, tx, b.f.issuer, subject, target)
-	}); err != nil {
-		t.Fatal(err)
-	}
-	resume()
-	select {
-	case status := <-response:
-		if status != http.StatusForbidden {
-			t.Fatalf("switching a deleted account returned %d", status)
-		}
-	case <-ctx.Done():
-		t.Fatal("the workspace switch did not finish")
+	})
+	if status != http.StatusForbidden {
+		t.Fatalf("switching a deleted account returned %d", status)
 	}
 }

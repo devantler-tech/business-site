@@ -133,11 +133,23 @@ func checkInterruptedWorkspaceInvitation(t *testing.T, interrupt func(*browserFi
 	b.as(subject)
 	b.finish(b.startInvited(subject, "workspace-one", "client"))
 	b.invite(subject, "workspace-two", "client")
-	form := url.Values{"workspace": {"workspace-two"}, "csrf_token": {b.csrf("/portal/workspaces?lang=en")}}
-	pause := installCompletedRead(t, b, "SELECT COALESCE(min(client_id),'')")
+	status := switchWorkspaceAfterRead(t, b, "workspace-two", "SELECT COALESCE(min(client_id),'')", func(context.Context) {
+		interrupt(b)
+	})
+	if status != http.StatusForbidden {
+		t.Fatalf("the interrupted invitation returned %d", status)
+	}
+	assertWorkspaceInvitationPending(t, b, subject)
+}
+
+func switchWorkspaceAfterRead(t *testing.T, b *browserFixture, workspace, checkpoint string, interrupt func(context.Context)) int {
+	t.Helper()
+	form := url.Values{"workspace": {workspace}, "csrf_token": {b.csrf("/portal/workspaces?lang=en")}}
+	pause := installCompletedRead(t, b, checkpoint)
 	resume := onceRelease(pause.release)
 	defer resume()
-
+	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
+	defer cancel()
 	response := make(chan int, 1)
 	go func() {
 		status, _, _ := b.request("POST", "/portal/workspaces/open?lang=en", form, b.site.URL)
@@ -145,20 +157,18 @@ func checkInterruptedWorkspaceInvitation(t *testing.T, interrupt func(*browserFi
 	}()
 	select {
 	case <-pause.blocked:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the request never read the pending invitation")
+	case <-ctx.Done():
+		t.Fatal("the workspace switch did not reach the database checkpoint")
 	}
-	interrupt(b)
+	interrupt(ctx)
 	resume()
 	select {
 	case status := <-response:
-		if status != http.StatusForbidden {
-			t.Fatalf("the interrupted request returned %d", status)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the interrupted request did not complete")
+		return status
+	case <-ctx.Done():
+		t.Fatal("the interrupted workspace switch did not complete")
+		return 0
 	}
-	assertWorkspaceInvitationPending(t, b, subject)
 }
 
 func assertWorkspaceInvitationPending(t *testing.T, b *browserFixture, subject string) {
