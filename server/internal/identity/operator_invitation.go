@@ -90,21 +90,23 @@ func (b *browser) createCustomerInvitation(ctx context.Context, r *http.Request)
 	if !open {
 		return nil, errOperatorInput
 	}
-	userID, err := b.foundation.customers.EnsureUser(ctx, input.Name, input.Email, func() bool { return b.operatorMutationAllowed(ctx, b.foundation.pool) })
+	userID, created, err := b.foundation.customers.EnsureUser(ctx, input.Name, input.Email, func() bool { return b.operatorMutationAllowed(ctx, b.foundation.pool) })
 	if err != nil {
 		return nil, err
 	}
 	subject := customeridentity.DexSubject(userID, customeridentity.ZitadelConnectorID)
 	invitation := Invitation{b.foundation.broker.issuer, subject, input.Workspace, "client", time.Now().Add(7 * 24 * time.Hour)}
 	setOperatorTarget(ctx, input.Workspace)
-	expires, err := b.issueDirectoryInvitation(ctx, invitation, userID, selected)
+	notice := workspaceInvitationNotice{recipient: input.Email, lang: language(r),
+		signIn: b.origin + b.visible("/portal/sign-in"), nativeSetup: created}
+	expires, err := b.issueDirectoryInvitation(ctx, invitation, userID, selected, notice)
 	if err != nil {
 		return nil, err
 	}
 	return pendingInvitation{Subject: subject, Workspace: input.Workspace, Role: "client", Expires: expires}, nil
 }
 
-func (b *browser) issueDirectoryInvitation(ctx context.Context, invitation Invitation, userID string, selected bool) (time.Time, error) {
+func (b *browser) issueDirectoryInvitation(ctx context.Context, invitation Invitation, userID string, selected bool, notice workspaceInvitationNotice) (time.Time, error) {
 	if invitation.Subject == "" || !b.foundation.canInvite(invitation.Subject, "client") {
 		return time.Time{}, ErrDenied
 	}
@@ -122,16 +124,7 @@ func (b *browser) issueDirectoryInvitation(ctx context.Context, invitation Invit
 	}
 	if !available {
 		if selected {
-			var expires time.Time
-			err := connection.QueryRow(ctx, `SELECT i.expires_at FROM portal_invitations i
- WHERE i.issuer=$1 AND i.subject=$2 AND i.client_id=$3 AND i.role='client' AND NOT i.revoked AND i.expires_at>now()
- AND NOT EXISTS (SELECT 1 FROM portal_workspace_settings w WHERE w.workspace_id=$3 AND w.closed_at IS NOT NULL)
- AND NOT EXISTS (SELECT 1 FROM portal_memberships m WHERE m.issuer=$1 AND m.subject=$2)`,
-				invitation.Issuer, invitation.Subject, invitation.ClientID).Scan(&expires)
-			if errors.Is(err, pgx.ErrNoRows) {
-				return time.Time{}, errInvitationAccess
-			}
-			return expires, err
+			return b.retryWorkspaceInvitation(ctx, connection.Begin, invitation, notice)
 		}
 		return time.Time{}, ErrDenied
 	}
@@ -140,13 +133,55 @@ func (b *browser) issueDirectoryInvitation(ctx context.Context, invitation Invit
 	if err := b.foundation.customers.VerifyUser(ctx, userID); err != nil {
 		return time.Time{}, err
 	}
-	err = b.foundation.invite(ctx, invitation, selected, connection.Begin, func(tx pgx.Tx) error {
+	err = b.foundation.invite(ctx, invitation, selected, connection.Begin, func(tx pgx.Tx, token []byte) error {
+		if !b.operatorMutationAllowed(ctx, tx) {
+			return ErrDenied
+		}
+		if err := notice.queue(ctx, tx, token); err != nil {
+			return err
+		}
 		if !b.operatorMutationAllowed(ctx, tx) {
 			return ErrDenied
 		}
 		return nil
 	})
 	return invitation.Expires, err
+}
+
+func (b *browser) retryWorkspaceInvitation(ctx context.Context, begin func(context.Context) (pgx.Tx, error),
+	invitation Invitation, notice workspaceInvitationNotice,
+) (time.Time, error) {
+	tx, err := begin(ctx)
+	if err != nil {
+		return time.Time{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err = lockWorkspace(ctx, tx, invitation.ClientID); err != nil {
+		return time.Time{}, err
+	}
+	var expires time.Time
+	var token []byte
+	err = tx.QueryRow(ctx, `SELECT i.expires_at,i.token_digest FROM portal_invitations i
+ WHERE i.issuer=$1 AND i.subject=$2 AND i.client_id=$3 AND i.role='client' AND NOT i.revoked AND i.expires_at>now()
+ AND NOT EXISTS (SELECT 1 FROM portal_workspace_settings w WHERE w.workspace_id=$3 AND w.closed_at IS NOT NULL)
+ AND NOT EXISTS (SELECT 1 FROM portal_memberships m WHERE m.issuer=$1 AND m.subject=$2)`,
+		invitation.Issuer, invitation.Subject, invitation.ClientID).Scan(&expires, &token)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return time.Time{}, errInvitationAccess
+	}
+	if err != nil {
+		return time.Time{}, err
+	}
+	if !b.operatorMutationAllowed(ctx, tx) {
+		return time.Time{}, ErrDenied
+	}
+	if err := notice.queue(ctx, tx, token); err != nil {
+		return time.Time{}, err
+	}
+	if !b.operatorMutationAllowed(ctx, tx) {
+		return time.Time{}, ErrDenied
+	}
+	return expires, tx.Commit(ctx)
 }
 
 func workspaceAcceptsInvitations(ctx context.Context, query queryRower, issuer, workspace string) (bool, error) {

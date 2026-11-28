@@ -42,7 +42,7 @@ func TestDirectoryRechecksAuthorityAfterProviderRead(t *testing.T) {
 			var err error
 			switch action {
 			case "create":
-				_, err = c.EnsureUser(t.Context(), "Ada Lovelace", "ada@example.test", permit)
+				_, _, err = c.EnsureUser(t.Context(), "Ada Lovelace", "ada@example.test", permit)
 			case "deactivate":
 				err = c.DeactivateUser(t.Context(), "user-42", permit)
 			case "reactivate":
@@ -113,8 +113,8 @@ func TestEnsureUserCreatesOrReusesWithinOrganization(t *testing.T) {
 					w.WriteHeader(404)
 				}
 			})
-			id, err := c.EnsureUser(t.Context(), "Ada Lovelace", "ada@example.test", allowDirectoryEffect)
-			if err != nil || id != "user-42" || (existing && creates != 0) || (!existing && creates != 1) {
+			id, created, err := c.EnsureUser(t.Context(), "Ada Lovelace", "ada@example.test", allowDirectoryEffect)
+			if err != nil || id != "user-42" || created == existing || (existing && creates != 0) || (!existing && creates != 1) {
 				t.Fatalf("ensure user: id=%q creates=%d err=%v", id, creates, err)
 			}
 		})
@@ -137,7 +137,7 @@ func TestEnsureUserFailsClosedOnProviderErrorsAndAmbiguousOwners(t *testing.T) {
 					_, _ = fmt.Fprint(w, "private-provider-diagnostic")
 				}
 			})
-			if id, err := c.EnsureUser(t.Context(), "Ada Lovelace", "ada@example.test", allowDirectoryEffect); id != "" || !errors.Is(err, ErrUnavailable) || strings.Contains(err.Error(), "private-provider-diagnostic") {
+			if id, _, err := c.EnsureUser(t.Context(), "Ada Lovelace", "ada@example.test", allowDirectoryEffect); id != "" || !errors.Is(err, ErrUnavailable) || strings.Contains(err.Error(), "private-provider-diagnostic") {
 				t.Fatalf("unsafe provider response accepted or exposed: id=%q err=%v", id, err)
 			}
 		})
@@ -159,7 +159,7 @@ func TestEnsureUserRechecksConflictWithoutDuplicateCreation(t *testing.T) {
 			w.WriteHeader(http.StatusConflict)
 		}
 	})
-	if id, err := c.EnsureUser(t.Context(), "Ada Lovelace", "ada@example.test", allowDirectoryEffect); err != nil || id != "existing" || creates != 1 || reads != 2 {
+	if id, _, err := c.EnsureUser(t.Context(), "Ada Lovelace", "ada@example.test", allowDirectoryEffect); err != nil || id != "existing" || creates != 1 || reads != 2 {
 		t.Fatalf("conflict was not safely resolved: id=%q reads=%d creates=%d err=%v", id, reads, creates, err)
 	}
 }
@@ -253,7 +253,7 @@ func TestCredentialRotationAndRedirectRefusal(t *testing.T) {
 	}
 	for _, value := range []string{"old", "new"} {
 		token = value
-		if _, err := c.EnsureUser(context.Background(), "Ada Lovelace", "ada@example.test", allowDirectoryEffect); !errors.Is(err, ErrUnavailable) {
+		if _, _, err := c.EnsureUser(context.Background(), "Ada Lovelace", "ada@example.test", allowDirectoryEffect); !errors.Is(err, ErrUnavailable) {
 			t.Fatal("redirect was accepted")
 		}
 	}

@@ -330,7 +330,7 @@ const invitationIdentityAvailable = `NOT EXISTS (
 
 // invite retains the control-plane rules and permits the operator API to bind
 // its final commit to the original caller on its already locked connection.
-func (s *Foundation) invite(ctx context.Context, i Invitation, existingWorkspace bool, begin func(context.Context) (pgx.Tx, error), checkpoint func(pgx.Tx) error) error {
+func (s *Foundation) invite(ctx context.Context, i Invitation, existingWorkspace bool, begin func(context.Context) (pgx.Tx, error), checkpoint func(pgx.Tx, []byte) error) error {
 	if i.ClientID == previewWorkspace || i.Subject == previewSubject {
 		return ErrDenied
 	}
@@ -368,8 +368,9 @@ func (s *Foundation) invite(ctx context.Context, i Invitation, existingWorkspace
 			return errOperatorInput
 		}
 	}
+	token := digest(secret())
 	result, err := tx.Exec(ctx, `INSERT INTO portal_invitations(token_digest,issuer,subject,client_id,role,expires_at)
- SELECT $3,$1,$2,$4,$5,$6 WHERE `+invitationIdentityAvailable, i.Issuer, i.Subject, digest(secret()), i.ClientID, i.Role, i.Expires)
+ SELECT $3,$1,$2,$4,$5,$6 WHERE `+invitationIdentityAvailable, i.Issuer, i.Subject, token, i.ClientID, i.Role, i.Expires)
 	if err != nil {
 		return fmt.Errorf("persist invitation: %w", err)
 	}
@@ -377,7 +378,7 @@ func (s *Foundation) invite(ctx context.Context, i Invitation, existingWorkspace
 		return ErrDenied
 	}
 	if checkpoint != nil {
-		if err := checkpoint(tx); err != nil {
+		if err := checkpoint(tx, token); err != nil {
 			return err
 		}
 	}

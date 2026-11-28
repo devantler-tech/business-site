@@ -125,7 +125,7 @@ func checkWorkspaceRole(ctx context.Context, pool queryRower) error {
 // and the two billing state tables it also updates. None allows deletion or
 // delegation.
 var (
-	billingFixedTables = []string{"portal_orders", "portal_numina_contacts", "portal_stripe_events", "portal_order_ends", "portal_card_cancellations", "portal_charge_reversals", "portal_order_withdrawals", "portal_withdrawal_cancellations", "portal_order_completions", "portal_withdrawal_settlements", "portal_mail_outbox", "portal_mail_deliveries", "portal_launch_places", "portal_order_addons", "portal_request_closures", "portal_addon_ends", "portal_addon_removals", "portal_operator_audit", "portal_workspaces", "portal_service_fulfillments", "portal_service_consumers", "portal_appointment_reservations", "portal_appointment_revisions", "portal_appointment_introductions", "portal_appointment_introduction_cancellations", "portal_appointment_calendar_intents", "portal_appointment_calendar_observations", "portal_customer_account_closures", "portal_appointment_calendar_attempts", "portal_appointment_calendar_removals"}
+	billingFixedTables = []string{"portal_orders", "portal_numina_contacts", "portal_stripe_events", "portal_order_ends", "portal_card_cancellations", "portal_charge_reversals", "portal_order_withdrawals", "portal_withdrawal_cancellations", "portal_order_completions", "portal_withdrawal_settlements", "portal_mail_outbox", "portal_mail_deliveries", "portal_workspace_invitation_deliveries", "portal_launch_places", "portal_order_addons", "portal_request_closures", "portal_addon_ends", "portal_addon_removals", "portal_operator_audit", "portal_workspaces", "portal_service_fulfillments", "portal_service_consumers", "portal_appointment_reservations", "portal_appointment_revisions", "portal_appointment_introductions", "portal_appointment_introduction_cancellations", "portal_appointment_calendar_intents", "portal_appointment_calendar_observations", "portal_customer_account_closures", "portal_appointment_calendar_attempts", "portal_appointment_calendar_removals"}
 	billingStateTables = []string{"portal_order_charges", "portal_card_checkouts"}
 )
 
@@ -161,6 +161,15 @@ func checkBillingRole(ctx context.Context, pool queryRower) error {
   FROM unnest($1::text[]||$2::text[]) table_name
   CROSS JOIN unnest(ARRAY['SELECT','INSERT']) privilege)
  AND (SELECT bool_and(has_table_privilege(current_user,table_name,'UPDATE')) FROM unnest($2::text[]) table_name)
+ AND has_table_privilege(current_user,'portal_workspace_invitation_notices','SELECT')
+ AND has_table_privilege(current_user,'portal_workspace_invitation_notices','INSERT')
+ AND has_column_privilege(current_user,'portal_workspace_invitation_notices','last_attempt_at','UPDATE')
+ AND NOT EXISTS (
+  SELECT 1 FROM pg_roles role WHERE (role.rolname=current_user OR pg_has_role(current_user,role.oid,'MEMBER')) AND (
+   has_any_column_privilege(role.oid,'portal_workspace_invitation_notices','REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,UPDATE WITH GRANT OPTION')
+   OR has_table_privilege(role.oid,'portal_workspace_invitation_notices','DELETE,TRUNCATE,TRIGGER,MAINTAIN')
+   OR EXISTS (SELECT 1 FROM unnest(ARRAY['invitation_digest','native_setup','recipient','language','sign_in_url']) immutable(column_name)
+    WHERE has_column_privilege(role.oid,'portal_workspace_invitation_notices',immutable.column_name,'UPDATE'))))
  AND NOT EXISTS (
   SELECT 1 FROM pg_roles role WHERE (role.rolname=current_user OR pg_has_role(current_user,role.oid,'MEMBER')) AND (
    EXISTS (SELECT 1 FROM unnest($1::text[]) fixed(table_name)

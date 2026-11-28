@@ -405,6 +405,13 @@ scoped production service account still require their own live verification.
 Invitations need the web pod's portal settings with the production identity
 profile and an enabled flag (see [the settings file](../deploy/README.md#portal-settings-and-invitations)).
 
+Open the customer's workspace in the operator portal and send the invitation there.
+ZITADEL sends account setup to new users. For an existing user, the portal queues
+an email with the shared sign-in link as it saves the invitation. The workspace
+shows whether the email is pending, retrying or accepted by the mail service.
+
+For manual provisioning:
+
 1. In the ZITADEL console at `https://accounts.devantler.tech`, create the
    customer as a human user with their email address, unverified, and let
    ZITADEL send its invitation mail. Copy the user's ID from the user page.

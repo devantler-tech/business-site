@@ -66,6 +66,7 @@ type (
 		Role      string                   `json:"role"`
 		Expires   time.Time                `json:"expires"`
 		Person    customeridentity.Profile `json:"-"`
+		Notice    string                   `json:"-"`
 	}
 	workspaceMember struct {
 		Subject string                   `json:"subject"`
@@ -300,15 +301,21 @@ func (b *browser) pendingInvitations(ctx context.Context) ([]pendingInvitation, 
 }
 
 func (b *browser) pendingInvitationsFor(ctx context.Context, workspace string) ([]pendingInvitation, error) {
-	rows, err := b.foundation.pool.Query(ctx, `SELECT subject,client_id,role,expires_at FROM portal_invitations WHERE
- issuer=$1 AND NOT revoked AND expires_at>now() AND ($3='' OR client_id=$3)
- ORDER BY expires_at,client_id LIMIT $2`, b.foundation.broker.issuer, operatorListLimit+1, workspace)
+	rows, err := b.foundation.pool.Query(ctx, `SELECT i.subject,i.client_id,i.role,i.expires_at,
+ CASE WHEN n.invitation_digest IS NULL OR n.native_setup THEN ''
+      WHEN d.delivered_at IS NOT NULL THEN 'sent'
+      WHEN n.last_attempt_at IS NOT NULL THEN 'retrying' ELSE 'queued' END
+ FROM portal_invitations i
+ LEFT JOIN portal_workspace_invitation_notices n ON n.invitation_digest=i.token_digest
+ LEFT JOIN portal_workspace_invitation_deliveries d ON d.invitation_digest=i.token_digest
+ WHERE i.issuer=$1 AND NOT i.revoked AND i.expires_at>now() AND ($3='' OR i.client_id=$3)
+ ORDER BY i.expires_at,i.client_id LIMIT $2`, b.foundation.broker.issuer, operatorListLimit+1, workspace)
 	if err != nil {
 		return nil, fmt.Errorf("list invitations: %w", err)
 	}
 	list, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (pendingInvitation, error) {
 		var i pendingInvitation
-		return i, row.Scan(&i.Subject, &i.Workspace, &i.Role, &i.Expires)
+		return i, row.Scan(&i.Subject, &i.Workspace, &i.Role, &i.Expires, &i.Notice)
 	})
 	if len(list) > operatorListLimit {
 		return nil, errors.New("invitation inventory exceeds response limit")

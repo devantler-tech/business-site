@@ -22,7 +22,7 @@
       <input id="invite-name" name="name" autocomplete="off" maxlength="200" required></div>
     <div><label for="invite-email">{{if eq .Lang "da"}}E-mail til login{{else}}Sign-in email{{end}}</label>
       <input id="invite-email" name="email" type="email" autocomplete="off" maxlength="254" required></div>
-    <p class="operator-help">{{if eq .Lang "da"}}Nye kunder får en e-mail til at oprette deres konto. Invitationen er gyldig i syv dage.{{else}}New customers receive an account setup email. The invitation is valid for seven days.{{end}}</p>
+    <p class="operator-help">{{if eq .Lang "da"}}Nye kunder får en e-mail til at oprette deres konto. Kunder med en konto får et link til login. Invitationen er gyldig i syv dage.{{else}}New customers receive a setup email. Customers with an account receive a sign-in link. The invitation is valid for seven days.{{end}}</p>
     <div class="operator-actions"><button type="submit">{{if eq .Lang "da"}}Inviter kunde{{else}}Invite customer{{end}}</button>
       <a href="{{root}}/operator/customers?lang={{.Lang}}{{if .InviteWorkspace}}&amp;workspace={{.InviteWorkspace}}{{end}}">{{if eq .Lang "da"}}Annuller{{else}}Cancel{{end}}</a></div>
   </form>
@@ -158,7 +158,12 @@
     {{range .Invitations}}
     <li class="operator-access-row">
       {{template "operator-person" .Person}}
-      <span>{{if eq $.Lang "da"}}Udløber{{else}}Expires{{end}} <time datetime="{{.Expires.UTC.Format `2006-01-02T15:04:05Z`}}">{{.Expires.UTC.Format "2006-01-02"}}</time></span>
+      <div>
+        <span>{{if eq $.Lang "da"}}Udløber{{else}}Expires{{end}} <time datetime="{{.Expires.UTC.Format `2006-01-02T15:04:05Z`}}">{{.Expires.UTC.Format "2006-01-02"}}</time></span>
+        {{if eq .Notice "queued"}}<div class="operator-help">{{if eq $.Lang "da"}}E-mail afventer{{else}}Email pending{{end}}</div>{{end}}
+        {{if eq .Notice "retrying"}}<div class="operator-help">{{if eq $.Lang "da"}}Sender igen{{else}}Retrying email{{end}}</div>{{end}}
+        {{if eq .Notice "sent"}}<div class="operator-help">{{if eq $.Lang "da"}}E-mail sendt{{else}}Email sent{{end}}</div>{{end}}
+      </div>
       <form method="post" action="{{root}}/operator/api/invitations/revoke?lang={{$.Lang}}&amp;focus=workspace">
         <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
         <input type="hidden" name="subject" value="{{.Subject}}">

@@ -122,16 +122,17 @@ func (c *Client) find(ctx context.Context, email string) (string, error) {
 	return u.ID, nil
 }
 
-// EnsureUser creates or reuses one human in the configured organization.
-func (c *Client) EnsureUser(ctx context.Context, name, email string, allowed func() bool) (string, error) {
+// EnsureUser creates or reuses one human in the configured organization. A
+// newly created account gets ZITADEL's native setup email.
+func (c *Client) EnsureUser(ctx context.Context, name, email string, allowed func() bool) (string, bool, error) {
 	address, err := mail.ParseAddress(email)
 	parts := strings.Fields(name)
 	if allowed == nil || err != nil || address.Address != email || address.Name != "" || len(email) > 254 || len(parts) < 2 || len(name) > 200 || strings.ContainsAny(name, "\r\n\x00") {
-		return "", ErrUnavailable
+		return "", false, ErrUnavailable
 	}
 	id, err := c.find(ctx, email)
 	if err != nil || id != "" {
-		return id, err
+		return id, false, err
 	}
 	body := map[string]any{"userName": email, "profile": map[string]string{"firstName": parts[0], "lastName": strings.Join(parts[1:], " "), "displayName": name}, "email": map[string]any{"email": email, "isEmailVerified": false}}
 	var created struct {
@@ -142,12 +143,13 @@ func (c *Client) EnsureUser(ctx context.Context, name, email string, allowed fun
 	}
 	status, err := c.call(ctx, "POST", "/management/v1/users/human", body, &created, allowed)
 	if status == http.StatusConflict {
-		return c.findExisting(ctx, email)
+		id, err = c.findExisting(ctx, email)
+		return id, false, err
 	}
 	if err != nil || !identifier.MatchString(created.ID) || created.Details.Owner != c.org {
-		return "", ErrUnavailable
+		return "", false, ErrUnavailable
 	}
-	return created.ID, nil
+	return created.ID, true, nil
 }
 
 func (c *Client) findExisting(ctx context.Context, email string) (string, error) {

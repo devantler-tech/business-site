@@ -176,6 +176,8 @@ GRANT SELECT,INSERT,UPDATE ON portal_order_charges,portal_card_checkouts TO port
 GRANT SELECT,INSERT ON portal_stripe_events TO portal_runtime;
 GRANT SELECT,INSERT ON portal_order_ends,portal_card_cancellations,portal_charge_reversals,portal_order_withdrawals,portal_withdrawal_cancellations,portal_order_completions,portal_withdrawal_settlements,portal_mail_outbox,portal_mail_deliveries,portal_launch_places,portal_order_addons,portal_request_closures,portal_addon_ends,portal_addon_removals TO portal_runtime;
 GRANT SELECT,INSERT ON portal_operator_audit TO portal_runtime;
+GRANT SELECT,INSERT ON portal_workspace_invitation_notices,portal_workspace_invitation_deliveries TO portal_runtime;
+GRANT UPDATE(last_attempt_at) ON portal_workspace_invitation_notices TO portal_runtime;
 GRANT SELECT,INSERT ON portal_workspaces TO portal_runtime;
 GRANT SELECT,INSERT,UPDATE(display_name,closed_at) ON portal_workspace_settings TO portal_runtime;
 GRANT SELECT,INSERT ON portal_service_fulfillments,portal_service_consumers TO portal_runtime;
