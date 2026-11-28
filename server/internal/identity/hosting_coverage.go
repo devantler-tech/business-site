@@ -18,6 +18,10 @@ type hostingCoverage struct {
 	StartsAt, EndsAt *time.Time
 }
 
+func (s *Foundation) hostingRecordingReady(ctx context.Context) bool {
+	return s.acceptanceReady(ctx) && s.hostingCoverageReady(ctx)
+}
+
 func (s *Foundation) hostingCoverageReady(ctx context.Context) bool {
 	if !s.triageReady(ctx) {
 		return false
@@ -27,7 +31,7 @@ func (s *Foundation) hostingCoverageReady(ctx context.Context) bool {
 }
 
 func (s *Foundation) readHostingCoverage(ctx context.Context, p Principal, project string) (*hostingCoverage, error) {
-	if p.membershipIncarnation == "" || !s.hostingCoverageReady(ctx) {
+	if p.membershipIncarnation == "" {
 		return nil, ErrDenied
 	}
 	var coverage hostingCoverage
@@ -64,12 +68,24 @@ func (b *browser) showHostingReview(w http.ResponseWriter, r *http.Request, proj
 		b.triageError(w, r, err)
 		return
 	}
+	// showTriage evaluates display readiness before reading the private detail.
+	if page.AcceptanceEnabled {
+		for _, acceptance := range page.Acceptances {
+			if acceptance.Proposal.ContentFormat == 2 && acceptance.Proposal.Service.Kind == proposalServiceSoftware {
+				page.HostingAgreements = append(page.HostingAgreements, acceptance)
+			}
+		}
+		if len(page.HostingAgreements) > 0 {
+			page.HostingPeriodID = secret()
+		}
+	}
 	var html bytes.Buffer
 	if err := b.templates().ExecuteTemplate(&html, "triage.html", page); err != nil {
 		b.triageError(w, r, err)
 		return
 	}
-	if !b.foundation.hostingCoverageReady(ctx) || !b.durableSnapshotAllowed(ctx, snapshot, client, "operator", b.foundation.pool) {
+	if (page.HostingPeriodID != "" && !b.foundation.acceptanceReady(ctx)) ||
+		!b.foundation.hostingCoverageReady(ctx) || !b.durableSnapshotAllowed(ctx, snapshot, client, "operator", b.foundation.pool) {
 		b.triageError(w, r, ErrDenied)
 		return
 	}

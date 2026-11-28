@@ -23,12 +23,35 @@
     <dt>{{if eq $.Lang `da`}}Accepteret tilbud{{else}}Accepted proposal{{end}}</dt>
     <dd>Version {{.ProposalVersion}}</dd>
     <dt>{{if eq $.Lang `da`}}Start (UTC){{else}}Starts (UTC){{end}}</dt>
-    <dd><time datetime="{{.StartsAt.UTC.Format `2006-01-02T15:04:05.999999999Z`}}">{{.StartsAt.UTC.Format `2006-01-02 15:04`}}</time></dd>
+    <dd><time datetime="{{.StartsAt.UTC.Format `2006-01-02T15:04:05.999999Z`}}">{{.StartsAt.UTC.Format `2006-01-02 15:04:05.999999`}}</time></dd>
     <dt>{{if eq $.Lang `da`}}Udløb (UTC){{else}}Ends (UTC){{end}}</dt>
-    <dd><time datetime="{{.EndsAt.UTC.Format `2006-01-02T15:04:05.999999999Z`}}">{{.EndsAt.UTC.Format `2006-01-02 15:04`}}</time></dd>
+    <dd><time datetime="{{.EndsAt.UTC.Format `2006-01-02T15:04:05.999999Z`}}">{{.EndsAt.UTC.Format `2006-01-02 15:04:05.999999`}}</time></dd>
     <dt>{{if eq $.Lang `da`}}Aftalt vedligeholdelse{{else}}Agreed maintenance{{end}}</dt>
     <dd class="request-brief">{{.Scope}}</dd>
   </dl>
+  {{end}}
+  {{if $.HostingPeriodID}}
+  <form method="post" action="{{root}}/operator/requests/{{(index $.Requests 0).ID}}/hosting-periods">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <input type="hidden" name="period_id" value="{{$.HostingPeriodID}}">
+    <input type="hidden" name="lang" value="{{$.Lang}}">
+    <label for="hosting-agreement">{{if eq $.Lang `da`}}Accepteret hostingtilbud{{else}}Accepted hosting proposal{{end}}</label>
+    <select id="hosting-agreement" name="acceptance_id" required>
+      <option value="">{{if eq $.Lang `da`}}Vælg et tilbud{{else}}Choose a proposal{{end}}</option>
+      {{range $.HostingAgreements}}<option value="{{.ID}}">Version {{.Proposal.Version}} · {{.Recorded.UTC.Format `2006-01-02`}} · {{.Proposal.MonthlyDKK}} DKK{{if eq $.Lang `da`}}/md.{{else}}/month{{end}}</option>{{end}}
+    </select>
+    <label for="hosting-start-date">{{if eq $.Lang `da`}}Aftalt startdato{{else}}Agreed start date{{end}}</label>
+    <input id="hosting-start-date" type="date" name="start_date" required>
+    <label for="hosting-start-time">{{if eq $.Lang `da`}}Starttidspunkt (UTC){{else}}Start time (UTC){{end}}</label>
+    <input id="hosting-start-time" type="text" name="start_time" maxlength="15" placeholder="09:30" aria-describedby="hosting-clock-format" required>
+    <label for="hosting-end-date">{{if eq $.Lang `da`}}Aftalt slutdato{{else}}Agreed end date{{end}}</label>
+    <input id="hosting-end-date" type="date" name="end_date" required>
+    <label for="hosting-end-time">{{if eq $.Lang `da`}}Sluttidspunkt (UTC){{else}}End time (UTC){{end}}</label>
+    <input id="hosting-end-time" type="text" name="end_time" maxlength="15" placeholder="09:30" aria-describedby="hosting-clock-format" required>
+    <p id="hosting-clock-format">{{if eq $.Lang `da`}}Brug UTC, fx 09:30 eller 09:30:00.123456, hvis aftalen angiver et mere præcist tidspunkt.{{else}}Use UTC, for example 09:30 or 09:30:00.123456 if the agreement specifies a more precise time.{{end}}</p>
+    <label><input type="checkbox" name="confirm" value="yes" required> {{if eq $.Lang `da`}}Kundens accepterede vilkår dækker hele perioden.{{else}}The customer's accepted terms cover this entire period.{{end}}</label>
+    <button type="submit">{{if eq $.Lang `da`}}Registrér hostingperiode{{else}}Record hosting period{{end}}</button>
+  </form>
   {{end}}
 </section>
 {{end}}

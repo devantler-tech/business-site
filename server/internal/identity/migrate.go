@@ -170,6 +170,9 @@ var hostingCoverageSchema string
 //go:embed customer-workspace-membership.sql
 var customerWorkspaceMembershipSchema string
 
+//go:embed hosting-period-record.sql
+var hostingPeriodRecordSchema string
+
 // runtimeGrants is the web role's complete object privilege set after the
 // migrations above, as MIGRATIONS.md documents. A migration that adds
 // or changes runtime access updates this list in the same change; web startup's
@@ -198,6 +201,7 @@ var runtimeGrants = []string{
 	"EXECUTE ON FUNCTION public.portal_lock_work_queue_revision(bigint)",
 	"EXECUTE ON FUNCTION public.portal_workspace_purge_state(text),public.portal_purge_closed_workspace(text,timestamptz,text,text,text)",
 	"EXECUTE ON FUNCTION public.portal_operator_hosting_coverage(text,text,text,text,uuid)",
+	"EXECUTE ON FUNCTION public.portal_record_hosting_period(text,text,text,uuid,text,text,timestamptz,timestamptz)",
 }
 
 // managedTables are every relation the migrations own. Granting first revokes
@@ -299,7 +303,7 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, runtimeRole string) error 
 
 // orderedMigrations lists the embedded migrations; version N is element N-1.
 func orderedMigrations() []string {
-	return []string{schema, sessionsSchema, contactsSchema, requestsSchema, triageIndexSchema, proposalsSchema, proposalVisibilitySchema, contactVerificationSchema, proposalAcceptanceSchema, invoicesSchema, creditsSchema, invoiceTaxSchema, membershipHistorySchema, workApprovalsSchema, otherRequestsSchema, ordersSchema, cardsSchema, orderEndsSchema, workFundingSchema, clientOrderEndsSchema, orderWithdrawalsSchema, earlyStartSchema, mailSchema, launchPlacesSchema, orderAddonsSchema, requestClosuresSchema, addonEndsSchema, operatorAuditSchema, workspacesSchema, originalConfirmationSchema, previewReceiptsSchema, workspaceManagementSchema, serviceContractsSchema, appointmentReservationsSchema, appointmentCalendarIntentsSchema, workQueueRevisionSchema, appointmentCalendarObservationsSchema, customerAccountClosuresSchema, workQueueRevisionLockSchema, workLeasesSchema, memberAccountClosuresSchema, workLeaseSelectionSchema, appointmentCalendarAttemptsSchema, appointmentCalendarRemovalsSchema, workLeaseReleaseSchema, workLeaseOpenSchema, workLeaseApprovalWindowSchema, hostingPeriodsSchema, workspaceEarlyDeletionSchema, workspaceInvitationMailSchema, hostingCoverageSchema, customerWorkspaceMembershipSchema}
+	return []string{schema, sessionsSchema, contactsSchema, requestsSchema, triageIndexSchema, proposalsSchema, proposalVisibilitySchema, contactVerificationSchema, proposalAcceptanceSchema, invoicesSchema, creditsSchema, invoiceTaxSchema, membershipHistorySchema, workApprovalsSchema, otherRequestsSchema, ordersSchema, cardsSchema, orderEndsSchema, workFundingSchema, clientOrderEndsSchema, orderWithdrawalsSchema, earlyStartSchema, mailSchema, launchPlacesSchema, orderAddonsSchema, requestClosuresSchema, addonEndsSchema, operatorAuditSchema, workspacesSchema, originalConfirmationSchema, previewReceiptsSchema, workspaceManagementSchema, serviceContractsSchema, appointmentReservationsSchema, appointmentCalendarIntentsSchema, workQueueRevisionSchema, appointmentCalendarObservationsSchema, customerAccountClosuresSchema, workQueueRevisionLockSchema, workLeasesSchema, memberAccountClosuresSchema, workLeaseSelectionSchema, appointmentCalendarAttemptsSchema, appointmentCalendarRemovalsSchema, workLeaseReleaseSchema, workLeaseOpenSchema, workLeaseApprovalWindowSchema, hostingPeriodsSchema, workspaceEarlyDeletionSchema, workspaceInvitationMailSchema, hostingCoverageSchema, customerWorkspaceMembershipSchema, hostingPeriodRecordSchema}
 }
 
 // migrationChecksum is the ledger's record of one migration's exact bytes.
@@ -347,6 +351,7 @@ func grantRuntime(ctx context.Context, tx pgx.Tx, role string) error {
 		"REVOKE ALL ON FUNCTION public.portal_lock_work_queue_revision(bigint) FROM " + grantee,
 		"REVOKE ALL ON FUNCTION public.portal_workspace_purge_state(text),public.portal_purge_closed_workspace(text,timestamptz,text,text,text) FROM " + grantee,
 		"REVOKE ALL ON FUNCTION public.portal_operator_hosting_coverage(text,text,text,text,uuid) FROM " + grantee,
+		"REVOKE ALL ON FUNCTION public.portal_record_hosting_period(text,text,text,uuid,text,text,timestamptz,timestamptz) FROM " + grantee,
 		"REVOKE ALL ON FUNCTION public.portal_guard_hosting_period_operator() FROM " + grantee,
 		"REVOKE ALL ON FUNCTION public.portal_assign_work_lease_fence() FROM " + grantee,
 		"REVOKE ALL ON FUNCTION public.portal_require_active_work_lease() FROM " + grantee,

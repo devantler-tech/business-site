@@ -350,6 +350,7 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	}
 	mux.HandleFunc("GET /portal/operator/requests", b.triageList)
 	mux.HandleFunc("GET /portal/operator/requests/{id}", b.triageDetail)
+	mux.HandleFunc("POST /portal/operator/requests/{id}/hosting-periods", b.submitHostingPeriod)
 	mux.HandleFunc("POST /portal/operator/requests/{id}/proposals", b.submitProposal)
 	mux.HandleFunc("POST /portal/operator/requests/{id}/proposal-visibility", b.submitVisibility)
 	mux.HandleFunc("GET /portal/operator/requests/{id}/work-review", b.showWorkReview)
@@ -867,6 +868,9 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	}
 	if kind == "proposal-invalid" || kind == "proposal-conflict" || kind == "sharing-invalid" || kind == "sharing-conflict" {
 		path = "/portal/operator/requests"
+	}
+	if kind == "hosting-period-error" {
+		path = "/portal/operator/requests/" + r.PathValue("id")
 	}
 	if kind == "operator-action-error" || kind == "operator-workspace-billing-error" || kind == "operator-workspace-purge-error" || kind == "operator-support" {
 		path = "/portal/operator/customers"

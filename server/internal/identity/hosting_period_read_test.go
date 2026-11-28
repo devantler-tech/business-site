@@ -4,7 +4,47 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/open-feature/go-sdk/openfeature"
+	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
+
+// TestHostingCoverageDoesNotReevaluateClosedFormGate exercises the detail
+// handler when coverage is enabled but the recording form is unavailable.
+func TestHostingCoverageDoesNotReevaluateClosedFormGate(t *testing.T) {
+	for _, outcome := range []string{"disabled", "unavailable"} {
+		t.Run(outcome, func(t *testing.T) {
+			b := acceptedServiceQuoteFixture(t, proposalServiceSoftware)
+			b.signOut()
+			b.as("proposal-operator")
+			b.finish(b.start())
+
+			flags := acceptanceMemoryFlags()
+			flags["portal-hosting-periods"] = memprovider.InMemoryFlag{
+				State: memprovider.Enabled, DefaultVariant: "on", Variants: map[string]any{"on": true},
+			}
+			provider := &finalRequestProvider{
+				FeatureProvider: memprovider.NewInMemoryProvider(flags),
+				key:             "portal-proposal-acceptance",
+			}
+			provider.denied.Store(true)
+			if outcome == "unavailable" {
+				provider.resolutionError = openfeature.NewGeneralResolutionError("synthetic unavailable evaluation")
+			}
+			if err := b.flags.SetProviderAndWait(t.Context(), provider); err != nil {
+				t.Fatal(err)
+			}
+
+			status, page, _ := b.request("GET", "/portal/operator/requests/"+proposalRequestID, nil, "")
+			if status != http.StatusOK || !strings.Contains(page, "Hosting period") || strings.Contains(page, "Record hosting period") {
+				t.Fatalf("expected coverage with the recording form unavailable: %d", status)
+			}
+			if reads := provider.reads.Load(); reads != 1 {
+				t.Fatalf("closed form gate evaluated %d times, want one before the private detail reads", reads)
+			}
+		})
+	}
+}
 
 func TestOperatorReadsOnlyTheGoverningHostingRevision(t *testing.T) {
 	b := acceptedServiceQuoteFixture(t, proposalServiceSoftware)
