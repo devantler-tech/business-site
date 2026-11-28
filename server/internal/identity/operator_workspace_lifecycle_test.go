@@ -155,15 +155,20 @@ func assertCustomerCanSignInWithoutWorkspace(t *testing.T, b *browserFixture) {
 	}
 }
 
+func markLegacyMembershipRevoked(t *testing.T, b *browserFixture) {
+	t.Helper()
+	if _, err := b.pool.Exec(t.Context(), `UPDATE portal_memberships SET revoked=true WHERE subject=$1`, customerSubject); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRemovingLegacyBlockedMemberRestoresOnlySignIn(t *testing.T) {
 	var restored atomic.Bool
 	b := managementMemberFixture(t, func(_ context.Context, _ string, active bool) error {
 		restored.Store(active)
 		return nil
 	})
-	if _, err := b.pool.Exec(t.Context(), `UPDATE portal_memberships SET revoked=true WHERE subject=$1`, customerSubject); err != nil {
-		t.Fatal(err)
-	}
+	markLegacyMembershipRevoked(t, b)
 	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_operator_audit(actor_issuer,actor_subject,actor_kind,action,target,outcome)
  VALUES ($1,$2,'operator','members.deactivate',$3,'allowed')`, b.f.issuer, operatorSubject, customerSubject); err != nil {
 		t.Fatal(err)
