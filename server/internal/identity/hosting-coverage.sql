@@ -19,19 +19,21 @@ periods AS MATERIALIZED (
 ), selected AS (
   SELECT p.*, p.starts_at<=t.value AS governing
   FROM periods p CROSS JOIN checked_at t
-  WHERE p.ends_at>t.value
+  WHERE p.ends_at>t.value AND (p.starts_at<=t.value OR p.state='agreed')
   ORDER BY p.starts_at
   LIMIT 1
 ), coverage_state AS (
   SELECT CASE
     WHEN NOT EXISTS (SELECT 1 FROM periods) OR EXISTS (SELECT 1 FROM periods p WHERE p.starts_at<p.previous_end)
       THEN 'unavailable'
-    WHEN NOT EXISTS (SELECT 1 FROM selected) THEN 'ended'
+    WHEN s.state IS NULL AND EXISTS (SELECT 1 FROM periods p WHERE p.starts_at>t.value)
+      THEN 'unavailable'
+    WHEN s.state IS NULL THEN 'ended'
     WHEN NOT s.governing THEN 'future'
     WHEN s.state='agreed' THEN 'active'
     ELSE s.state
   END AS value
-  FROM (SELECT 1) AS one LEFT JOIN selected s ON true
+  FROM checked_at t LEFT JOIN selected s ON true
 )
 SELECT c.value,s.scope,s.proposal_version,s.starts_at,s.ends_at
 FROM coverage_state c
