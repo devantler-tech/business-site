@@ -17,11 +17,15 @@ function assertStages(w) {
   assert.ok(identity && quality && runtime, 'quality, database tests and packaging need separate budgets');
   assert.ok(goStatic, 'database-free Go checks keep their own job');
   assert.equal(goStatic.services, undefined, 'database-free Go checks do not need a database');
-  for (const command of ['go mod verify', 'test -z "$(gofmt -l .)"', 'go vet ./...', 'go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...']) {
-    const steps = goStatic.steps.filter(s => (s.run ?? '').split('\n').includes(command));
-    assert.equal(steps.length, 1, `exactly one database-free Go check runs: ${command}`);
-    assert.equal(steps[0].if, undefined);
-    assert.ok(steps[0]['continue-on-error'] == null || steps[0]['continue-on-error'] === false);
+  // Exact step text: an added line such as `set +e` or `true` could otherwise mask a check.
+  assert.deepEqual(goStatic.steps.filter(s => s.run).map(s => s.run), [
+    'go mod verify\ntest -z "$(gofmt -l .)"\ngo vet ./...\n',
+    'go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...',
+  ]);
+  for (const step of goStatic.steps) {
+    assert.equal(step.if, undefined);
+    assert.equal(step.shell, undefined, 'the default shell keeps -e');
+    assert.ok(step['continue-on-error'] == null || step['continue-on-error'] === false);
   }
   assert.deepEqual(runtime.needs, ['test-portal-quality', 'test-portal-identity']);
   assert.equal(quality.services, undefined, 'quality observers do not need a database');
@@ -165,6 +169,8 @@ for (const [name, mutate] of [
   ['missing vulnerability scan', w => { w.jobs['test-portal-go-static'].steps = w.jobs['test-portal-go-static'].steps.filter(s => !s.run?.includes('govulncheck')); }],
   ['conditional vet', w => { w.jobs['test-portal-go-static'].steps.find(s => s.run?.includes('go vet')).if = 'false'; }],
   ['masked vet failure', w => { const s = w.jobs['test-portal-go-static'].steps.find(s => s.run?.includes('go vet')); s.run = s.run.replace('go vet ./...', 'go vet ./... || true'); }],
+  ['masked formatting failure', w => { const s = w.jobs['test-portal-go-static'].steps.find(s => s.run?.includes('go vet')); s.run = 'set +e\n' + s.run; }],
+  ['errexit-free Go check shell', w => { w.jobs['test-portal-go-static'].steps.find(s => s.run?.includes('go vet')).shell = 'bash {0}'; }],
   ['missing package stage', w => { delete w.jobs['test-combined-runtime']; }],
   ['conditional package stage', w => { w.jobs['test-combined-runtime'].if = 'false'; }],
   ['ignored package stage failure', w => { w.jobs['test-combined-runtime']['continue-on-error'] = true; }],
