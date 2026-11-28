@@ -212,9 +212,12 @@ func (b *browser) operatorAPI(route operatorRoute) http.HandlerFunc {
 			case http.StatusConflict:
 				b.render(w, r, status, "operator-workspace-billing-error", "", "")
 			case http.StatusBadRequest:
-				if route.action == "invitations.create" {
+				switch route.action {
+				case "invitations.create":
 					b.render(w, r, status, "operator-invitation-error", "", "")
-				} else {
+				case "workspaces.purge":
+					b.render(w, r, status, "operator-workspace-purge-error", "", "")
+				default:
 					b.render(w, r, status, "operator-action-error", "", "")
 				}
 			default:
@@ -250,7 +253,7 @@ func (b *browser) operatorFormReturn(r *http.Request, action string, result []by
 	switch {
 	case action == "invitations.cleanup":
 		query.Set("view", "cleanup")
-	case action == "workspaces.delete" && r.URL.Query().Get("focus") == "workspace":
+	case action == "workspaces.purge" || action == "workspaces.delete" && r.URL.Query().Get("focus") == "workspace":
 		query.Set("view", "closed")
 	case action == "workspaces.create" && r.PostForm.Has("display_name"):
 		var workspace workspaceView

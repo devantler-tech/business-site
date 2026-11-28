@@ -21,7 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const migrationFixtureVersionCount = 48
+const migrationFixtureVersionCount = 49
 
 // migrationCommandFixture creates only a uniquely named disposable database on
 // the already validated loopback fixture, then exercises verified PostgreSQL TLS.

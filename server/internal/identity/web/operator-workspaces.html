@@ -38,6 +38,7 @@
   {{else if eq .View "close"}}{{template "operator-workspace-close" .}}
   {{else if eq .View "remove"}}{{template "operator-member-remove" .}}
   {{else if eq .View "closed"}}{{template "operator-closed-workspaces" .}}
+  {{else if eq .View "purge-confirm"}}{{template "operator-workspace-purge" .}}
   {{else if eq .View "cleanup"}}{{template "operator-stale-workspaces" .}}
   {{else if eq .View "cleanup-confirm"}}{{template "operator-cleanup-confirm" .}}
   {{else if eq .View "new"}}{{template "operator-workspace-create" .}}
@@ -253,12 +254,58 @@
     <h2 id="closed-workspaces">{{if eq .Lang "da"}}Lukkede arbejdsområder{{else}}Closed workspaces{{end}}</h2>
     {{template "operator-back-to-workspaces" .}}
   </div>
-  <p>{{if eq .Lang "da"}}Tidligere medlemmer har ikke længere adgang. Oplysningerne følger opbevaringspolitikken.{{else}}Former members no longer have access. Existing records follow the retention policy.{{end}}</p>
+  <p>{{if eq .Lang "da"}}Den planlagte oprydning kan slette oplysningerne efter opbevaringsdatoen, når adgang og fakturering er afsluttet.{{else}}Scheduled cleanup can remove records after the retention date once access and billing have ended.{{end}}</p>
   <ul class="operator-members">
-    {{range .Closed}}<li class="operator-access-row"><strong>{{.Name}}</strong>
-      <time datetime="{{.At.UTC.Format `2006-01-02T15:04:05Z`}}">{{.At.UTC.Format "2006-01-02"}}</time></li>
+    {{range .Closed}}
+    <li class="operator-access-row">
+      <strong>{{.Name}}</strong>
+      <dl class="operator-workspace-dates">
+        <div><dt>{{if eq $.Lang "da"}}Lukket{{else}}Closed{{end}}</dt><dd><time datetime="{{.ClosedDate}}">{{.ClosedDate}}</time></dd></div>
+        <div><dt>{{if eq $.Lang "da"}}Opbevaring udløber{{else}}Retention ends{{end}}</dt><dd><time datetime="{{.RetentionDate}}">{{.RetentionDate}}</time></dd></div>
+      </dl>
+      {{if eq .PurgeState "eligible"}}
+      <a class="operator-secondary" href="{{root}}/operator/customers?lang={{$.Lang}}&amp;view=purge-confirm&amp;workspace={{.ID}}" aria-label="{{if eq $.Lang `da`}}Slet permanent – {{.Name}}{{else}}Delete permanently – {{.Name}}{{end}}">{{if eq $.Lang "da"}}Slet permanent{{else}}Delete permanently{{end}}</a>
+      {{else if eq .PurgeState "access"}}
+      <span class="operator-help">{{if eq $.Lang "da"}}Adgang er stadig åben{{else}}Access is still open{{end}}</span>
+      {{else if eq .PurgeState "records"}}
+      <span class="operator-help">{{if eq $.Lang "da"}}Oplysninger skal bevares{{else}}Records require retention{{end}}</span>
+      {{end}}
+    </li>
     {{else}}<li>{{if eq .Lang "da"}}Ingen lukkede arbejdsområder.{{else}}No closed workspaces.{{end}}</li>{{end}}
   </ul>
+</section>
+{{end}}
+
+{{define "operator-workspace-purge"}}
+<section class="operator-panel operator-workspace-form" aria-labelledby="purge-workspace">
+  <h2 id="purge-workspace">{{if eq .Lang "da"}}Slet arbejdsområdet permanent{{else}}Delete workspace permanently{{end}}</h2>
+  {{if eq .Purge.PurgeState "eligible"}}
+  <p>{{if eq .Lang "da"}}Dette sletter arbejdsområdet, kontaktoplysninger, invitationer, forespørgsler og tilbud uden aftale. Handlingen kan ikke fortrydes. Loginkonti og revisionslog følger deres egne opbevaringsfrister.{{else}}This removes the workspace, contact details, invitations, requests and proposals without an agreement. Deletion is permanent. Sign-in accounts and audit records follow their own retention schedules.{{end}}</p>
+  <form class="operator-form" method="post" action="{{root}}/operator/customers/purge?lang={{.Lang}}">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <input type="hidden" name="workspace" value="{{.Purge.ID}}">
+    <input type="hidden" name="closed" value="{{.Purge.Closure}}">
+    <div>
+      <label for="purge-reason">{{if eq .Lang "da"}}Årsag til sletning{{else}}Reason for deletion{{end}}</label>
+      <select id="purge-reason" name="reason" required>
+        <option value="">{{if eq .Lang "da"}}Vælg en årsag{{else}}Choose a reason{{end}}</option>
+        <option value="test">{{if eq .Lang "da"}}Oprydning efter test{{else}}Test cleanup{{end}}</option>
+        <option value="request">{{if eq .Lang "da"}}Godkendt anmodning fra kunden{{else}}Approved customer deletion request{{end}}</option>
+      </select>
+    </div>
+    <div>
+      <label for="confirm-purge">{{if eq .Lang "da"}}Skriv arbejdsområdets navn for at bekræfte{{else}}Enter the workspace name to confirm{{end}}</label>
+      <input id="confirm-purge" name="confirm" maxlength="100" spellcheck="false" autocomplete="off" required>
+    </div>
+    <div class="operator-actions">
+      <button class="operator-danger-button" type="submit">{{if eq .Lang "da"}}Slet permanent{{else}}Delete permanently{{end}}</button>
+      <a href="{{root}}/operator/customers?lang={{.Lang}}&amp;view=closed">{{if eq .Lang "da"}}Annuller{{else}}Cancel{{end}}</a>
+    </div>
+  </form>
+  {{else}}
+  <p>{{if eq .Lang "da"}}Dette arbejdsområde kan ikke slettes før tid.{{else}}This workspace is ineligible for early deletion.{{end}}</p>
+  <a href="{{root}}/operator/customers?lang={{.Lang}}&amp;view=closed">{{if eq .Lang "da"}}Tilbage til lukkede arbejdsområder{{else}}Back to closed workspaces{{end}}</a>
+  {{end}}
 </section>
 {{end}}
 

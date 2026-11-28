@@ -40,6 +40,7 @@ type managementPage struct {
 	SelectedMember   *workspaceMember
 	InvitationCounts map[string]int
 	Closed           []closedCustomerWorkspace
+	Purge            *closedCustomerWorkspace
 	Stale            []staleWorkspaceInvitations
 }
 

@@ -350,6 +350,14 @@ before deleting its agreements and preserves operator history referenced by
 remaining hosting periods. The portal's authorization and period locking are
 required before a workflow begins writing real hosting periods.
 
+The workspace early-deletion migration grants execution of two owner-controlled
+functions only. They report eligibility and delete ordinary records of one exact
+closed workspace without granting runtime table DELETE. The deletion function
+rechecks the closure timestamp, current operator membership and protected records,
+leaves the identity closure history intact, and records the outcome in its transaction.
+Both functions pin their search path. Runtime startup verifies ownership and refuses
+public execution or delegated grants.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or
