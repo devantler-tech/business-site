@@ -84,10 +84,8 @@ jobs:
     permissions:
       contents: read
       id-token: write # lets the shared release workflow prove its identity to the GitHub token broker (ADR 0020)
-    uses: devantler-tech/.github/.github/workflows/create-release.yaml@d45338f0ba120e87bdb05c1f70691afe2ec9d2ca
+    uses: devantler-tech/.github/.github/workflows/create-release.yaml@832e6d37bfd0c0b39c855496efc128d2fdc2be2c
     with:
       disable-issue-side-effects: true
       warn-missing-breaking-bang: true
       dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'dry-run' }}
-    secrets:
-      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}

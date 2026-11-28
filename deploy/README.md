@@ -410,8 +410,9 @@ equals its frozen caller commit. It independently reads current API metadata, do
 bounded publication ZIP without extraction and executes the source-owned receipt reader. The
 accepted immutable shared verifier then authenticates the original image signature and complete
 provenance against a temporary deployment copy; source manifests are never edited by admission.
-Only then can the shared release tool obtain its existing GitHub App token. The caller forwards
-only `APP_PRIVATE_KEY`, disables issue side effects and uses the main-only GitHub release
+Only then can the shared release tool obtain its GitHub App token, which it gets from the GitHub
+token broker with the release job's OIDC identity (devantler-tech/monorepo ADR 0020). The caller
+forwards no secret, disables issue side effects and uses the main-only GitHub release
 configuration; it does not publish an npm package.
 
 After the source has merged and its main CI has succeeded, the explicit nonpublishing preflight is:
