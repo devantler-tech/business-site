@@ -76,9 +76,7 @@ func TestOperatorMemberTransitionsSerializeAcrossReplicas(t *testing.T) {
 		providerEnabled.Store(true)
 		return nil
 	})
-	if _, err := b.pool.Exec(t.Context(), `UPDATE portal_memberships SET revoked=true WHERE subject=$1`, customerSubject); err != nil {
-		t.Fatal(err)
-	}
+	markLegacyMembershipRevoked(t, b)
 	replica := New(b.pool, b.svc.broker, b.svc.flags)
 	if err := replica.LinkOperators([]string{operatorSubject}); err != nil {
 		t.Fatal(err)

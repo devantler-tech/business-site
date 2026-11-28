@@ -54,6 +54,7 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 		{"missing early deletion", "REVOKE EXECUTE ON FUNCTION public.portal_purge_closed_workspace(text,timestamptz,text,text,text) FROM portal_runtime; SET ROLE portal_runtime", false},
 		{"public early deletion", "GRANT EXECUTE ON FUNCTION public.portal_purge_closed_workspace(text,timestamptz,text,text,text) TO PUBLIC; SET ROLE portal_runtime", false},
 		{"delegated early deletion", "GRANT EXECUTE ON FUNCTION public.portal_purge_closed_workspace(text,timestamptz,text,text,text) TO portal_runtime WITH GRANT OPTION; SET ROLE portal_runtime", false},
+		{"public hosting coverage", "GRANT EXECUTE ON FUNCTION public.portal_operator_hosting_coverage(text,text,text,text,uuid) TO PUBLIC; SET ROLE portal_runtime", false},
 		{"membership recorder disabled", "ALTER TABLE portal_memberships DISABLE TRIGGER portal_membership_transition; SET ROLE portal_runtime", false},
 		{"membership incarnation disabled", "ALTER TABLE portal_memberships DISABLE TRIGGER portal_membership_incarnation; SET ROLE portal_runtime", false},
 		{"membership recorder conditional", "DROP TRIGGER portal_membership_transition ON portal_memberships; CREATE TRIGGER portal_membership_transition AFTER INSERT OR UPDATE OR DELETE ON portal_memberships FOR EACH ROW WHEN (false) EXECUTE FUNCTION portal_record_membership_transition(); SET ROLE portal_runtime", false},

@@ -350,6 +350,13 @@ before deleting its agreements and preserves operator history referenced by
 remaining hosting periods. The portal's authorization and period locking are
 required before a workflow begins writing real hosting periods.
 
+The operator hosting coverage query can execute under the web login. It
+returns only the effective period or next scheduled period for the exact
+project and workspace. The query validates the current operator membership
+and refuses inconsistent period heads. The web login still has no access to
+the hosting tables, and the display requires the explicitly enabled hosting
+periods capability.
+
 The workspace early-deletion migration grants execution of two owner-controlled
 functions only. They report eligibility and delete ordinary records of one exact
 closed workspace without granting runtime table DELETE. The deletion function

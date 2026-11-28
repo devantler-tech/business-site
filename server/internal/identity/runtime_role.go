@@ -110,10 +110,11 @@ func checkWorkspaceRole(ctx context.Context, pool queryRower) error {
  AND has_table_privilege(current_user,'portal_workspace_settings','INSERT')
  AND has_column_privilege(current_user,'portal_workspace_settings','display_name','UPDATE')
  AND has_column_privilege(current_user,'portal_workspace_settings','closed_at','UPDATE')
- AND (SELECT count(*)=2
+ AND (SELECT count(*)=3
   FROM pg_proc p JOIN pg_class w ON w.oid='public.portal_workspaces'::regclass
   WHERE p.oid IN ('public.portal_workspace_purge_state(text)'::regprocedure,
-                 'public.portal_purge_closed_workspace(text,timestamptz,text,text,text)'::regprocedure)
+                 'public.portal_purge_closed_workspace(text,timestamptz,text,text,text)'::regprocedure,
+                 'public.portal_operator_hosting_coverage(text,text,text,text,uuid)'::regprocedure)
     AND has_function_privilege(current_user,p.oid,'EXECUTE')
     AND p.proowner=w.relowner AND p.prokind='f' AND p.prosecdef
     AND p.proconfig=ARRAY['search_path=pg_catalog, pg_temp']
