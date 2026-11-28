@@ -415,6 +415,14 @@ jobs:
           go mod verify
           test -z "$(gofmt -l .)"
           go vet ./...
+      # -p=1 below keeps packages that share the test database from running at
+      # once, but it also builds one package at a time. Compiling both race
+      # variants here, in parallel and without running anything, fills the build
+      # cache so the serialized steps only link (business-site#873).
+      - name: Compile the race test binaries in parallel
+        run: |
+          go test -race -c -o "$RUNNER_TEMP/race-tests/" ./...
+          go test -race -cover -c -o "$RUNNER_TEMP/race-cover-tests/" ./...
       - name: List the complete compiled ordinary test inventory
         run: go test -race -p=1 ./... -list '^(Test|Example|Fuzz)' -count=1 -timeout=90s -json > test-inventory.jsonl
       - name: Test broker and durable access boundary
