@@ -132,6 +132,8 @@ type Foundation struct {
 	// fictional records from its own store on the same HTTP surface.
 	clientPreview, previewAuthority *Foundation
 	previewSessions                 bool
+	previewStoreCheck               func(context.Context) error
+	previewStoreVerified            atomic.Bool
 	// customers is the optional organization-scoped provider for operator actions.
 	customers CustomerDirectory
 	// agents is immutable policy and a distinct verifier, installed at startup.

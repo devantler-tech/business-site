@@ -46,7 +46,8 @@ func checkOperatorWorkspaceActions(t *testing.T, b *browserFixture, previewAvail
 
 func TestOperatorUnifiedPreviewKeepsPurchaseAndIdentityInSeparateStores(t *testing.T) {
 	b := newBrowserFixture(t)
-	demo := unifiedPreviewFixture(t, b.pool)
+	demo, previewMigrator := unifiedPreviewFixture(t, b.pool)
+	rewindHostingPeriodsFixture(t, previewMigrator)
 	ctx := t.Context()
 	if err := b.svc.LinkOperators([]string{sharedOperator}); err != nil {
 		t.Fatal(err)
@@ -62,10 +63,11 @@ func TestOperatorUnifiedPreviewKeepsPurchaseAndIdentityInSeparateStores(t *testi
 	if err := demoAPI.SetProviderAndWait(ctx, memprovider.NewInMemoryProvider(flags)); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.svc.LinkClientPreview(b.pool, demoAPI.NewClient()); err == nil {
+	checkStore := func(ctx context.Context) error { return CheckSchemaCurrent(ctx, demo) }
+	if err := b.svc.LinkClientPreview(b.pool, demoAPI.NewClient(), checkStore); err == nil {
 		t.Fatal("preview accepted the production session store")
 	}
-	if err := b.svc.LinkClientPreview(demo, demoAPI.NewClient()); err != nil {
+	if err := b.svc.LinkClientPreview(demo, demoAPI.NewClient(), checkStore); err != nil {
 		t.Fatal(err)
 	}
 	b.atRoot()
@@ -91,6 +93,12 @@ func TestOperatorUnifiedPreviewKeepsPurchaseAndIdentityInSeparateStores(t *testi
 	signIn(sharedOperator)
 	checkOperatorWorkspaceActions(t, b, true)
 	start := url.Values{"csrf_token": {b.csrf("/operator")}, "lang": {"en"}}
+	if status, _, _ := b.request(http.MethodPost, "/preview", start, b.site.URL); status != http.StatusServiceUnavailable {
+		t.Fatalf("preview accepted a session before the practice schema was current: %d", status)
+	}
+	if err := MigrateWithRuntimeRole(ctx, previewMigrator, "portal_preview_web"); err != nil {
+		t.Fatal(err)
+	}
 	if status, _, header := b.request(http.MethodPost, "/preview", start, b.site.URL); status != http.StatusSeeOther || header.Get("Location") != "/?lang=en" {
 		t.Fatalf("the existing operator session failed to switch on the same host: %d", status)
 	}
@@ -229,7 +237,7 @@ func checkUnifiedPreviewRelease(t *testing.T, b *browserFixture, demoAPI *openfe
 
 // The shared and product test runners already provide an exclusively owned
 // disposable service. Create a second database only on that fixed fixture.
-func unifiedPreviewFixture(t *testing.T, primary *pgxpool.Pool) *pgxpool.Pool {
+func unifiedPreviewFixture(t *testing.T, primary *pgxpool.Pool) (*pgxpool.Pool, *pgxpool.Pool) {
 	t.Helper()
 	cfg := primary.Config().ConnConfig
 	if (cfg.Host != "127.0.0.1" && cfg.Host != "localhost") || (cfg.Port != 5432 && cfg.Port != 55444) ||
@@ -286,5 +294,5 @@ func unifiedPreviewFixture(t *testing.T, primary *pgxpool.Pool) *pgxpool.Pool {
 	if err := CheckPreviewReceiptRole(t.Context(), demo, true); err != nil {
 		t.Fatal(err)
 	}
-	return demo
+	return demo, migrator
 }

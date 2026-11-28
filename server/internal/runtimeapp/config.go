@@ -355,7 +355,7 @@ func linkUnifiedPreview(ctx, startup context.Context, foundation *identity.Found
 		slog.Warn("client preview storage configuration is unavailable")
 		return closed
 	}
-	pool, err := connectPortalStore(startup, cfg, true)
+	pool, err := newPortalStore(startup, cfg)
 	if err != nil {
 		slog.Warn("client preview storage is unavailable")
 		return closed
@@ -376,7 +376,8 @@ func linkUnifiedPreview(ctx, startup context.Context, foundation *identity.Found
 		slog.Warn("client preview capabilities are unavailable")
 		return closed
 	}
-	if err := foundation.LinkClientPreview(pool, preview.NewClient()); err != nil {
+	checkStore := func(check context.Context) error { return checkPortalStore(check, pool, true) }
+	if err := foundation.LinkClientPreview(pool, preview.NewClient(), checkStore); err != nil {
 		shutdown()
 		slog.Warn("client preview could not be linked")
 		return closed
@@ -405,6 +406,18 @@ func connectPortal(startup context.Context, c Config) (*pgxpool.Pool, *identity.
 }
 
 func connectPortalStore(startup context.Context, cfg *pgxpool.Config, preview bool) (*pgxpool.Pool, error) {
+	pool, err := newPortalStore(startup, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkPortalStore(startup, pool, preview); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	return pool, nil
+}
+
+func newPortalStore(ctx context.Context, cfg *pgxpool.Config) (*pgxpool.Pool, error) {
 	cfg.MaxConns = 4
 	cfg.MinConns = 0
 	cfg.MaxConnLifetime = time.Hour
@@ -414,28 +427,31 @@ func connectPortalStore(startup context.Context, cfg *pgxpool.Config, preview bo
 	cfg.ConnConfig.RuntimeParams["search_path"] = "public"
 	cfg.ConnConfig.RuntimeParams["statement_timeout"] = "5000"
 	cfg.ConnConfig.RuntimeParams["lock_timeout"] = "1000"
-	pool, err := pgxpool.NewWithConfig(startup, cfg)
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, ErrConfig
 	}
-	fail := func() (*pgxpool.Pool, error) { pool.Close(); return nil, ErrConfig }
+	return pool, nil
+}
+
+func checkPortalStore(ctx context.Context, pool *pgxpool.Pool, preview bool) error {
 	// Assess the actual configured login, not a restricted role adopted by a
 	// broader credential. Both identities must agree before checking its grants.
 	var loginMatches bool
-	if err := pool.QueryRow(startup, "SELECT current_user::text = $1 AND session_user::text = $1", cfg.ConnConfig.User).Scan(&loginMatches); err != nil || !loginMatches {
-		return fail()
+	if err := pool.QueryRow(ctx, "SELECT current_user::text = $1 AND session_user::text = $1", pool.Config().ConnConfig.User).Scan(&loginMatches); err != nil || !loginMatches {
+		return ErrConfig
 	}
-	if err := identity.CheckRuntimeRole(startup, pool); err != nil {
-		return fail()
+	if err := identity.CheckRuntimeRole(ctx, pool); err != nil {
+		return ErrConfig
 	}
 	// Serve only once this release's migration job has migrated the store.
-	if err := identity.CheckSchemaCurrent(startup, pool); err != nil {
-		return fail()
+	if err := identity.CheckSchemaCurrent(ctx, pool); err != nil {
+		return ErrConfig
 	}
-	if err := identity.CheckPreviewReceiptRole(startup, pool, preview); err != nil {
-		return fail()
+	if err := identity.CheckPreviewReceiptRole(ctx, pool, preview); err != nil {
+		return ErrConfig
 	}
-	return pool, nil
+	return nil
 }
 
 // FitsPortalHost reports whether the configured portal matches the runtime's host

@@ -40,11 +40,11 @@ func (s *Foundation) EnableClientPreviewSessions() {
 	s.previewSessions = !s.operatorOnly && s.OperatorsLinked()
 }
 
-// LinkClientPreview is startup-only. The preview gets no customer directory,
-// provider clients, worker identity, or background services.
-func (s *Foundation) LinkClientPreview(pool *pgxpool.Pool, flags *openfeature.Client) error {
+// LinkClientPreview connects the isolated preview at startup. Each process
+// must validate its database before it can serve the first preview request.
+func (s *Foundation) LinkClientPreview(pool *pgxpool.Pool, flags *openfeature.Client, checkStore func(context.Context) error) error {
 	if s == nil || s.operatorOnly || s.clientPreview != nil || pool == nil || s.pool == nil ||
-		pool == s.pool || s.broker == nil || flags == nil || !s.OperatorsLinked() {
+		pool == s.pool || s.broker == nil || flags == nil || checkStore == nil || !s.OperatorsLinked() {
 		return ErrDenied
 	}
 	if pool.Config().ConnConfig.Database == s.pool.Config().ConnConfig.Database {
@@ -55,9 +55,23 @@ func (s *Foundation) LinkClientPreview(pool *pgxpool.Pool, flags *openfeature.Cl
 	preview.previewAuthority = s
 	preview.operators = s.operators
 	preview.site = s.site
+	preview.previewStoreCheck = checkStore
 	preview.orderTerms.Store(s.orderTerms.Load())
 	s.clientPreview = preview
 	s.EnableClientPreviewSessions()
+	return nil
+}
+
+func (s *Foundation) verifyPreviewStore(ctx context.Context) error {
+	if s.previewStoreVerified.Load() {
+		return nil
+	}
+	check, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	if s.previewStoreCheck == nil || s.previewStoreCheck(check) != nil || check.Err() != nil {
+		return errTriageStorage
+	}
+	s.previewStoreVerified.Store(true)
 	return nil
 }
 
@@ -183,6 +197,10 @@ func (b *browser) unifiedPreviewHandler() (http.Handler, error) {
 			return
 		}
 		defer release()
+		if err := demo.foundation.verifyPreviewStore(ctx); err != nil {
+			demo.finishPreviewTransition(w, r, "", err)
+			return
+		}
 		demoRoutes.ServeHTTP(w, r.WithContext(ctx))
 	})), nil
 }
@@ -420,6 +438,11 @@ func (b *browser) enterClientPreview(w http.ResponseWriter, r *http.Request) {
 		store = b.foundation.clientPreview
 		ctx, release, err = b.lockUnifiedPreview(ctx)
 		if err != nil {
+			b.finishPreviewTransition(w, r, "", err)
+			return
+		}
+		if err := store.verifyPreviewStore(ctx); err != nil {
+			release()
 			b.finishPreviewTransition(w, r, "", err)
 			return
 		}
