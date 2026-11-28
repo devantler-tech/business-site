@@ -357,6 +357,12 @@ and refuses inconsistent period heads. The web login still has no access to
 the hosting tables, and the display requires the explicitly enabled hosting
 periods capability.
 
+The hosting-period recording function checks the exact typed acceptance and
+copies its maintenance terms. It holds the workspace and entitlement locks
+while it checks for overlap and appends the period and its current revision.
+Its runtime grant is limited to execution. Recording requires both the hosting
+periods and proposal acceptance capabilities.
+
 The workspace early-deletion migration grants execution of two owner-controlled
 functions only. They report eligibility and delete ordinary records of one exact
 closed workspace without granting runtime table DELETE. The deletion function

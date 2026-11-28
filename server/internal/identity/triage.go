@@ -258,4 +258,6 @@ type triagePageData struct {
 	Order             *projectOrder
 	Feature           *featureState // the client's feature-request level and this request's closure
 	Hosting           *hostingCoverage
+	HostingAgreements []proposalAcceptance
+	HostingPeriodID   string
 }

@@ -1060,7 +1060,18 @@
     "Standardfortrydelsesformular",
     "Tilbuddets",
     "tjenesteydelse",
-    "virksomhedsoplysninger"
+    "virksomhedsoplysninger",
+    "angiver",
+    "datoer",
+    "eventuelt",
+    "hostingtilbud",
+    "perioden",
+    "præcist",
+    "slutdato",
+    "sluttidspunkt",
+    "startdato",
+    "starttidspunkt",
+    "tidspunkt"
   ],
   "overrides": [
     {

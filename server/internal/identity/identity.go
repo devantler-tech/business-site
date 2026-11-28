@@ -462,7 +462,7 @@ func (s *Foundation) completeSignInProof(ctx context.Context, nonce, raw string,
 	// A current member signs straight in. An identity without membership accepts
 	// its own pending invitation, bound to the exact issuer and subject.
 	if _, _, p.membershipIncarnation, err = s.membershipState(ctx, p); errors.Is(err, ErrDenied) {
-		if err = s.redeem(ctx, p, ""); err != nil && !errors.Is(err, ErrDenied) {
+		if err = s.redeem(ctx, p, "", nil); err != nil && !errors.Is(err, ErrDenied) {
 			return Principal{}, err
 		}
 		// Current membership decides, including one a concurrent first sign-in of
@@ -493,8 +493,8 @@ func (s *Foundation) isCustomerSignIn(subject string) bool {
 
 // redeem accepts the invitation for the selected workspace, or the sole
 // invitation at first sign-in. Invitation consumption and membership creation
-// stay in one transaction.
-func (s *Foundation) redeem(ctx context.Context, p Principal, selected string) error {
+// stay in one transaction. A workspace selection also pins its original session.
+func (s *Foundation) redeem(ctx context.Context, p Principal, selected string, session *durableResponseSnapshot) error {
 	if !time.Now().Before(p.expires) {
 		return ErrDenied
 	}
@@ -559,6 +559,9 @@ func (s *Foundation) redeem(ctx context.Context, p Principal, selected string) e
 		return ErrDenied
 	}
 	if ctx.Err() != nil || !time.Now().Before(p.expires) {
+		return ErrDenied
+	}
+	if session != nil && !lockBrowserSession(ctx, tx, *session) {
 		return ErrDenied
 	}
 	if err = tx.Commit(ctx); err != nil {

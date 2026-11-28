@@ -116,7 +116,12 @@ func (b *browser) openCustomerWorkspace(w http.ResponseWriter, r *http.Request) 
 	workspace := r.PostForm.Get("workspace")
 	incarnation, err := b.foundation.customerWorkspaceIncarnation(ctx, account.Principal, workspace)
 	if errors.Is(err, pgx.ErrNoRows) {
-		if err = b.foundation.redeem(ctx, account.Principal, workspace); err == nil || errors.Is(err, ErrDenied) {
+		session := durableResponseSnapshot{
+			original: contactAuthority{principal: account.Principal, deadline: account.deadline},
+			key:      account.key,
+			data:     account.data,
+		}
+		if err = b.foundation.redeem(ctx, account.Principal, workspace, &session); err == nil || errors.Is(err, ErrDenied) {
 			incarnation, err = b.foundation.customerWorkspaceIncarnation(ctx, account.Principal, workspace)
 		}
 	}
