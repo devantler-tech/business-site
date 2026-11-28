@@ -124,8 +124,8 @@ func TestWorkspaceInvitationSelectionAndRetry(t *testing.T) {
 		t.Fatal("retry duplicated an existing account or pending invitation")
 	}
 	form.Set("workspace", "client-c")
-	if status, _, _ := b.request("POST", path, form, b.site.URL); status != http.StatusBadRequest || b.invitationCount() != 1 {
-		t.Fatalf("a second workspace replaced a live invitation: %d", status)
+	if status, _, _ := b.request("POST", path, form, b.site.URL); status != http.StatusOK || b.invitationCount() != 2 {
+		t.Fatalf("a second workspace did not preserve both invitations: %d", status)
 	}
 	var subject string
 	var expires time.Time

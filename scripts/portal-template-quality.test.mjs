@@ -213,15 +213,15 @@ function lint(files) {
   return { status: result.status, output: result.stdout + result.stderr };
 }
 
-test('the pinned checker analyzes all seven actual Go HTML templates', () => {
+test('the pinned checker analyzes all eight actual Go HTML templates', () => {
   const version = spawnSync('htmlhint', ['--version'], { encoding: 'utf8', timeout: 30000 });
   assert.ifError(version.error);
   assert.equal(version.status, 0);
   assert.equal(version.stdout.trim(), manifest.devDependencies.htmlhint);
-  const result = lint(['portal', 'operator', 'operator-workspaces', 'contact', 'requests', 'triage', 'work-review'].map(name =>
+  const result = lint(['portal', 'operator', 'operator-workspaces', 'operator-customers', 'contact', 'requests', 'triage', 'work-review'].map(name =>
     join(root, 'server/internal/identity/web', `${name}.html`)));
   assert.equal(result.status, 0, result.output);
-  assert.match(result.output, /Scanned 7 files/);
+  assert.match(result.output, /Scanned 8 files/);
 });
 
 for (const [name, content] of [

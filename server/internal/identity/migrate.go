@@ -167,6 +167,9 @@ var workspaceInvitationMailSchema string
 //go:embed hosting-coverage.sql
 var hostingCoverageSchema string
 
+//go:embed customer-workspace-membership.sql
+var customerWorkspaceMembershipSchema string
+
 //go:embed hosting-period-record.sql
 var hostingPeriodRecordSchema string
 
@@ -300,7 +303,7 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, runtimeRole string) error 
 
 // orderedMigrations lists the embedded migrations; version N is element N-1.
 func orderedMigrations() []string {
-	return []string{schema, sessionsSchema, contactsSchema, requestsSchema, triageIndexSchema, proposalsSchema, proposalVisibilitySchema, contactVerificationSchema, proposalAcceptanceSchema, invoicesSchema, creditsSchema, invoiceTaxSchema, membershipHistorySchema, workApprovalsSchema, otherRequestsSchema, ordersSchema, cardsSchema, orderEndsSchema, workFundingSchema, clientOrderEndsSchema, orderWithdrawalsSchema, earlyStartSchema, mailSchema, launchPlacesSchema, orderAddonsSchema, requestClosuresSchema, addonEndsSchema, operatorAuditSchema, workspacesSchema, originalConfirmationSchema, previewReceiptsSchema, workspaceManagementSchema, serviceContractsSchema, appointmentReservationsSchema, appointmentCalendarIntentsSchema, workQueueRevisionSchema, appointmentCalendarObservationsSchema, customerAccountClosuresSchema, workQueueRevisionLockSchema, workLeasesSchema, memberAccountClosuresSchema, workLeaseSelectionSchema, appointmentCalendarAttemptsSchema, appointmentCalendarRemovalsSchema, workLeaseReleaseSchema, workLeaseOpenSchema, workLeaseApprovalWindowSchema, hostingPeriodsSchema, workspaceEarlyDeletionSchema, workspaceInvitationMailSchema, hostingCoverageSchema, hostingPeriodRecordSchema}
+	return []string{schema, sessionsSchema, contactsSchema, requestsSchema, triageIndexSchema, proposalsSchema, proposalVisibilitySchema, contactVerificationSchema, proposalAcceptanceSchema, invoicesSchema, creditsSchema, invoiceTaxSchema, membershipHistorySchema, workApprovalsSchema, otherRequestsSchema, ordersSchema, cardsSchema, orderEndsSchema, workFundingSchema, clientOrderEndsSchema, orderWithdrawalsSchema, earlyStartSchema, mailSchema, launchPlacesSchema, orderAddonsSchema, requestClosuresSchema, addonEndsSchema, operatorAuditSchema, workspacesSchema, originalConfirmationSchema, previewReceiptsSchema, workspaceManagementSchema, serviceContractsSchema, appointmentReservationsSchema, appointmentCalendarIntentsSchema, workQueueRevisionSchema, appointmentCalendarObservationsSchema, customerAccountClosuresSchema, workQueueRevisionLockSchema, workLeasesSchema, memberAccountClosuresSchema, workLeaseSelectionSchema, appointmentCalendarAttemptsSchema, appointmentCalendarRemovalsSchema, workLeaseReleaseSchema, workLeaseOpenSchema, workLeaseApprovalWindowSchema, hostingPeriodsSchema, workspaceEarlyDeletionSchema, workspaceInvitationMailSchema, hostingCoverageSchema, customerWorkspaceMembershipSchema, hostingPeriodRecordSchema}
 }
 
 // migrationChecksum is the ledger's record of one migration's exact bytes.

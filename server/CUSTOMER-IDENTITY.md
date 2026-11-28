@@ -367,9 +367,10 @@ and carry no browser nonce. Browser sign-in separately refuses machine subjects.
 
 An empty grant list permits only `invitations.list`, `workspaces.list`,
 `workspaces.members.list`, `audit.list` and `openapi.read`. The closed write catalogue is
-`invitations.create`, `invitations.revoke`, `workspaces.create`, `members.deactivate` and
-`members.reactivate`. Each needs its own grant; `invitations.create` explicitly permits the
-customer-facing account-setup email. A grant does not create an unimplemented route.
+`invitations.create`, `invitations.revoke` and `workspaces.create`. Each needs its own grant.
+`invitations.create` permits the customer-facing account-setup email. Existing configurations can
+still contain the retired `members.deactivate` grant, which returns a validation error.
+`members.reactivate` supports recovery of previously revoked memberships during the transition.
 There is no wildcard, operator role, payment, refund or deletion grant. Unknown actions and
 money/deletion grants are refused at startup and at dispatch, even if policy is malformed.
 

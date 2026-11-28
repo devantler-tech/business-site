@@ -10,6 +10,8 @@ import (
 // delegates account setup to the provider and never deletes users.
 type CustomerDirectory interface {
 	Profiles(context.Context, []string) (map[string]customeridentity.Profile, error)
+	SearchAccounts(context.Context, string, uint64) ([]customeridentity.Account, bool, error)
+	Account(context.Context, string) (customeridentity.Account, error)
 	EnsureUser(ctx context.Context, name, email string, allowed func() bool) (id string, created bool, err error)
 	VerifyUser(context.Context, string) error
 	DeactivateUser(context.Context, string, func() bool) error

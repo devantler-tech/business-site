@@ -63,7 +63,10 @@ func lockWorkMembers(ctx context.Context, tx pgx.Tx, wanted []workMember) ([]wor
 		if result := cmp.Compare(wanted[a].Issuer, wanted[b].Issuer); result != 0 {
 			return result
 		}
-		return cmp.Compare(wanted[a].Subject, wanted[b].Subject)
+		if result := cmp.Compare(wanted[a].Subject, wanted[b].Subject); result != 0 {
+			return result
+		}
+		return cmp.Compare(wanted[a].Client, wanted[b].Client)
 	})
 	actual, matches := make([]workMember, len(wanted)), make([]bool, len(wanted))
 	for _, i := range order {
@@ -73,7 +76,7 @@ func lockWorkMembers(ctx context.Context, tx pgx.Tx, wanted []workMember) ([]wor
  EXISTS(SELECT 1 FROM public.portal_membership_transitions h WHERE h.incarnation=m.incarnation
  AND h.kind IN ('baseline','insert','update') AND h.issuer=m.issuer AND h.subject=m.subject
  AND h.client_id=m.client_id AND h.role=m.role AND h.revoked=m.revoked)
- FROM public.portal_memberships m WHERE m.issuer=$1 AND m.subject=$2 FOR SHARE OF m`, member.Issuer, member.Subject).Scan(&member.Client, &member.Role, &member.Incarnation, &revoked, &recorded)
+ FROM public.portal_memberships m WHERE m.issuer=$1 AND m.subject=$2 AND m.client_id=$3 FOR SHARE OF m`, member.Issuer, member.Subject, wanted[i].Client).Scan(&member.Client, &member.Role, &member.Incarnation, &revoked, &recorded)
 		if errors.Is(err, pgx.ErrNoRows) {
 			continue
 		}

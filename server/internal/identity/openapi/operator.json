@@ -164,11 +164,11 @@
     "/operator/api/members/deactivate": {
       "post": {
         "operationId": "members.deactivate",
-        "summary": "Deactivate a customer membership and its ZITADEL user",
+        "summary": "Retired account deactivation",
+        "deprecated": true,
         "requestBody": { "$ref": "#/components/requestBodies/ChangeMember" },
         "responses": {
-          "200": { "description": "Portal and identity-provider access are disabled" },
-          "400": { "description": "The submitted fields are invalid" },
+          "400": { "description": "Account deactivation is unavailable" },
           "401": { "$ref": "#/components/responses/SignIn" },
           "403": { "$ref": "#/components/responses/OperatorsOnly" },
           "503": { "$ref": "#/components/responses/Unavailable" }
@@ -178,7 +178,8 @@
     "/operator/api/members/reactivate": {
       "post": {
         "operationId": "members.reactivate",
-        "summary": "Reactivate a customer after its ZITADEL user is active",
+        "summary": "Recover a previously revoked customer membership",
+        "deprecated": true,
         "requestBody": { "$ref": "#/components/requestBodies/ChangeMember" },
         "responses": {
           "200": { "description": "Portal and identity-provider access are enabled" },

@@ -77,10 +77,10 @@ and whether it was sent. Reminders (rykker) stay a Numina task.
 
 ## The card path (Stripe)
 
-The client can instead pay by card or MobilePay. Stripe issues and emails a full VAT invoice for
-each payment, and Numina's own Stripe integration books the sale, fee and payout from Stripe's
-payout. The portal makes no Numina invoice for a card order, so nothing is booked twice: the
-Stripe invoice is the sale's document, and Numina books the money once.
+The client can pay by card or MobilePay. Stripe issues and emails a full VAT invoice for each
+payment. The Stripe invoice is the sale document. [Bookkeeper](https://github.com/devantler-tech/bookkeeper/issues/25)
+owns reconciliation of Stripe sales, fees and payouts in Numina. The portal creates Numina
+invoices only for orders on the invoice collection path.
 
 - **Checkout.** Placing a card order creates one Stripe Checkout Session per amount and shows
   each as a **Continue to payment** link on the receipt. The portal's CSP allows form posts only
@@ -417,8 +417,7 @@ For the invoice, the maintainer also sets up the Stripe account; none of this is
 - the default invoice template showing amounts without VAT, which subscription invoices use;
 - emailed receipts and invoices for successful payments.
 
-Before the card path goes live, the maintainer also asks Numina support to switch on Numina's
-Stripe integration.
+Verify Bookkeeper's Stripe-to-Numina reconciliation before opening the portal card path.
 
 ## Storage and privileges
 

@@ -125,24 +125,10 @@
     {{range .Detail.Members}}
     <li class="operator-access-row">
       {{template "operator-person" .Person}}
-      <span class="operator-status">{{if eq .Role "operator"}}{{$.Operator}}{{else if .Revoked}}{{if eq $.Lang "da"}}Deaktiveret{{else}}Deactivated{{end}}{{else}}{{if eq $.Lang "da"}}Aktiv{{else}}Active{{end}}{{end}}</span>
+      <span class="operator-status">{{if eq .Role "operator"}}{{$.Operator}}{{else if .Revoked}}{{if eq $.Lang "da"}}Ingen adgang{{else}}No access{{end}}{{else}}{{if eq $.Lang "da"}}Aktiv{{else}}Active{{end}}{{end}}</span>
       {{if eq .Role "client"}}
       <div class="operator-actions">
-        {{if .Revoked}}
-        <form method="post" action="{{root}}/operator/api/members/deactivate?lang={{$.Lang}}&amp;focus=workspace">
-          <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
-          <input type="hidden" name="workspace" value="{{$workspace}}">
-          <input type="hidden" name="subject" value="{{.Subject}}">
-          <button type="submit" class="operator-secondary">{{if eq $.Lang "da"}}Prøv deaktivering igen{{else}}Retry deactivation{{end}}</button>
-        </form>
-        {{end}}
-        <form method="post" action="{{root}}/operator/api/members/{{if .Revoked}}reactivate{{else}}deactivate{{end}}?lang={{$.Lang}}&amp;focus=workspace">
-          <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
-          <input type="hidden" name="workspace" value="{{$workspace}}">
-          <input type="hidden" name="subject" value="{{.Subject}}">
-          <button type="submit" class="operator-secondary">{{if .Revoked}}{{if eq $.Lang "da"}}Genaktiver{{else}}Reactivate{{end}}{{else}}{{if eq $.Lang "da"}}Deaktiver{{else}}Deactivate{{end}}{{end}}</button>
-        </form>
-        <a href="{{root}}/operator/customers?lang={{$.Lang}}&amp;workspace={{$workspace}}&amp;view=remove&amp;member={{.Subject}}">{{if eq $.Lang "da"}}Fjern{{else}}Remove{{end}}</a>
+        <a href="{{root}}/operator/customers?lang={{$.Lang}}&amp;workspace={{$workspace}}&amp;view=remove&amp;member={{.Subject}}">{{template "customer-remove-label" $.Lang}}</a>
       </div>
       {{end}}
     </li>
@@ -241,14 +227,14 @@
 
 {{define "operator-member-remove"}}
 <section class="operator-panel operator-workspace-form" aria-labelledby="remove-member">
-  <h2 id="remove-member">{{if eq .Lang "da"}}Fjern medlem{{else}}Remove member{{end}}</h2>
+  <h2 id="remove-member">{{template "customer-remove-label" .Lang}}</h2>
   {{template "operator-person" .SelectedMember.Person}}
-  <p>{{if eq .Lang "da"}}Medlemmet mister adgangen med det samme. En ny invitation kræves for at få adgang igen.{{else}}This ends the member’s access immediately. They will need a new invitation to return.{{end}}</p>
+  <p>{{if eq .Lang "da"}}Medlemmet mister adgangen med det samme.{{else}}This ends the member’s access immediately.{{end}} {{template "customer-remove-explanation" .Lang}}</p>
   <form class="operator-form" method="post" action="{{root}}/operator/api/members/remove?lang={{.Lang}}&amp;focus=workspace">
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
     <input type="hidden" name="workspace" value="{{.Detail.ID}}">
     <input type="hidden" name="subject" value="{{.SelectedMember.Subject}}">
-    <div class="operator-actions"><button class="operator-danger-button" type="submit">{{if eq .Lang "da"}}Fjern medlem{{else}}Remove member{{end}}</button>{{template "operator-back-to-workspace" .}}</div>
+    <div class="operator-actions"><button class="operator-danger-button" type="submit">{{template "customer-remove-label" .Lang}}</button>{{template "operator-back-to-workspace" .}}</div>
   </form>
 </section>
 {{end}}

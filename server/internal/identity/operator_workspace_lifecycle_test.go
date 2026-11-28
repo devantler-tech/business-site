@@ -2,13 +2,16 @@ package identity
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -55,9 +58,7 @@ func TestOperatorRenamesWorkspaceAndRemovesItsMember(t *testing.T) {
 		b.f.issuer, customerSubject).Scan(&removed, &deadline); err != nil || !removed || !deadline {
 		t.Fatalf("member removal did not commit its exact account-removal deadline: %v", err)
 	}
-	b.signOut()
-	b.as(customerSubject)
-	b.refused(b.start())
+	assertCustomerCanSignInWithoutWorkspace(t, b, customerSubject)
 }
 
 func TestOperatorMemberRemovalRequiresItsAccountDeadline(t *testing.T) {
@@ -138,13 +139,67 @@ func TestOperatorDeletesWorkspaceAndClosesItsInvitations(t *testing.T) {
  (SELECT count(*)=1 FROM portal_customer_account_closures)`, b.f.issuer, customerSubject).Scan(&exact, &total); err != nil || !exact || !total {
 		t.Fatalf("workspace closure did not record exactly one deadline for its closed sign-in account: %v", err)
 	}
+	assertCustomerCanSignInWithoutWorkspace(t, b, customerSubject)
 	b.signOut()
-	b.as(customerSubject)
-	b.refused(b.start())
 	b.as("waiting-client")
 	b.refused(b.start())
 	b.as("unrelated-client")
 	b.finish(b.start())
+}
+
+func assertCustomerCanSignInWithoutWorkspace(t *testing.T, b *browserFixture, subject string) {
+	t.Helper()
+	b.signOut()
+	b.as(subject)
+	b.finish(b.start())
+	if status, body, _ := b.request("GET", "/portal/?lang=en", nil, ""); status != http.StatusOK || !strings.Contains(body, "No workspaces yet") {
+		t.Fatalf("ending workspace access left the customer unable to sign in: %d", status)
+	}
+}
+
+func markLegacyMembershipRevoked(t *testing.T, b *browserFixture) {
+	t.Helper()
+	if _, err := b.pool.Exec(t.Context(), `UPDATE portal_memberships SET revoked=true WHERE subject=$1`, customerSubject); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRemovingLegacyBlockedMemberRestoresOnlySignIn(t *testing.T) {
+	longSubject := customeridentity.DexSubject(strings.Repeat("a", 160), customeridentity.ZitadelConnectorID)
+	for _, tc := range []struct {
+		name, subject, auditTarget string
+	}{
+		{"plain target", customerSubject, customerSubject},
+		{"hashed target", longSubject, "sha256:" + hex.EncodeToString(digest(longSubject))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var restored atomic.Bool
+			b := newOperatorBrowserFixture(t)
+			directory := &managementDirectory{change: func(_ context.Context, user string, active bool) error {
+				expected := customeridentity.DexUser(tc.subject, customeridentity.ZitadelConnectorID)
+				restored.Store(active && user == expected)
+				return nil
+			}}
+			if err := b.svc.LinkCustomerDirectory(directory); err != nil {
+				t.Fatal(err)
+			}
+			_, err := b.pool.Exec(t.Context(), `INSERT INTO portal_memberships(issuer,subject,client_id,role,revoked)
+ VALUES ($1,$2,'client-a','client',true)`, b.f.issuer, tc.subject)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = b.pool.Exec(t.Context(), `INSERT INTO portal_operator_audit(actor_issuer,actor_subject,actor_kind,action,target,outcome)
+ VALUES ($1,$2,'operator','members.deactivate',$3,'allowed')`, b.f.issuer, operatorSubject, tc.auditTarget)
+			if err != nil {
+				t.Fatal(err)
+			}
+			form := operatorMembershipForm(b, tc.subject, "client-a")
+			if status, _, _ := b.request("POST", operatorAPIRoot+"/members/remove", form, b.site.URL); status != http.StatusOK || !restored.Load() {
+				t.Fatalf("removing a legacy-blocked customer did not restore provider sign-in: %d", status)
+			}
+			assertCustomerCanSignInWithoutWorkspace(t, b, tc.subject)
+		})
+	}
 }
 
 func TestOperatorWorkspaceDeletionSerializesWithInvitation(t *testing.T) {

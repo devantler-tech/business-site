@@ -63,14 +63,13 @@ test("rendered package arguments fail closed without the required disclosure", (
   }
 });
 
-// The migration Job and the retention CronJob run this same image. With no Secret
-// mounted, each must fail on its missing connection, not on its arguments: the
-// image accepts exactly the arguments the package gives it.
-test("the image accepts the migration Job's and retention CronJob's arguments", () => {
+// A missing Secret exercises the argument parser before any database access.
+test("the image accepts both migration jobs and the retention job arguments", () => {
   const docs = yaml.loadAll(rendered);
-  const job = docs.find((d) => d?.kind === "Job").spec.template.spec.containers[0].args;
+  const migrations = docs.filter((d) => d?.kind === "Job")
+    .map((job) => [job.spec.template.spec.containers[0].args, "portal schema migration failed\n"]);
   const cron = docs.find((d) => d?.kind === "CronJob").spec.jobTemplate.spec.template.spec.containers[0].args;
-  for (const [args, failure] of [[job, "portal schema migration failed\n"], [cron, "portal retention purge failed\n"]]) {
+  for (const [args, failure] of [...migrations, [cron, "portal retention purge failed\n"]]) {
     const result = spawnSync("docker", ["run", "--rm", "--network=none", ...restrictions, image, ...args], { encoding: "utf8", timeout: 30000 });
     assert.ifError(result.error);
     assert.equal(result.status, 1);

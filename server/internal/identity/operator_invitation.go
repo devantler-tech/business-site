@@ -119,7 +119,7 @@ func (b *browser) issueDirectoryInvitation(ctx context.Context, invitation Invit
 		return time.Time{}, ErrDenied
 	}
 	var available bool
-	if err := connection.QueryRow(ctx, `SELECT `+invitationIdentityAvailable, invitation.Issuer, invitation.Subject).Scan(&available); err != nil {
+	if err := connection.QueryRow(ctx, `SELECT `+invitationIdentityAvailable, invitation.Issuer, invitation.Subject, invitation.ClientID).Scan(&available); err != nil {
 		return time.Time{}, err
 	}
 	if !available {
@@ -164,7 +164,7 @@ func (b *browser) retryWorkspaceInvitation(ctx context.Context, begin func(conte
 	err = tx.QueryRow(ctx, `SELECT i.expires_at,i.token_digest FROM portal_invitations i
  WHERE i.issuer=$1 AND i.subject=$2 AND i.client_id=$3 AND i.role='client' AND NOT i.revoked AND i.expires_at>now()
  AND NOT EXISTS (SELECT 1 FROM portal_workspace_settings w WHERE w.workspace_id=$3 AND w.closed_at IS NOT NULL)
- AND NOT EXISTS (SELECT 1 FROM portal_memberships m WHERE m.issuer=$1 AND m.subject=$2)`,
+ AND NOT EXISTS (SELECT 1 FROM portal_memberships m WHERE m.issuer=$1 AND m.subject=$2 AND (m.client_id=$3 OR m.role='operator'))`,
 		invitation.Issuer, invitation.Subject, invitation.ClientID).Scan(&expires, &token)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return time.Time{}, errInvitationAccess

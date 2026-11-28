@@ -325,7 +325,7 @@ func (s *Foundation) startClientPreview(ctx context.Context, operator Principal)
 		return "", ErrDenied
 	}
 	if _, err = tx.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role)
- VALUES($1,$2,$3,'client') ON CONFLICT(issuer,subject) DO NOTHING`, operator.issuer, previewSubject, previewWorkspace); err != nil {
+ VALUES($1,$2,$3,'client') ON CONFLICT DO NOTHING`, operator.issuer, previewSubject, previewWorkspace); err != nil {
 		return "", err
 	}
 	if s.previewAuthority != nil {

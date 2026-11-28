@@ -349,29 +349,12 @@ func (b *browser) workspaceMembers(ctx context.Context, db interface {
 	return nonNil(list), err
 }
 
-func (b *browser) deactivateCustomerMember(ctx context.Context, r *http.Request) (any, error) {
-	return b.changeCustomerMember(ctx, r, false)
+func (*browser) deactivateCustomerMember(context.Context, *http.Request) (any, error) {
+	// Retain a fail-closed response for older callers during the rollout.
+	return nil, errOperatorInput
 }
 
 func (b *browser) reactivateCustomerMember(ctx context.Context, r *http.Request) (any, error) {
-	return b.changeCustomerMember(ctx, r, true)
-}
-
-// customerIdentityTransaction serializes invitation and membership transitions
-// for the same broker identity, and releases a transaction whose lock fails.
-func (b *browser) customerIdentityTransaction(ctx context.Context, subject string) (pgx.Tx, error) {
-	tx, err := b.foundation.pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if err = lockIdentity(ctx, tx, b.foundation.broker.issuer, subject); err != nil {
-		_ = tx.Rollback(ctx)
-		return nil, err
-	}
-	return tx, nil
-}
-
-func (b *browser) changeCustomerMember(ctx context.Context, r *http.Request, active bool) (any, error) {
 	input, err := managementFields(r, "workspace", "subject")
 	if err != nil || !validCustomerWorkspace(input.Workspace) {
 		return nil, errOperatorInput
@@ -401,12 +384,13 @@ func (b *browser) changeCustomerMember(ctx context.Context, r *http.Request, act
 	if !b.operatorMutationAllowed(ctx, tx) {
 		return nil, ErrDenied
 	}
-	if active {
-		if err = b.foundation.customers.ReactivateUser(ctx, user, func() bool { return b.operatorMutationAllowed(ctx, tx) }); err != nil {
-			return nil, err
-		}
+	if !current {
+		return map[string]bool{"active": true}, nil
 	}
-	if _, err = tx.Exec(ctx, `UPDATE portal_memberships SET revoked=$4 WHERE issuer=$1 AND subject=$2 AND client_id=$3 AND role='client' AND revoked IS DISTINCT FROM $4`, b.foundation.broker.issuer, input.Subject, input.Workspace, !active); err != nil {
+	if err = b.foundation.customers.ReactivateUser(ctx, user, func() bool { return b.operatorMutationAllowed(ctx, tx) }); err != nil {
+		return nil, err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE portal_memberships SET revoked=false WHERE issuer=$1 AND subject=$2 AND client_id=$3 AND role='client' AND revoked`, b.foundation.broker.issuer, input.Subject, input.Workspace); err != nil {
 		return nil, err
 	}
 	if !b.operatorMutationAllowed(ctx, tx) {
@@ -415,13 +399,19 @@ func (b *browser) changeCustomerMember(ctx context.Context, r *http.Request, act
 	if err = tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-	if !active {
-		if !b.operatorMutationAllowed(ctx, connection) {
-			return nil, ErrDenied
-		}
-		if err = b.foundation.customers.DeactivateUser(ctx, user, func() bool { return b.operatorMutationAllowed(ctx, connection) }); err != nil {
-			return nil, err
-		}
+	return map[string]bool{"active": true}, nil
+}
+
+// customerIdentityTransaction serializes invitation and membership transitions
+// for the same broker identity, and releases a transaction whose lock fails.
+func (b *browser) customerIdentityTransaction(ctx context.Context, subject string) (pgx.Tx, error) {
+	tx, err := b.foundation.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return map[string]bool{"active": active}, nil
+	if err = lockIdentity(ctx, tx, b.foundation.broker.issuer, subject); err != nil {
+		_ = tx.Rollback(ctx)
+		return nil, err
+	}
+	return tx, nil
 }

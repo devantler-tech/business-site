@@ -19,6 +19,36 @@ import (
 	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
 
+func TestOperatorOrderDescribesPaymentProvider(t *testing.T) {
+	for _, example := range []struct {
+		lang, collection, paymentCopy string
+	}{
+		{"en", "card", "The client pays by card or MobilePay through Stripe."},
+		{"da", "card", "Kunden betaler med kort eller MobilePay via Stripe."},
+		{"en", "invoice", "The client pays by invoice. The portal creates, books and sends each invoice in Numina and reads the payment from there."},
+		{"da", "invoice", "Kunden betaler via faktura. Portalen opretter, bogfører og sender hver faktura i Numina og læser betalingen derfra."},
+	} {
+		t.Run(example.lang+"/"+example.collection, func(t *testing.T) {
+			page := triagePageData{
+				pageData:          pageData{Lang: example.lang},
+				Detail:            true,
+				ProposalsEnabled:  true,
+				AcceptanceEnabled: true,
+				BillingEnabled:    true,
+				ExpectedVersion:   50,
+				Order:             &projectOrder{Collection: example.collection},
+			}
+			var markup strings.Builder
+			if err := browserPage.ExecuteTemplate(&markup, "triage.html", page); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(markup.String(), "<p>"+example.paymentCopy+"</p>") {
+				t.Fatal("order detail does not identify the expected payment provider")
+			}
+		})
+	}
+}
+
 // triageFlags keeps each release boundary independently controllable; changing
 // one gate must not silently replace the other two with absent flags.
 func triageFlags(t *testing.T, b *browserFixture, identity, requests, triage any) {

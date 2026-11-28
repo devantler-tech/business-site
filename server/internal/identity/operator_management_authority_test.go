@@ -74,9 +74,8 @@ func TestOperatorWorkspaceCommitRechecksAuthority(t *testing.T) {
 	}
 }
 
-// TestOperatorDeactivationRequiresAudit catches a real member mutation or
-// provider effect taking place despite unavailable audit storage.
-func TestOperatorDeactivationRequiresAudit(t *testing.T) {
+// Older clients cannot block customer sign-in, even with operator authority.
+func TestOperatorCannotDeactivateCustomer(t *testing.T) {
 	var calls atomic.Int32
 	b := managementMemberFixture(t, func(context.Context, string, bool) error {
 		calls.Add(1)
@@ -91,8 +90,8 @@ func TestOperatorDeactivationRequiresAudit(t *testing.T) {
 	}
 	restoreAudit()
 	status, _, _ = b.request("POST", operatorAPIRoot+"/members/deactivate", form, b.site.URL)
-	if err := b.pool.QueryRow(t.Context(), `SELECT revoked FROM portal_memberships WHERE subject=$1`, customerSubject).Scan(&revoked); err != nil || !revoked || status != http.StatusOK || calls.Load() != 1 {
-		t.Fatal("audited deactivation positive control failed", status, revoked, calls.Load(), err)
+	if status != http.StatusBadRequest || b.customerRevoked() || calls.Load() != 0 {
+		t.Fatal("retired deactivation endpoint changed customer access", status, calls.Load())
 	}
 }
 
@@ -151,7 +150,10 @@ func TestOperatorNativeErrorLanguageNavigation(t *testing.T) {
 				form := url.Values{"workspace": {operatorWorkspace}, "csrf_token": {b.csrf("/portal/")}}
 				if failure == "provider" {
 					linkManagedMember(t, b, func(context.Context, string, bool) error { return ErrDenied })
-					path, wantStatus = operatorAPIRoot+"/members/deactivate", http.StatusServiceUnavailable
+					if _, err := b.pool.Exec(t.Context(), `UPDATE portal_memberships SET revoked=true WHERE subject=$1`, customerSubject); err != nil {
+						t.Fatal(err)
+					}
+					path, wantStatus = operatorAPIRoot+"/members/reactivate", http.StatusServiceUnavailable
 					form = operatorMembershipForm(b, customerSubject, "client-a")
 				}
 				status, body, _ := managementNativeResponse(b, path+"?lang="+lang, form)
