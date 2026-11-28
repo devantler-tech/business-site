@@ -31,7 +31,7 @@ func (s *Foundation) hostingCoverageReady(ctx context.Context) bool {
 }
 
 func (s *Foundation) readHostingCoverage(ctx context.Context, p Principal, project string) (*hostingCoverage, error) {
-	if p.membershipIncarnation == "" || !s.hostingCoverageReady(ctx) {
+	if p.membershipIncarnation == "" {
 		return nil, ErrDenied
 	}
 	var coverage hostingCoverage
@@ -68,7 +68,8 @@ func (b *browser) showHostingReview(w http.ResponseWriter, r *http.Request, proj
 		b.triageError(w, r, err)
 		return
 	}
-	if b.foundation.hostingRecordingReady(ctx) {
+	// showTriage evaluates display readiness before reading the private detail.
+	if page.AcceptanceEnabled {
 		for _, acceptance := range page.Acceptances {
 			if acceptance.Proposal.ContentFormat == 2 && acceptance.Proposal.Service.Kind == proposalServiceSoftware {
 				page.HostingAgreements = append(page.HostingAgreements, acceptance)
