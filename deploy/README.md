@@ -19,9 +19,14 @@ The whole directory is published as one artifact and split into Kustomize overla
   schema changes, and the restricted database and sign-in client. The platform's
   authenticated proxy and network policies control access to `dev.devantler.tech`
   (devantler-tech/platform#6126).
+- `practice/` exposes just the practice database migration Job for the unified
+  preview in the operator portal. It uses the same job, inputs and release image
+  as `dev/`. Platform will consume this overlay through
+  [the verified release source](https://github.com/devantler-tech/platform/issues/6751).
 
-Overlays reference only `../base` and their own files. `kubectl kustomize deploy/dev`
-must render, and `deploy` must render exactly what `deploy/prod` renders.
+`kubectl kustomize deploy/dev` must render the WebApp and migration Job.
+`kubectl kustomize deploy/practice` must render only that Job.
+`deploy` and `deploy/prod` must render identical output.
 
 From the repository root, with Node 24, installed root dependencies, Kubectl and
 Docker available:
