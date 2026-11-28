@@ -25,8 +25,7 @@ type mailer struct{ Mailer }
 // mailLock makes one replica send each pass; others skip the tick.
 const mailLock = 1869820521
 
-// EnableMail supplies the site's mail sender. The portal queues email only
-// for orders and withdrawals, which their false-default gates control.
+// EnableMail supplies the site's transactional mail sender.
 func (s *Foundation) EnableMail(m Mailer) error {
 	if m == nil {
 		return errors.New("mail is not configured")
@@ -211,27 +210,31 @@ func (s *Foundation) SendQueuedMail(ctx context.Context) error {
 		return nil
 	}
 	return s.withRunLock(ctx, mailLock, func(conn *pgx.Conn) error {
-		rows, err := conn.Query(ctx, `SELECT o.id,o.recipient,o.subject,o.body FROM portal_mail_outbox o WHERE NOT EXISTS (SELECT 1 FROM portal_mail_deliveries d WHERE d.outbox_id=o.id) ORDER BY o.queued_at,o.id LIMIT 20`)
-		if err != nil {
-			return errTriageStorage
-		}
-		queued, err := pgx.CollectRows(rows, pgx.RowToStructByPos[mail.Message])
-		if err != nil {
-			return errTriageStorage
-		}
-		for _, msg := range queued {
-			if !s.ready(ctx) {
-				return nil
-			}
-			if err = m.Send(ctx, msg); err != nil {
-				return err
-			}
-			if _, err = conn.Exec(ctx, `INSERT INTO portal_mail_deliveries(outbox_id) VALUES($1) ON CONFLICT DO NOTHING`, msg.ID); err != nil {
-				return errTriageStorage
-			}
-		}
-		return nil
+		return errors.Join(s.sendWorkspaceInvitationNotices(ctx, conn, m), s.sendOrderMail(ctx, conn, m))
 	})
+}
+
+func (s *Foundation) sendOrderMail(ctx context.Context, conn *pgx.Conn, m Mailer) error {
+	rows, err := conn.Query(ctx, `SELECT o.id,o.recipient,o.subject,o.body FROM portal_mail_outbox o WHERE NOT EXISTS (SELECT 1 FROM portal_mail_deliveries d WHERE d.outbox_id=o.id) ORDER BY o.queued_at,o.id LIMIT 20`)
+	if err != nil {
+		return errTriageStorage
+	}
+	queued, err := pgx.CollectRows(rows, pgx.RowToStructByPos[mail.Message])
+	if err != nil {
+		return errTriageStorage
+	}
+	for _, msg := range queued {
+		if !s.ready(ctx) {
+			return nil
+		}
+		if err = m.Send(ctx, msg); err != nil {
+			return err
+		}
+		if _, err = conn.Exec(ctx, `INSERT INTO portal_mail_deliveries(outbox_id) VALUES($1) ON CONFLICT DO NOTHING`, msg.ID); err != nil {
+			return errTriageStorage
+		}
+	}
+	return nil
 }
 
 // RunMail sends queued email at once and then on every tick until ctx ends.

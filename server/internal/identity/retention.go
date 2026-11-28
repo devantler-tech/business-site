@@ -161,6 +161,10 @@ func PurgeExpiredClients(ctx context.Context, pool *pgxpool.Pool, now time.Time)
 		cutoff, now.AddDate(0, 0, -90)); err != nil {
 		return 0, errTriageStorage
 	}
+	if _, err := pool.Exec(ctx, `DELETE FROM portal_workspace_invitation_notices n USING portal_invitations i
+ WHERE n.invitation_digest=i.token_digest AND (i.revoked OR i.expires_at<=$1)`, now); err != nil {
+		return 0, errTriageStorage
+	}
 	rows, err := pool.Query(ctx, retentionDue, cutoff, "")
 	if err != nil {
 		return 0, errTriageStorage

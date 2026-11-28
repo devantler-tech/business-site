@@ -27,8 +27,8 @@ func (d *managementDirectory) Profiles(_ context.Context, ids []string) (map[str
 	return d.profiles(ids), nil
 }
 
-func (*managementDirectory) EnsureUser(context.Context, string, string, func() bool) (string, error) {
-	return "", ErrDenied
+func (*managementDirectory) EnsureUser(context.Context, string, string, func() bool) (string, bool, error) {
+	return "", false, ErrDenied
 }
 
 func (*managementDirectory) VerifyUser(context.Context, string) error {

@@ -358,6 +358,12 @@ leaves the identity closure history intact, and records the outcome in its trans
 Both functions pin their search path. Runtime startup verifies ownership and refuses
 public execution or delegated grants.
 
+Workspace invitation emails have one queued notice and one delivery receipt
+per pending invitation. The runtime can read and append both rows and update
+only the timestamp of the last delivery attempt. Acceptance and invitation
+cleanup remove both rows through their foreign keys. The scheduled retention
+job clears recipients of revoked and expired invitations.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

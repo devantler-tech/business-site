@@ -227,7 +227,7 @@ func TestOperatorResponseRequiresDurableAuthority(t *testing.T) {
 						case "/audit":
 							query = "SELECT id::text,at,actor_kind"
 						case "/api/invitations":
-							query = "FROM portal_invitations WHERE"
+							query = pendingInvitationsSQL
 						case "/api/workspaces":
 							query = "FROM inventory i LEFT JOIN portal_memberships"
 						}

@@ -335,7 +335,7 @@ is invoiced or charged.
 
 ## Portal email inputs
 
-The portal emails order confirmations and withdrawal receipts itself
+The portal emails returning-customer invitations, order confirmations and withdrawal receipts
 ([BILLING.md](../server/BILLING.md#emails)) through the site's send-only SES sender
 (devantler-tech/platform#5400). The platform adds that sender's OpenBao entry
 `apps/business-site/smtp` (`username`, `password`) to `business-site-runtime` as
@@ -350,9 +350,8 @@ PORTAL_SMTP_PASSWORD_FILE=/run/webapp-inputs/smtp-password
 
 The two lines come together or not at all, and the files use the disclosure projection's
 confinement. `PORTAL_SMTP_ADDR` (default `email-smtp.eu-central-1.amazonaws.com:587`) and
-`PORTAL_MAIL_FROM` (default `no-reply@devantler.tech`) are optional. The portal queues email
-only for orders and withdrawals, which their false-default flags control, and sends only while
-sign-in is on.
+`PORTAL_MAIL_FROM` (default `no-reply@devantler.tech`) are optional. The portal sends only while
+sign-in is on. The order and withdrawal flags still govern those workflows.
 
 ## Offline publication receipt admission
 
