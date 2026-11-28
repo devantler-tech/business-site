@@ -420,16 +420,67 @@ jobs:
       - name: Test broker and durable access boundary
         shell: bash
         run: go test -race -coverprofile=coverage-core.out -p=1 ./... -count=1 -timeout=90s -json -skip '^Test(Work(Approval|Review|Eligibility|Funding|Lease|QueueRevision)|Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)' | tee test-core.jsonl
+      - name: Verify every core test ran exactly once
+        run: node ../scripts/identity-cohorts.mjs core
+      - name: Scan reachable Go vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+  # The work and private/operator cohorts need their own database and job budget.
+  test-portal-flows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: server
+    env:
+      LC_ALL: C
+      GOTOOLCHAIN: local
+      PORTAL_TEST_DATABASE_URL: postgres://portal_runtime:fixture-only@localhost:5432/portal_identity_test?sslmode=disable
+      PORTAL_TEST_MIGRATION_DATABASE_URL: postgres://portal_migrator:fixture-only@localhost:5432/portal_identity_test?sslmode=disable
+    services:
+      postgres:
+        image: postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
+        env:
+          POSTGRES_USER: portal_fixture_owner
+          POSTGRES_PASSWORD: fixture-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U portal_fixture_owner"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: Setup Node.js for cohort verification
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Provision isolated test database roles
+        env:
+          PGPASSWORD: fixture-only
+        run: psql -h localhost -U portal_fixture_owner -d postgres -v ON_ERROR_STOP=1 -f testdata/provision.sql
+      - name: List the complete compiled ordinary test inventory
+        run: go test -race -p=1 ./... -list '^(Test|Example|Fuzz)' -count=1 -timeout=90s -json > test-inventory.jsonl
       - name: Test work approval and review boundary
         shell: bash
         run: go test -race -coverprofile=coverage-work.out -p=1 ./... -count=1 -timeout=90s -json -run '^TestWork(Approval|Review|Eligibility|Funding|Lease|QueueRevision)' | tee test-work.jsonl
       - name: Test private and operator flows
         shell: bash
         run: go test -race -coverprofile=coverage-private.out -p=1 ./... -count=1 -timeout=90s -json -run '^Test(Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)' | tee test-private.jsonl
-      - name: Verify every ordinary test ran exactly once
-        run: node ../scripts/identity-cohorts.mjs
-      - name: Scan reachable Go vulnerabilities
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+      - name: Verify every work and private test ran exactly once
+        run: node ../scripts/identity-cohorts.mjs work private
 
   test-tenant-admission:
     runs-on: ubuntu-latest
@@ -500,7 +551,7 @@ jobs:
 
   # Separate setup/build budget; identity and quality must finish successfully first.
   test-combined-runtime:
-    needs: [test-portal-quality, test-portal-identity]
+    needs: [test-portal-quality, test-portal-identity, test-portal-flows]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -649,6 +700,7 @@ jobs:
       - drift-check-active-projects
       - test-repository-contracts
       - test-portal-identity
+      - test-portal-flows
       - test-portal-quality
       - test-tenant-admission
       - test-combined-runtime
@@ -665,6 +717,7 @@ jobs:
             ${{ needs.drift-check-active-projects.result }}
             ${{ needs.test-repository-contracts.result }}
             ${{ needs.test-portal-identity.result }}
+            ${{ needs.test-portal-flows.result }}
             ${{ needs.test-portal-quality.result }}
             ${{ needs.test-tenant-admission.result }}
             ${{ needs.test-combined-runtime.result }}
@@ -684,6 +737,7 @@ jobs:
       - drift-check-active-projects
       - test-repository-contracts
       - test-portal-identity
+      - test-portal-flows
       - test-portal-quality
       - test-tenant-admission
       - test-combined-runtime
@@ -703,6 +757,7 @@ jobs:
             ${{ needs.drift-check-active-projects.result }}
             ${{ needs.test-repository-contracts.result }}
             ${{ needs.test-portal-identity.result }}
+            ${{ needs.test-portal-flows.result }}
             ${{ needs.test-portal-quality.result }}
             ${{ needs.test-tenant-admission.result }}
             ${{ needs.test-combined-runtime.result }}

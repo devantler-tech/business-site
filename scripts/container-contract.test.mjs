@@ -198,8 +198,9 @@ function assertCI(w) {
   assert.equal(w.jobs['test-portal-quality'].if, undefined);
   assert.ok(w.jobs['test-portal-quality']['continue-on-error'] == null || w.jobs['test-portal-quality']['continue-on-error'] === false);
   assert.equal(w.jobs['test-portal-identity'].if, undefined);
+  assert.equal(w.jobs['test-portal-flows'].if, undefined);
   assert.equal(w.jobs['test-combined-runtime'].if, undefined);
-  assert.deepEqual(w.jobs['test-combined-runtime'].needs, ['test-portal-quality', 'test-portal-identity']);
+  assert.deepEqual(w.jobs['test-combined-runtime'].needs, ['test-portal-quality', 'test-portal-identity', 'test-portal-flows']);
   const steps = w.jobs['test-combined-runtime'].steps;
   const build = steps.findIndex(s => s.run?.includes('docker build --file Dockerfile'));
   const smoke = steps.findIndex(s => s.run === 'node scripts/container-smoke.test.mjs business-site:test runtime-dist');
@@ -240,6 +241,8 @@ test('CI must exercise and retain the actual container before distribution', asy
     w => { w.jobs['test-portal-quality']['continue-on-error'] = true; },
     w => { w.jobs['test-combined-runtime'].needs = ['test-portal-identity']; },
     w => { w.jobs['test-portal-identity'].if = 'false'; },
+    w => { w.jobs['test-portal-flows'].if = 'false'; },
+    w => { w.jobs['test-combined-runtime'].needs = ['test-portal-quality', 'test-portal-identity']; },
     w => { w.jobs['test-combined-runtime'].if = 'false'; },
     w => { w.jobs['test-combined-runtime'].steps.find(s => s.run?.includes('docker build --file Dockerfile')).if = 'false'; },
     w => { w.jobs['test-combined-runtime'].steps.find(s => s.run?.includes('node scripts/container-smoke.test.mjs'))['continue-on-error'] = true; },

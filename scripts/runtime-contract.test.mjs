@@ -49,7 +49,7 @@ function assertRuntime(workflow) {
   const qualitySteps = quality.steps;
   const runtime = workflow.jobs["test-combined-runtime"];
   assert.equal(runtime.if, undefined);
-  assert.deepEqual(runtime.needs, ["test-portal-quality", "test-portal-identity"]);
+  assert.deepEqual(runtime.needs, ["test-portal-quality", "test-portal-identity", "test-portal-flows"]);
   const packageSteps = runtime.steps;
   const node = steps.findIndex((s) => s.uses?.startsWith("actions/setup-node@"));
   const install = qualitySteps.findIndex((s) => s.run === "npm ci" && s["working-directory"] === ".");
@@ -161,6 +161,8 @@ function assertRuntime(workflow) {
   assert.match(workflow.jobs.status.steps[0].with["job-results"], /needs\.test-combined-runtime\.result/);
   assert.ok(workflow.jobs.status.needs.includes("test-portal-identity"));
   assert.match(workflow.jobs.status.steps[0].with["job-results"], /needs\.test-portal-identity\.result/);
+  assert.ok(workflow.jobs.status.needs.includes("test-portal-flows"));
+  assert.match(workflow.jobs.status.steps[0].with["job-results"], /needs\.test-portal-flows\.result/);
   const upload = packageSteps.find((s) => s.with?.name === "business-site-runtime");
   assert.equal(upload?.with?.["if-no-files-found"], "error");
   assert.equal(upload?.with?.path, "runtime-dist/business-site-runtime.tar.gz");

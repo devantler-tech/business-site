@@ -49,10 +49,23 @@ function parse(text, listing = false) {
   return packages;
 }
 
-/** Verify all real complementary executions against the current compiled module inventory. */
-export function checkCohorts(outputs, coverage) {
-  assert.equal(outputs.length, 4);
-  assert.equal(coverage.length, 3, "retain all three distinct coverage profiles");
+const families = ["core", "work", "private"];
+
+/** Resolve requested families; no request means the complete suite, anything unknown or repeated is refused. */
+export function selectFamilies(requested) {
+  const selected = requested.length === 0 ? families : requested;
+  assert.ok(
+    selected.every((family) => families.includes(family)) && new Set(selected).size === selected.length,
+    "requested families must be known and distinct",
+  );
+  return families.filter((family) => selected.includes(family));
+}
+
+/** Verify the selected real executions against the complete current compiled module inventory. */
+export function checkCohorts(outputs, coverage, selected = families) {
+  assert.deepEqual(selectFamilies(selected), [...selected], "requested families must be known and distinct");
+  assert.equal(outputs.length, selected.length + 1);
+  assert.equal(coverage.length, selected.length, "retain every distinct coverage profile");
   for (const profile of coverage) {
     assert.match(
       profile,
@@ -62,36 +75,35 @@ export function checkCohorts(outputs, coverage) {
   }
   const inventory = parse(outputs[0], true);
   const results = outputs.slice(1).map((output) => parse(output));
-  const counts = [0, 0, 0];
-  for (const [cohort, result] of results.entries()) {
+  const counts = { core: 0, work: 0, private: 0 };
+  for (const [index, result] of results.entries()) {
+    const cohort = selected[index];
     assert.deepEqual([...result.keys()].sort(), [...inventory.keys()].sort(), "every module package must be examined");
     for (const [name, p] of inventory) {
       const actual = result.get(name);
-      const selected = [...p.tests.keys()].filter((test) => {
-        const family = workFamily.test(test) ? 1 : privateFamily.test(test) ? 2 : 0;
+      const expected = [...p.tests.keys()].filter((test) => {
+        const family = workFamily.test(test) ? "work" : privateFamily.test(test) ? "private" : "core";
         return family === cohort;
       });
       assert.deepEqual(
         [...actual.tests.keys()].sort(),
-        selected.sort(),
+        expected.sort(),
         "test cohort must exactly match compiled inventory",
       );
       if (actual.skipped) assert.ok(p.skipped, "a package with compiled tests cannot be skipped");
       for (const state of actual.tests.values())
         assert.deepEqual(state, { run: 1, pass: 1 }, "each selected test must run and pass exactly once");
-      counts[cohort] += selected.length;
+      counts[cohort] += expected.length;
     }
   }
   assert.ok(
-    counts.every((n) => n > 0),
-    "all three ordinary families must be nonempty",
+    selected.every((family) => counts[family] > 0),
+    "every selected ordinary family must be nonempty",
   );
   return {
     packages: inventory.size,
-    tests: counts[0] + counts[1] + counts[2],
-    core: counts[0],
-    work: counts[1],
-    private: counts[2],
+    tests: counts.core + counts.work + counts.private,
+    ...counts,
   };
 }
 
@@ -139,13 +151,14 @@ export function failureDiagnostic(error) {
     "package must start once",
     "package must finish once",
     "only packages without tests may be skipped",
-    "retain all three distinct coverage profiles",
+    "requested families must be known and distinct",
+    "retain every distinct coverage profile",
     "complete race/atomic coverage profile required",
     "every module package must be examined",
     "test cohort must exactly match compiled inventory",
     "a package with compiled tests cannot be skipped",
     "each selected test must run and pass exactly once",
-    "all three ordinary families must be nonempty",
+    "every selected ordinary family must be nonempty",
     "safe evidence-open flags required",
     "bounded regular test evidence required",
     "test evidence exceeded its byte bound",
@@ -156,12 +169,14 @@ export function failureDiagnostic(error) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
+    const selected = selectFamilies(process.argv.slice(2));
     const result = checkCohorts(
-      ["test-inventory.jsonl", "test-core.jsonl", "test-work.jsonl", "test-private.jsonl"].map(readEvidence),
-      ["coverage-core.out", "coverage-work.out", "coverage-private.out"].map(readEvidence),
+      ["inventory", ...selected].map((family) => readEvidence(`test-${family}.jsonl`)),
+      selected.map((family) => readEvidence(`coverage-${family}.out`)),
+      selected,
     );
     console.log(
-      `Complete ordinary Go suite: ${result.tests} tests in ${result.packages} packages; core=${result.core}, work=${result.work}, private=${result.private}; separate atomic coverage profiles retained.`,
+      `Ordinary Go cohorts verified: ${result.tests} tests in ${result.packages} packages; ${selected.map((family) => `${family}=${result[family]}`).join(", ")}; separate atomic coverage profiles retained.`,
     );
   } catch (error) {
     console.error(failureDiagnostic(error));
