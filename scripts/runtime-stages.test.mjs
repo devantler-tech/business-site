@@ -13,7 +13,16 @@ function assertStages(w) {
   const identity = w.jobs['test-portal-identity'];
   const quality = w.jobs['test-portal-quality'];
   const runtime = w.jobs['test-combined-runtime'];
+  const goStatic = w.jobs['test-portal-go-static'];
   assert.ok(identity && quality && runtime, 'quality, database tests and packaging need separate budgets');
+  assert.ok(goStatic, 'database-free Go checks keep their own job');
+  assert.equal(goStatic.services, undefined, 'database-free Go checks do not need a database');
+  for (const command of ['go mod verify', 'test -z "$(gofmt -l .)"', 'go vet ./...', 'go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...']) {
+    const steps = goStatic.steps.filter(s => (s.run ?? '').split('\n').includes(command));
+    assert.equal(steps.length, 1, `exactly one database-free Go check runs: ${command}`);
+    assert.equal(steps[0].if, undefined);
+    assert.ok(steps[0]['continue-on-error'] == null || steps[0]['continue-on-error'] === false);
+  }
   assert.deepEqual(runtime.needs, ['test-portal-quality', 'test-portal-identity']);
   assert.equal(quality.services, undefined, 'quality observers do not need a database');
   assert.equal(quality.needs, undefined, 'quality checks run independently of database tests');
@@ -21,7 +30,7 @@ function assertStages(w) {
   assert.equal(identity.steps.some(s => /\bnpm\b|\bnpx\b/.test(s.run ?? '')), false, 'database checks must not reinstall frontend tooling');
   assert.ok(quality.steps.some(s => s.run === 'npm ci'));
   assert.ok(quality.steps.some(s => s.run === 'node --test scripts/identity-cohorts.test.mjs'));
-  for (const [name, job] of [['test-portal-quality', quality], ['test-portal-identity', identity], ['test-combined-runtime', runtime]]) {
+  for (const [name, job] of [['test-portal-quality', quality], ['test-portal-identity', identity], ['test-portal-go-static', goStatic], ['test-combined-runtime', runtime]]) {
     assert.equal(job.if, undefined);
     assert.ok(job['continue-on-error'] == null || job['continue-on-error'] === false);
     assert.equal(job['timeout-minutes'], 10, 'do not extend the existing job budget');
@@ -150,6 +159,12 @@ for (const [name, mutate] of [
   ['quality database coupling', w => { w.jobs['test-portal-quality'].services = {postgres: {}}; }],
   ['frontend setup inside database stage', w => { w.jobs['test-portal-identity'].steps.push({run: 'npm ci'}); }],
   ['quality waits for database tests', w => { w.jobs['test-portal-quality'].needs = ['test-portal-identity']; }],
+  ['missing database-free Go stage', w => { delete w.jobs['test-portal-go-static']; }],
+  ['conditional database-free Go stage', w => { w.jobs['test-portal-go-static'].if = 'false'; }],
+  ['ignored database-free Go failure', w => { w.jobs['test-portal-go-static']['continue-on-error'] = true; }],
+  ['missing vulnerability scan', w => { w.jobs['test-portal-go-static'].steps = w.jobs['test-portal-go-static'].steps.filter(s => !s.run?.includes('govulncheck')); }],
+  ['conditional vet', w => { w.jobs['test-portal-go-static'].steps.find(s => s.run?.includes('go vet')).if = 'false'; }],
+  ['masked vet failure', w => { const s = w.jobs['test-portal-go-static'].steps.find(s => s.run?.includes('go vet')); s.run = s.run.replace('go vet ./...', 'go vet ./... || true'); }],
   ['missing package stage', w => { delete w.jobs['test-combined-runtime']; }],
   ['conditional package stage', w => { w.jobs['test-combined-runtime'].if = 'false'; }],
   ['ignored package stage failure', w => { w.jobs['test-combined-runtime']['continue-on-error'] = true; }],
@@ -170,7 +185,7 @@ for (const [name, mutate] of [
     runtime.steps = runtime.steps.filter(s => s.id !== 'tenant-renderer');
     runtime.steps.push(setup);
   }],
-  ...['validation', 'status'].flatMap(gate => ['test-portal-quality', 'test-portal-identity', 'test-combined-runtime'].flatMap(stage => [
+  ...['validation', 'status'].flatMap(gate => ['test-portal-quality', 'test-portal-identity', 'test-portal-go-static', 'test-combined-runtime'].flatMap(stage => [
     [`${gate} omits ${stage}`, w => { w.jobs[gate].needs = w.jobs[gate].needs.filter(n => n !== stage); }],
     [`${gate} ignores ${stage} result`, w => { w.jobs[gate].steps[0].with['job-results'] = w.jobs[gate].steps[0].with['job-results'].replace('${{ needs.' + stage + '.result }}', 'success'); }],
   ])),
