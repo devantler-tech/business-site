@@ -261,7 +261,7 @@ func renderedLinkPagesFor(name string, templates *template.Template, b *browser)
 					d.CSRF = "fictional-csrf"
 					index := b.visible(customerAccountsPath) + "?lang=" + lang
 					account := customerAccountRow{Subject: customeridentity.DexSubject("fictional-customer", customeridentity.ZitadelConnectorID), Name: "Ada Example", Email: "ada@example.test",
-						Workspace: "fictional-workspace", WorkspaceName: "Fictional workspace", Status: "active", ManageAccess: true}
+						Workspace: "fictional-workspace", WorkspaceName: "Fictional workspace", Status: "active", ManageAccess: true, ChangeSignIn: true}
 					account.URL = index + "&account=" + account.Subject
 					page := customerAccountsPage{pageData: d, Query: "Ada", BackURL: index,
 						Confirmation: account.URL + "&view=remove", Previous: index + "&page=1", Next: index + "&page=3"}

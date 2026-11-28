@@ -22,6 +22,7 @@ type customerAccountRow struct {
 	Workspace, WorkspaceName  string
 	Status                    string
 	ManageAccess              bool
+	ChangeSignIn              bool
 	Deadline                  *time.Time
 }
 
@@ -35,7 +36,11 @@ func (row customerAccountRow) StatusLabel(lang string) string {
 	case "active":
 		en, da = "Active", "Aktiv"
 	case "suspended":
-		en, da = "Suspended", "Adgang på pause"
+		en, da = "Sign-in paused", "Login på pause"
+	case "access-paused":
+		en, da = "Workspace access paused", "Adgang på pause"
+	case "locked":
+		en, da = "Sign-in locked", "Login låst"
 	case "invited":
 		en, da = "Invited", "Inviteret"
 	case "former":
@@ -276,8 +281,15 @@ func accountRow(account customeridentity.Account, access customerWorkspaceAccess
 	case access.Member != "":
 		row.Workspace, row.Status = access.Member, "active"
 		row.ManageAccess = validCustomerWorkspace(access.Member)
-		if access.Revoked || account.Suspended {
+		row.ChangeSignIn = row.ManageAccess && account.SignInChangeAllowed
+		if access.Revoked {
+			row.Status = "access-paused"
+		}
+		if account.Suspended {
 			row.Status = "suspended"
+		}
+		if account.Locked {
+			row.Status = "locked"
 		}
 	case access.Invitation != "":
 		row.Workspace, row.Status = access.Invitation, "invited"

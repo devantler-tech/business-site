@@ -181,7 +181,7 @@ func TestOperatorRetriesDeactivationWithoutRestoringAccess(t *testing.T) {
 		t.Fatal("the failed provider did not retain its failure", status)
 	}
 	status, body, _ := b.request("GET", "/portal/operator/customers?lang=en&workspace=client-a", nil, "")
-	if status != http.StatusOK || !strings.Contains(body, "Retry deactivation") {
+	if status != http.StatusOK || !strings.Contains(body, "Retry sign-in pause") {
 		t.Fatal("disabled member has no deactivation retry in the inventory", status)
 	}
 	form = workNativeForm(t, body, `members/deactivate\?lang=en&amp;focus=workspace`)

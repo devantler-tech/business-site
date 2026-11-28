@@ -46,12 +46,12 @@
     <a href="{{.BackURL}}">{{if .ConfirmRemoval}}{{if eq .Lang "da"}}Tilbage til kunden{{else}}Back to customer{{end}}{{else}}{{if eq .Lang "da"}}Tilbage til kunder{{else}}Back to customers{{end}}{{end}}</a>
   </div>
   <section class="operator-panel" aria-labelledby="customer-access">
-    <h2 id="customer-access">{{if .ConfirmRemoval}}{{if eq .Lang "da"}}Fjern adgang til arbejdsområdet{{else}}Remove workspace access{{end}}{{else}}{{if eq .Lang "da"}}Konto og adgang{{else}}Account and access{{end}}{{end}}</h2>
+    <h2 id="customer-access">{{if .ConfirmRemoval}}{{template "customer-remove-label" .Lang}}{{else}}{{if eq .Lang "da"}}Konto og adgang{{else}}Account and access{{end}}{{end}}</h2>
     {{if .ConfirmRemoval}}
-    <p>{{if eq .Lang "da"}}Fjern kundens adgang til{{else}}Remove this customer’s access to{{end}} <strong>{{.Account.WorkspaceName}}</strong>.</p>
+    <p>{{if eq .Lang "da"}}Kunden mister straks adgangen til{{else}}The customer will immediately lose access to{{end}} <strong>{{.Account.WorkspaceName}}</strong>. {{template "customer-remove-explanation" .Lang}}</p>
     <form class="operator-actions" method="post" action="{{root}}/operator/api/members/remove?lang={{.Lang}}&amp;focus=customer">
       {{template "customer-account-fields" .}}
-      <button type="submit" class="operator-danger-button">{{if eq .Lang "da"}}Fjern adgang{{else}}Remove access{{end}}</button>
+      <button type="submit" class="operator-danger-button">{{template "customer-remove-label" .Lang}}</button>
       <a href="{{.BackURL}}">{{if eq .Lang "da"}}Annuller{{else}}Cancel{{end}}</a>
     </form>
     {{else}}
@@ -68,13 +68,24 @@
       {{end}}
     </dl>
     {{if .Account.ManageAccess}}
+    {{if .Account.ChangeSignIn}}
+    <p class="operator-help">{{if eq .Lang "da"}}En pause stopper login og bevarer kundens medlemskab.{{else}}Pausing sign-in keeps the customer’s workspace membership.{{end}}</p>
+    {{end}}
     <div class="operator-actions">
-      {{$suspended := eq .Account.Status "suspended"}}
+      {{if .Account.ChangeSignIn}}
+      {{$suspended := or (eq .Account.Status "suspended") (eq .Account.Status "access-paused")}}
       <form method="post" action="{{root}}/operator/api/members/{{if $suspended}}reactivate{{else}}deactivate{{end}}?lang={{.Lang}}&amp;focus=customer">
         {{template "customer-account-fields" .}}
-        <button type="submit" class="operator-secondary">{{if $suspended}}{{if eq .Lang "da"}}Gendan adgang{{else}}Restore access{{end}}{{else}}{{if eq .Lang "da"}}Sæt adgang på pause{{else}}Suspend access{{end}}{{end}}</button>
+        <button type="submit" class="operator-secondary">{{if $suspended}}{{template "customer-resume-label" .Lang}}{{else}}{{template "customer-pause-label" .Lang}}{{end}}</button>
       </form>
-      <a href="{{.Confirmation}}" class="operator-danger-link">{{if eq .Lang "da"}}Fjern adgang{{else}}Remove access{{end}}</a>
+      {{if eq .Account.Status "access-paused"}}
+      <form method="post" action="{{root}}/operator/api/members/deactivate?lang={{.Lang}}&amp;focus=customer">
+        {{template "customer-account-fields" .}}
+        <button type="submit" class="operator-secondary">{{template "customer-retry-pause-label" .Lang}}</button>
+      </form>
+      {{end}}
+      {{end}}
+      <a href="{{.Confirmation}}" class="operator-danger-link">{{template "customer-remove-label" .Lang}}</a>
     </div>
     {{else if or (eq .Account.Status "former") (eq .Account.Status "unassigned")}}
     <p><a href="{{root}}/operator/invitations/new?lang={{.Lang}}">{{if eq .Lang "da"}}Inviter til et arbejdsområde{{else}}Invite to a workspace{{end}}</a></p>
@@ -82,6 +93,12 @@
     {{end}}
   </section>
 {{end}}
+
+{{define "customer-pause-label"}}{{if eq . "da"}}Sæt login på pause{{else}}Pause sign-in{{end}}{{end}}
+{{define "customer-resume-label"}}{{if eq . "da"}}Gendan login{{else}}Restore sign-in{{end}}{{end}}
+{{define "customer-retry-pause-label"}}{{if eq . "da"}}Prøv at sætte login på pause igen{{else}}Retry sign-in pause{{end}}{{end}}
+{{define "customer-remove-label"}}{{if eq . "da"}}Fjern fra arbejdsområdet{{else}}Remove from workspace{{end}}{{end}}
+{{define "customer-remove-explanation"}}{{if eq . "da"}}Kunden beholder sin konto og skal have en ny invitation for at få adgang igen.{{else}}They keep their sign-in account and need a new invitation to return.{{end}}{{end}}
 
 {{define "customer-account-fields"}}
   <input type="hidden" name="csrf_token" value="{{.CSRF}}">

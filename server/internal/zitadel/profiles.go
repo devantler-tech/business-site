@@ -112,5 +112,10 @@ func (c *Client) SearchAccounts(ctx context.Context, nameOrEmail string, offset 
 }
 
 func accountFor(account user) customeridentity.Account {
-	return customeridentity.Account{ID: account.ID, Profile: profileFor(account), Suspended: account.State == "USER_STATE_INACTIVE" || account.State == "USER_STATE_LOCKED"}
+	return customeridentity.Account{
+		ID: account.ID, Profile: profileFor(account),
+		Suspended:           account.State == "USER_STATE_INACTIVE",
+		Locked:              account.State == "USER_STATE_LOCKED",
+		SignInChangeAllowed: account.State == "USER_STATE_ACTIVE" || account.State == "USER_STATE_INACTIVE",
+	}
 }
