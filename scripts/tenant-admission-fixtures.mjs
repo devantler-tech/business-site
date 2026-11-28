@@ -20,21 +20,21 @@ const workloads = [
   {
     kind: "WebApp",
     version: "kro.run/v1alpha1",
-    name: namespace,
+    names: [namespace],
     policy: "restrict-tenant-webapps",
     deny: (object) => { object.spec.name = "fictional-other-tenant"; },
   },
   {
     kind: "Job",
     version: "batch/v1",
-    name: "business-site-portal-migration",
+    names: ["business-site-portal-migration", "business-site-practice-migration"],
     policy: podSecurity,
     deny: (object) => refusePrivilegedContainer(object.spec?.template?.spec, object.kind),
   },
   {
     kind: "CronJob",
     version: "batch/v1",
-    name: "business-site-portal-retention",
+    names: ["business-site-portal-retention"],
     policy: podSecurity,
     deny: (object) => refusePrivilegedContainer(object.spec?.jobTemplate?.spec?.template?.spec, object.kind),
   },
@@ -199,10 +199,11 @@ try {
   const [deployment, , route] = children;
   const generatedContext = { ...tenantContext, actor: kroActor };
   const fixtures = [
-    ...workloads.flatMap((scope) => {
-      const [object] = renderedObjects(documents, scope, [scope.name]);
-      return controls(object, scope.kind, scope);
-    }),
+    ...workloads.flatMap((scope) =>
+      renderedObjects(documents, scope, scope.names).flatMap((object) =>
+        controls(object, `${scope.kind}-${object.metadata.name}`, scope),
+      ),
+    ),
     ...directResources.flatMap((scope) =>
       renderedObjects(documents, scope, scope.names).flatMap((object) =>
         scope.policies.flatMap((check) =>

@@ -13,7 +13,7 @@ function keys(value, allowed) {
 export function validateTenantPackage(input) {
   assert.ok(typeof input === "string" && Buffer.byteLength(input) <= 262144, "input size");
   const docs = yaml.loadAll(input);
-  assert.equal(docs.length, 11, "resource count");
+  assert.equal(docs.length, 12, "resource count");
   const app = docs.find((d) => d?.kind === "WebApp");
   const network = docs.find((d) => d?.kind === "CiliumNetworkPolicy");
   const budget = docs.find((d) => d?.kind === "PodDisruptionBudget");
@@ -127,14 +127,13 @@ export function validateTenantPackage(input) {
       { key: "portal-zitadel-token", path: "portal-zitadel-token" },
     ],
   }]);
-  // The one migration Job runs this release's own image with only migration
-  // arguments. It reads the platform's migration Secret and nothing else, so the
-  // package names that Secret but carries no migration input.
-  assert.deepEqual(docs.find((d) => d?.kind === "Job"), {
+  // Both migration Jobs run this release's image. Each has one database login
+  // projection and a separate runtime role.
+  const migrationJob = (name, secretName, runtimeRole) => ({
     apiVersion: "batch/v1",
     kind: "Job",
     metadata: {
-      name: "business-site-portal-migration",
+      name,
       namespace: "business-site",
       annotations: { "kustomize.toolkit.fluxcd.io/force": "enabled" },
     },
@@ -142,7 +141,7 @@ export function validateTenantPackage(input) {
       backoffLimit: 2,
       activeDeadlineSeconds: 240,
       template: {
-        metadata: { labels: { "app.kubernetes.io/name": "business-site-portal-migration" } },
+        metadata: { labels: { "app.kubernetes.io/name": name } },
         spec: {
           restartPolicy: "Never",
           automountServiceAccountToken: false,
@@ -151,7 +150,7 @@ export function validateTenantPackage(input) {
           containers: [{
             name: "migrate",
             image: spec.image,
-            args: ["--migrate", "--migration-database-projection", "/run/portal-migration/database-url", "--runtime-role", "portal_web"],
+            args: ["--migrate", "--migration-database-projection", "/run/portal-migration/database-url", "--runtime-role", runtimeRole],
             resources: { requests: { cpu: "10m", memory: "32Mi" }, limits: { cpu: "500m", memory: "128Mi" } },
             securityContext: { allowPrivilegeEscalation: false, runAsNonRoot: true, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } },
             volumeMounts: [
@@ -163,7 +162,7 @@ export function validateTenantPackage(input) {
             {
               name: "migration",
               secret: {
-                secretName: "business-site-portal-db-migration",
+                secretName,
                 defaultMode: 0o400,
                 items: [{ key: "database-url", path: "database-url" }, { key: "ca.crt", path: "ca.crt" }],
               },
@@ -174,9 +173,14 @@ export function validateTenantPackage(input) {
       },
     },
   });
+  const jobs = docs.filter((d) => d?.kind === "Job").sort((a, b) => a.metadata.name.localeCompare(b.metadata.name));
+  assert.deepEqual(jobs, [
+    migrationJob("business-site-portal-migration", "business-site-portal-db-migration", "portal_web"),
+    migrationJob("business-site-practice-migration", "business-site-practice-migration", "portal_preview_web"),
+  ]);
   // The one retention CronJob runs this release's image once a day with only
   // the purge and the migration Job's Secret, label and pod hardening.
-  const job = docs.find((d) => d?.kind === "Job");
+  const [job] = jobs;
   assert.deepEqual(docs.find((d) => d?.kind === "CronJob"), {
     apiVersion: "batch/v1",
     kind: "CronJob",

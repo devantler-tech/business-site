@@ -91,8 +91,8 @@ if [[ "${EXTRA_NESTED_MEMBER:-false}" == true ]]; then printf 'unapproved\n' > "
 if [[ "${EXTRA_DIRECTORY:-false}" == true ]]; then mkdir "$5/other"; fi
 if [[ "${MISSING_DEV:-false}" == true ]]; then rm "$5/dev/kustomization.yaml"; fi
 if [[ "${ALTER_DEV:-false}" == true ]]; then yq -i '.namespace="business-site"' "$5/dev/kustomization.yaml"; fi
-if [[ "${MISSING_PREVIEW_MIGRATION:-false}" == true ]]; then rm "$5/dev/job-preview-migration.yaml"; fi
-if [[ "${ALTER_PREVIEW_MIGRATION:-false}" == true ]]; then yq -i '.spec.template.spec.containers[0].args[4]="portal_web"' "$5/dev/job-preview-migration.yaml"; fi
+if [[ "${MISSING_PREVIEW_MIGRATION:-false}" == true ]]; then rm "$5/practice-job/job-preview-migration.yaml"; fi
+if [[ "${ALTER_PREVIEW_MIGRATION:-false}" == true ]]; then yq -i '.spec.template.spec.containers[0].args[4]="portal_web"' "$5/practice-job/job-preview-migration.yaml"; fi
 if [[ "${MISSING_PRACTICE:-false}" == true ]]; then rm "$5/practice/kustomization.yaml"; fi
 if [[ "${ALTER_PRACTICE:-false}" == true ]]; then yq -i 'del(.patches)' "$5/practice/kustomization.yaml"; fi
 if [[ "${EXTRA_PRACTICE_MEMBER:-false}" == true ]]; then printf 'unapproved\n' > "$5/practice/extra.yaml"; fi

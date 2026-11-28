@@ -5,7 +5,7 @@ kind: Kustomization
 namespace: business-site-dev
 resources:
   - ../base
-  - job-preview-migration.yaml
+  - ../practice-job
 replacements:
   - source:
       kind: WebApp
