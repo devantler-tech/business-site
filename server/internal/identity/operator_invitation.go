@@ -119,7 +119,7 @@ func (b *browser) issueDirectoryInvitation(ctx context.Context, invitation Invit
 		return time.Time{}, ErrDenied
 	}
 	var available bool
-	if err := connection.QueryRow(ctx, `SELECT `+invitationIdentityAvailable, invitation.Issuer, invitation.Subject, invitation.ClientID).Scan(&available); err != nil {
+	if err := connection.QueryRow(ctx, `SELECT `+invitationIdentityAvailable, invitation.Issuer, invitation.Subject, invitation.ClientID, invitation.Role).Scan(&available); err != nil {
 		return time.Time{}, err
 	}
 	if !available {

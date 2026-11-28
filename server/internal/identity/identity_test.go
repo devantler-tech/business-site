@@ -585,6 +585,32 @@ func TestOnePendingInvitationPerWorkspace(t *testing.T) {
 	}
 }
 
+func TestCustomerMembershipAndOperatorInvitationAreExclusive(t *testing.T) {
+	f := fixtureBroker(t)
+	pool := fixtureDB(t)
+	svc := enabled(t, pool, f)
+	expires := time.Now().Add(time.Hour)
+	_ = enroll(t, svc, f, "member", "client-a", "client")
+	if err := svc.Invite(f.ctx, Invitation{f.issuer, "member", "operator-a", "operator", expires}); !errors.Is(err, ErrDenied) {
+		t.Fatalf("customer membership allowed an operator invitation: %v", err)
+	}
+	if err := svc.Invite(f.ctx, Invitation{f.issuer, "pending", "operator-a", "operator", expires}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Invite(f.ctx, Invitation{f.issuer, "pending", "client-a", "client", expires}); !errors.Is(err, ErrDenied) {
+		t.Fatalf("pending operator invitation allowed a customer invitation: %v", err)
+	}
+	// Refuse a role change at redemption too, even if an old row already exists.
+	if _, err := pool.Exec(f.ctx, `INSERT INTO portal_invitations(token_digest,issuer,subject,client_id,role,expires_at)
+ VALUES($1,$2,'member','operator-a','operator',$3)`, digest(secret()), f.issuer, expires); err != nil {
+		t.Fatal(err)
+	}
+	p := Principal{issuer: f.issuer, subject: "member", expires: expires}
+	if err := svc.redeem(f.ctx, p, "", nil); !errors.Is(err, ErrDenied) {
+		t.Fatalf("customer membership allowed operator redemption: %v", err)
+	}
+}
+
 // An identity with neither membership nor invitation is refused after a valid
 // authentication: the portal is invitation-only.
 func TestUninvitedIdentityIsRefused(t *testing.T) {

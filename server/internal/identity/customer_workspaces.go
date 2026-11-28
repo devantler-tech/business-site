@@ -125,30 +125,61 @@ func (b *browser) openCustomerWorkspace(w http.ResponseWriter, r *http.Request) 
 			incarnation, err = b.foundation.customerWorkspaceIncarnation(ctx, account.Principal, workspace)
 		}
 	}
+	if err == nil {
+		err = b.switchCustomerWorkspace(w, r, account, incarnation)
+	}
 	switch {
 	case errors.Is(err, pgx.ErrNoRows), errors.Is(err, ErrDenied):
 		b.render(w, r, http.StatusForbidden, "error", "", "")
 	case err != nil:
 		b.render(w, r, http.StatusServiceUnavailable, "unavailable", "", "")
-	case !account.current(ctx, b.foundation.pool):
-		b.render(w, r, http.StatusForbidden, "error", "", "")
 	default:
-		if err := b.renewEmptySession(ctx); err != nil {
-			b.render(w, r, http.StatusServiceUnavailable, "unavailable", "", "")
-			return
-		}
-		b.sessions.Put(ctx, "issuer", account.issuer)
-		b.sessions.Put(ctx, "subject", account.subject)
-		b.sessions.Put(ctx, "expires", account.expires.Unix())
-		b.sessions.Put(ctx, "membership_incarnation", incarnation)
-		b.sessions.Put(ctx, "customer_signed_in", true)
-		b.sessions.Put(ctx, "lang", language(r))
-		b.sessions.SetDeadline(ctx, account.deadline)
-		b.sessions.RememberMe(ctx, true)
 		// Forms already open in another tab belong to the previous workspace.
 		b.csrf.RegenerateToken(w, r)
 		http.Redirect(w, r, "/portal/?lang="+language(r), http.StatusSeeOther)
 	}
+}
+
+// Replace the exact authenticated session in one database statement. A
+// concurrent sign-out or another successful switch consumes the original
+// token, so this request cannot issue another token from its stale snapshot.
+func (b *browser) switchCustomerWorkspace(w http.ResponseWriter, r *http.Request, account customerAccountSession, incarnation string) error {
+	ctx := r.Context()
+	if !b.foundation.ready(ctx) {
+		return ErrDenied
+	}
+	deadline := account.deadline
+	if account.expires.Before(deadline) {
+		deadline = account.expires
+	}
+	data, err := b.sessions.Codec.Encode(deadline, map[string]any{
+		"issuer":                 account.issuer,
+		"subject":                account.subject,
+		"expires":                account.expires.Unix(),
+		"membership_incarnation": incarnation,
+		"customer_signed_in":     true,
+		"lang":                   language(r),
+		"__rememberMe":           b.sessions.GetBool(ctx, "__rememberMe"),
+	})
+	if err != nil {
+		return err
+	}
+	token := secret() + secret()
+	key := base64.RawURLEncoding.EncodeToString(digest(token))
+	var expiry time.Time
+	err = b.foundation.pool.QueryRow(ctx, `WITH original AS (
+ DELETE FROM portal_sessions WHERE token=$1 AND data=$2 AND expiry>clock_timestamp() RETURNING expiry
+) INSERT INTO portal_sessions(token,data,expiry)
+ SELECT $4,$5,LEAST(expiry,$3::timestamptz) FROM original
+ WHERE LEAST(expiry,$3::timestamptz)>clock_timestamp() RETURNING expiry`,
+		account.key, account.data, deadline, key, data).Scan(&expiry)
+	if err != nil {
+		return err
+	}
+	// Leave the middleware's loaded context untouched so its save step cannot
+	// write the original token back after rotation.
+	b.sessions.WriteSessionCookie(ctx, w, token, expiry)
+	return nil
 }
 
 func (s *Foundation) customerWorkspaceIncarnation(ctx context.Context, p Principal, workspace string) (string, error) {

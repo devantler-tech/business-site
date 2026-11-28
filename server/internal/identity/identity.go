@@ -328,11 +328,13 @@ func (s *Foundation) Invite(ctx context.Context, i Invitation) error {
 	}, nil)
 }
 
-// One identity has at most one pending invitation per workspace. Operator
-// identities and existing memberships for that workspace cannot be invited.
+// One identity has at most one pending invitation per workspace. Operators
+// cannot share an identity with customer memberships or pending invitations.
 const invitationIdentityAvailable = `NOT EXISTS (
- SELECT 1 FROM portal_invitations WHERE issuer=$1 AND subject=$2 AND client_id=$3 AND NOT revoked AND expires_at>now())
- AND NOT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND (client_id=$3 OR role='operator'))
+ SELECT 1 FROM portal_invitations WHERE issuer=$1 AND subject=$2 AND NOT revoked AND expires_at>now()
+ AND (client_id=$3 OR role='operator' OR $4='operator'))
+ AND NOT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2
+ AND (client_id=$3 OR role='operator' OR $4='operator'))
  AND NOT ` + customerDeletionExists
 
 // invite retains the control-plane rules and permits the operator API to bind
@@ -377,7 +379,7 @@ func (s *Foundation) invite(ctx context.Context, i Invitation, existingWorkspace
 	}
 	token := digest(secret())
 	result, err := tx.Exec(ctx, `INSERT INTO portal_invitations(token_digest,issuer,subject,client_id,role,expires_at)
- SELECT $4,$1,$2,$3,$5,$6 WHERE `+invitationIdentityAvailable, i.Issuer, i.Subject, i.ClientID, token, i.Role, i.Expires)
+ SELECT $5,$1,$2,$3,$4,$6 WHERE `+invitationIdentityAvailable, i.Issuer, i.Subject, i.ClientID, i.Role, token, i.Expires)
 	if err != nil {
 		return fmt.Errorf("persist invitation: %w", err)
 	}
@@ -546,11 +548,12 @@ func (s *Foundation) redeem(ctx context.Context, p Principal, selected string, s
 	if err = rows.Err(); err != nil {
 		return fmt.Errorf("consume invitation: %w", err)
 	}
-	if pending != 1 || !s.canInvite(p.subject, role) {
+	if pending != 1 || !s.canInvite(p.subject, role) || (selected != "" && role != "client") {
 		return ErrDenied
 	}
 	result, err := tx.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role)
- SELECT $1,$2,$3,$4 WHERE NOT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='operator')
+ SELECT $1,$2,$3,$4 WHERE NOT EXISTS (
+ SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND (role='operator' OR $4='operator'))
  ON CONFLICT DO NOTHING`, p.issuer, p.subject, client, role)
 	if err != nil {
 		return fmt.Errorf("create membership: %w", err)
@@ -558,10 +561,10 @@ func (s *Foundation) redeem(ctx context.Context, p Principal, selected string, s
 	if result.RowsAffected() != 1 {
 		return ErrDenied
 	}
-	if ctx.Err() != nil || !time.Now().Before(p.expires) {
+	if session != nil && !lockBrowserSession(ctx, tx, *session) {
 		return ErrDenied
 	}
-	if session != nil && !lockBrowserSession(ctx, tx, *session) {
+	if ctx.Err() != nil || !time.Now().Before(p.expires) || !s.ready(ctx) {
 		return ErrDenied
 	}
 	if err = tx.Commit(ctx); err != nil {
