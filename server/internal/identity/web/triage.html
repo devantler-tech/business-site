@@ -7,6 +7,31 @@
 {{if .Detail}}
 {{if .WorkReviewEnabled}}<p><a href="{{root}}/operator/requests/{{(index .Requests 0).ID}}/work-review?lang={{.Lang}}">{{if eq .Lang `da`}}Gennemgå arbejdsbeslutninger{{else}}Review work decisions{{end}}</a></p>{{end}}{{range .Requests}}<h2>{{.Title}}</h2>
 <dl class="request-receipt"><dt>{{if eq $.Lang `da`}}Type{{else}}Offering{{end}}</dt><dd>{{if eq .Product `website`}}{{if eq $.Lang `da`}}Hjemmeside{{else}}Website{{end}}{{else if eq .Product `app`}}{{if eq $.Lang `da`}}Webapp{{else}}Web app{{end}}{{else if eq .Product `other`}}{{if eq $.Lang `da`}}Andre opgaver{{else}}Other requests{{end}}{{else}}{{if eq $.Lang `da`}}Service eller integration{{else}}Service or integration{{end}}{{end}}</dd><dt>{{if eq $.Lang `da`}}Modtaget (UTC){{else}}Received (UTC){{end}}</dt><dd><time datetime="{{.Submitted.UTC.Format `2006-01-02T15:04:05.999999Z`}}">{{.Submitted.UTC.Format `2006-01-02 15:04`}} UTC</time></dd><dt>{{if eq $.Lang `da`}}Forespørgsel{{else}}Brief{{end}}</dt><dd class="request-brief">{{.Brief}}</dd></dl>{{end}}
+{{with .Hosting}}
+<section aria-labelledby="hosting-coverage">
+  <h2 id="hosting-coverage">{{if eq $.Lang `da`}}Hostingperiode{{else}}Hosting period{{end}}</h2>
+  <p class="operator-status">
+    {{if eq .State "active"}}{{if eq $.Lang `da`}}Aktiv{{else}}Active{{end}}
+    {{else if eq .State "future"}}{{if eq $.Lang `da`}}Kommende{{else}}Upcoming{{end}}
+    {{else if eq .State "ended"}}{{if eq $.Lang `da`}}Afsluttet{{else}}Ended{{end}}
+    {{else if eq .State "cancelled"}}{{if eq $.Lang `da`}}Opsagt{{else}}Cancelled{{end}}
+    {{else if eq .State "disputed"}}{{if eq $.Lang `da`}}Bestridt{{else}}Disputed{{end}}
+    {{else}}{{if eq $.Lang `da`}}Ingen bekræftet periode{{else}}No verified period{{end}}{{end}}
+  </p>
+  {{if .ProposalVersion}}
+  <dl class="request-receipt">
+    <dt>{{if eq $.Lang `da`}}Accepteret tilbud{{else}}Accepted proposal{{end}}</dt>
+    <dd>Version {{.ProposalVersion}}</dd>
+    <dt>{{if eq $.Lang `da`}}Start (UTC){{else}}Starts (UTC){{end}}</dt>
+    <dd><time datetime="{{.StartsAt.UTC.Format `2006-01-02T15:04:05.999999999Z`}}">{{.StartsAt.UTC.Format `2006-01-02 15:04`}}</time></dd>
+    <dt>{{if eq $.Lang `da`}}Udløb (UTC){{else}}Ends (UTC){{end}}</dt>
+    <dd><time datetime="{{.EndsAt.UTC.Format `2006-01-02T15:04:05.999999999Z`}}">{{.EndsAt.UTC.Format `2006-01-02 15:04`}}</time></dd>
+    <dt>{{if eq $.Lang `da`}}Aftalt vedligeholdelse{{else}}Agreed maintenance{{end}}</dt>
+    <dd class="request-brief">{{.Scope}}</dd>
+  </dl>
+  {{end}}
+</section>
+{{end}}
 {{if .ProposalsEnabled}}
 <h2>{{if eq .Lang `da`}}Udkast til tilbud{{else}}Draft proposals{{end}}</h2>
 <p>{{if eq .Lang `da`}}At gemme et udkast indhenter ikke kundens accept og godkender ikke arbejde.{{else}}Saving a draft does not obtain client acceptance or approve work.{{end}}</p>
