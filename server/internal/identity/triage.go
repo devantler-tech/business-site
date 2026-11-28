@@ -134,6 +134,7 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 	acceptanceEnabled := sharingEnabled && b.foundation.acceptanceReady(r.Context())
 	billingEnabled := acceptanceEnabled && b.foundation.orderReady(r.Context())
 	workEnabled := id != "" && b.foundation.workApprovalGate(r.Context())
+	hostingEnabled := id != "" && b.foundation.hostingCoverageReady(r.Context())
 	rows, err := b.foundation.readTriage(r.Context(), p, id, cursor)
 	if missingProjectRequest(id, rows, err) {
 		http.NotFound(w, r)
@@ -182,10 +183,14 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 			page.BillingEnabled = true
 		}
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
 	page.TriageEnabled = true
 	page.CSRF = nosurf.Token(r)
+	if hostingEnabled {
+		b.showHostingReview(w, r, id, page)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
 	_ = b.templates().ExecuteTemplate(w, "triage.html", page)
 }
 
@@ -252,4 +257,5 @@ type triagePageData struct {
 	BillingEnabled    bool
 	Order             *projectOrder
 	Feature           *featureState // the client's feature-request level and this request's closure
+	Hosting           *hostingCoverage
 }
