@@ -19,7 +19,8 @@
           {{template "operator-person" .}}
           <span class="operator-workspace-counts">
             <span class="operator-status">{{.StatusLabel $.Lang}}</span>
-            {{if .WorkspaceName}}<span>{{.WorkspaceName}}</span>{{end}}
+            {{if eq (len .Workspaces) 1}}<span>{{(index .Workspaces 0).Name}}</span>
+            {{else if .Workspaces}}<span>{{len .Workspaces}} {{if eq $.Lang "da"}}arbejdsområder{{else}}workspaces{{end}}</span>{{end}}
           </span>
           <span class="operator-workspace-chevron" aria-hidden="true">›</span>
         </a>
@@ -43,12 +44,12 @@
 
 {{define "operator-customer-account"}}
   <div class="operator-actions">
-    <a href="{{.BackURL}}">{{if .ConfirmRemoval}}{{if eq .Lang "da"}}Tilbage til kunden{{else}}Back to customer{{end}}{{else}}{{if eq .Lang "da"}}Tilbage til kunder{{else}}Back to customers{{end}}{{end}}</a>
+    <a href="{{.BackURL}}">{{if .Remove}}{{if eq .Lang "da"}}Tilbage til kunden{{else}}Back to customer{{end}}{{else}}{{if eq .Lang "da"}}Tilbage til kunder{{else}}Back to customers{{end}}{{end}}</a>
   </div>
   <section class="operator-panel" aria-labelledby="customer-access">
-    <h2 id="customer-access">{{if .ConfirmRemoval}}{{template "customer-remove-label" .Lang}}{{else}}{{if eq .Lang "da"}}Konto og adgang{{else}}Account and access{{end}}{{end}}</h2>
-    {{if .ConfirmRemoval}}
-    <p>{{if eq .Lang "da"}}Kunden mister straks adgangen til{{else}}The customer will immediately lose access to{{end}} <strong>{{.Account.WorkspaceName}}</strong>. {{template "customer-remove-explanation" .Lang}}</p>
+    <h2 id="customer-access">{{if .Remove}}{{template "customer-remove-label" .Lang}}{{else}}{{if eq .Lang "da"}}Konto og adgang{{else}}Account and access{{end}}{{end}}</h2>
+    {{if .Remove}}
+    <p>{{if eq .Lang "da"}}Kunden mister straks adgangen til{{else}}The customer will immediately lose access to{{end}} <strong>{{.Remove.Name}}</strong>. {{template "customer-remove-explanation" .Lang}}</p>
     <form class="operator-actions" method="post" action="{{root}}/operator/api/members/remove?lang={{.Lang}}&amp;focus=customer">
       {{template "customer-account-fields" .}}
       <button type="submit" class="operator-danger-button">{{template "customer-remove-label" .Lang}}</button>
@@ -60,20 +61,25 @@
       <div><dt>{{if eq .Lang "da"}}Login-e-mail{{else}}Sign-in email{{end}}</dt><dd>{{.Account.Email}}</dd></div>
       {{end}}
       <div><dt>Status</dt><dd><span class="operator-status">{{.Account.StatusLabel .Lang}}</span></dd></div>
-      {{if .Account.Workspace}}
-      <div><dt>{{if eq .Lang "da"}}Arbejdsområde{{else}}Workspace{{end}}</dt><dd><a href="{{root}}/operator/customers?lang={{.Lang}}&amp;workspace={{.Account.Workspace}}">{{.Account.WorkspaceName}}</a></dd></div>
-      {{end}}
       {{if .Account.Deadline}}
       <div><dt>{{if eq .Lang "da"}}Frist for opbevaring af konto{{else}}Account retention deadline{{end}}</dt><dd><time datetime="{{.Account.RetentionDate}}">{{.Account.RetentionDate}}</time></dd></div>
       {{end}}
     </dl>
-    {{if .Account.ManageAccess}}
-    <div class="operator-actions">
-      <a href="{{.Confirmation}}" class="operator-danger-link">{{template "customer-remove-label" .Lang}}</a>
-    </div>
-    {{else if or (eq .Account.Status "former") (eq .Account.Status "unassigned")}}
-    <p><a href="{{root}}/operator/invitations/new?lang={{.Lang}}">{{if eq .Lang "da"}}Inviter til et arbejdsområde{{else}}Invite to a workspace{{end}}</a></p>
+    {{if .Account.Workspaces}}
+    <h3>{{if eq .Lang "da"}}Arbejdsområder{{else}}Workspaces{{end}}</h3>
+    <ul class="operator-workspace-index" role="list">
+      {{range .Account.Workspaces}}
+      <li class="operator-access-row">
+        <a href="{{root}}/operator/customers?lang={{$.Lang}}&amp;workspace={{.ID}}">{{.Name}}</a>
+        {{if .Invited}}<span class="operator-status">{{if eq $.Lang "da"}}Inviteret{{else}}Invited{{end}}</span>
+        {{else if .Revoked}}<span class="operator-status">{{if eq $.Lang "da"}}Ingen adgang{{else}}No access{{end}}</span>
+        {{else}}<span class="operator-status">{{if eq $.Lang "da"}}Medlem{{else}}Member{{end}}</span>{{end}}
+        {{if .RemoveURL}}<a href="{{.RemoveURL}}" class="operator-danger-link">{{template "customer-remove-label" $.Lang}}</a>{{end}}
+      </li>
+      {{end}}
+    </ul>
     {{end}}
+    <p><a href="{{root}}/operator/invitations/new?lang={{.Lang}}">{{if eq .Lang "da"}}Inviter til et arbejdsområde{{else}}Invite to a workspace{{end}}</a></p>
     {{end}}
   </section>
 {{end}}
@@ -84,5 +90,5 @@
 {{define "customer-account-fields"}}
   <input type="hidden" name="csrf_token" value="{{.CSRF}}">
   <input type="hidden" name="subject" value="{{.Account.Subject}}">
-  <input type="hidden" name="workspace" value="{{.Account.Workspace}}">
+  <input type="hidden" name="workspace" value="{{.Remove.ID}}">
 {{end}}

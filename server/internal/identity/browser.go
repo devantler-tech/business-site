@@ -59,6 +59,7 @@ const internalRoot = "/portal"
 type browser struct {
 	foundation *Foundation
 	sessions   *scs.SessionManager
+	csrf       *nosurf.CSRFHandler
 	oauth      oauth2.Config
 	origin     string
 	// atRoot serves the portal at the root of its own host: visitors see "/sign-in"
@@ -213,6 +214,7 @@ func (b *browser) withCSRF(handler http.Handler) http.Handler {
 	csrf := nosurf.New(handler)
 	csrf.SetBaseCookie(http.Cookie{Name: "__Host-portal_csrf", Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: 1800})
 	csrf.SetFailureHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { b.render(w, r, 403, "error", "", "") }))
+	b.csrf = csrf
 	return csrf
 }
 
@@ -319,6 +321,8 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /portal/signed-out", b.signedOut)
 	mux.HandleFunc("GET /portal/callback", b.callback)
 	mux.HandleFunc("GET /portal/{$}", b.home)
+	mux.HandleFunc("GET /portal/workspaces", b.customerWorkspaces)
+	mux.HandleFunc("POST /portal/workspaces/open", b.openCustomerWorkspace)
 	mux.HandleFunc("GET /portal/appointments", b.appointmentHistory)
 	mux.HandleFunc("POST "+introductionCancellationPath, b.cancelAppointmentIntroduction)
 	mux.HandleFunc("GET /portal/operator", b.operator)
@@ -703,7 +707,7 @@ func (b *browser) home(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if b.signedInCustomer(ctx) {
 			if errors.Is(err, ErrDenied) {
-				b.render(w, r, http.StatusOK, "no-workspaces", "", nosurf.Token(r))
+				b.customerWorkspaces(w, r)
 			} else {
 				b.render(w, r, http.StatusServiceUnavailable, "unavailable", "", "")
 			}
@@ -719,6 +723,7 @@ func (b *browser) home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page := b.data(r, "home", client, nosurf.Token(r))
+	page.WorkspacePicker = b.signedInCustomer(ctx) && !p.isClientPreview()
 	if !p.isClientPreview() {
 		page.Client, err = workspaceDisplayName(ctx, b.foundation.pool, client)
 		if err != nil {
@@ -788,6 +793,8 @@ type pageData struct {
 	CalendarConflictsEnabled                                                                                                         bool
 	TriageEnabled                                                                                                                    bool
 	ClientPreview, PreviewAvailable                                                                                                  bool
+	WorkspacePicker                                                                                                                  bool
+	Workspaces                                                                                                                       []customerWorkspaceChoice
 	ClientTasks                                                                                                                      clientTaskNavigation
 	Audit                                                                                                                            []auditEntry
 }

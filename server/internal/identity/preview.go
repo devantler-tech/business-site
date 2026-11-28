@@ -115,7 +115,7 @@ func (b *browser) lockUnifiedPreview(ctx context.Context) (context.Context, func
 		release()
 		return ctx, func() {}, err
 	}
-	if !lockBrowserSession(ctx, tx, snapshot) {
+	if lockBrowserSession(ctx, tx, snapshot).IsZero() {
 		release()
 		return ctx, func() {}, ErrDenied
 	}
@@ -123,13 +123,23 @@ func (b *browser) lockUnifiedPreview(ctx context.Context) (context.Context, func
 	return context.WithValue(ctx, previewAuthorityKey{}, grant), release, nil
 }
 
-func lockBrowserSession(ctx context.Context, tx pgx.Tx, snapshot durableResponseSnapshot) bool {
-	var storedDeadline time.Time
+func lockBrowserSession(ctx context.Context, tx pgx.Tx, snapshot durableResponseSnapshot) time.Time {
+	var deadline time.Time
 	err := tx.QueryRow(ctx, `SELECT expiry FROM portal_sessions
- WHERE token=$1 AND data=$2 AND expiry>clock_timestamp() FOR SHARE`, snapshot.key, snapshot.data).Scan(&storedDeadline)
-	now := time.Now()
-	return err == nil && ctx.Err() == nil && now.Before(storedDeadline) &&
-		now.Before(snapshot.original.deadline) && now.Before(snapshot.original.principal.expires)
+ WHERE token=$1 AND data=$2 AND expiry>clock_timestamp() FOR SHARE`, snapshot.key, snapshot.data).Scan(&deadline)
+	if err != nil || ctx.Err() != nil {
+		return time.Time{}
+	}
+	if snapshot.original.deadline.Before(deadline) {
+		deadline = snapshot.original.deadline
+	}
+	if snapshot.original.principal.expires.Before(deadline) {
+		deadline = snapshot.original.principal.expires
+	}
+	if !time.Now().Before(deadline) {
+		return time.Time{}
+	}
+	return deadline
 }
 
 func (s *Foundation) currentPreviewAuthority(ctx context.Context, operator Principal) (*previewAuthority, bool) {
