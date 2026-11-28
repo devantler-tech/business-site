@@ -12,17 +12,16 @@ The whole directory is published as one artifact and split into Kustomize overla
   only includes `prod/`.
 - `base/` holds the shared WebApp. The publisher pins its image in `base/webapp.yaml`.
 - `prod/` holds the production routes, network policy, disruption budget, secret
-  synchronization, migration Job and retention CronJob.
+  synchronization, both database migration Jobs and the retention CronJob.
 - `dev/` (#542) packages one portal replica and a migration Job for
   `business-site-dev`. Both use the release's pinned image. The platform supplies
   `business-site-dev-runtime` for the portal, `business-site-dev-migration` for
   schema changes, and the restricted database and sign-in client. The platform's
   authenticated proxy and network policies control access to `dev.devantler.tech`
   (devantler-tech/platform#6126).
-- `practice/` exposes just the practice database migration Job for the unified
-  preview in the operator portal. It uses the same job, inputs and release image
-  as `dev/`. Platform will consume this overlay through
-  [the verified release source](https://github.com/devantler-tech/platform/issues/6751).
+- `practice/` renders the standalone migration Job with the same inputs and
+  release image as `dev/`. The production overlay reuses its
+  `practice-job/` template for the operator's client preview.
 
 `kubectl kustomize deploy/dev` must render the WebApp and migration Job.
 `kubectl kustomize deploy/practice` must render only that Job.
@@ -42,7 +41,7 @@ newly tested production image as an explicit argument, retaining the rendered
 arguments and runtime restrictions. Neither mode verifies a registry signature;
 that remains mandatory in the signed publisher's independent receipt check.
 
-CI renders the production overlay and checks its WebApp, migration Job,
+CI renders the production overlay and checks its WebApp, migration Jobs,
 retention CronJob, routes, SecretStore, ExternalSecrets and network policy with
 the pinned Platform policies and Kyverno engine. The Tenant graph supplies the
 namespace labels. Each protected resource has an explicit refusal control for
@@ -65,7 +64,7 @@ lookup, which the platform's `business-site-dns-visibility` policy provides
 (devantler-tech/platform#6337); a tenant policy may not name kube-system itself.
 Other platform policies remain additive, so this is not an overriding deny
 of every platform-granted connection. The package itself sets no database, broker or
-activation value; the migration Job below only names the platform's migration Secret. The checker accepts only the committed,
+activation value. The migration Jobs reference their separate Platform-owned Secrets. The checker accepts only the committed,
 independently verified baseline image; a same-repository digest alone is insufficient.
 That baseline predates the host and portal-settings arguments, so the smoke test
 needs an image built from current source, as CI supplies.
@@ -231,6 +230,14 @@ With sign-in on, invite customers from a web pod as
   An authorized platform operator can then delete that failed Job. Flux recreates it
   from the signed release on the next reconcile. Verify that the replacement Job completes
   and the tenant Kustomization becomes Ready.
+
+The production package also includes `business-site-practice-migration`. It
+uses the same release image and Job restrictions with the
+`business-site-practice-migration` projection and `portal_preview_web` grant.
+Platform supplies the practice database credentials and CA independently of the
+ordinary portal. Its network policy grants access to the practice database and
+its DNS record. Deploy these Platform inputs before publishing the shared
+package. See [Platform #6751](https://github.com/devantler-tech/platform/issues/6751).
 
 ### Recovery after an additive migration
 

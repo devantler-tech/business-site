@@ -122,8 +122,8 @@ readonly manifest_members=(
   prod/network-policy.yaml prod/disruption-budget.yaml prod/secret-store.yaml
   prod/external-secret-disclosure.yaml prod/external-secret-numina.yaml prod/external-secret-stripe.yaml
   prod/job-portal-migration.yaml prod/cronjob-portal-retention.yaml
-  dev/kustomization.yaml dev/job-preview-migration.yaml
-  practice/kustomization.yaml
+  dev/kustomization.yaml practice/kustomization.yaml
+  practice-job/kustomization.yaml practice-job/job-preview-migration.yaml
 )
 is_manifest_member() {
   local expected
@@ -136,7 +136,7 @@ entries="$(find "$work/manifests" -mindepth 1 -print)" || fail 'manifest invento
 while IFS= read -r entry; do
   member=${entry#"$work/manifests/"}
   case "$member" in
-    base | prod | dev | practice)
+    base | prod | dev | practice | practice-job)
       [[ -d "$entry" && ! -L "$entry" ]] || fail 'manifest overlay directory'
       continue
       ;;

@@ -2,6 +2,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../base
+  - ../practice-job
   - http-route-public.yaml
   - http-route-portal.yaml
   - network-policy.yaml
@@ -13,6 +14,27 @@ resources:
   - job-portal-migration.yaml
   - cronjob-portal-retention.yaml
 patches:
+  - target:
+      group: batch
+      version: v1
+      kind: Job
+      name: business-site-dev-migration
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: business-site-practice-migration
+      - op: add
+        path: /metadata/namespace
+        value: business-site
+      - op: replace
+        path: /spec/template/metadata/labels/app.kubernetes.io~1name
+        value: business-site-practice-migration
+      - op: test
+        path: /spec/template/spec/volumes/0/name
+        value: migration
+      - op: replace
+        path: /spec/template/spec/volumes/0/secret/secretName
+        value: business-site-practice-migration
   - target:
       group: kro.run
       version: v1alpha1
@@ -31,8 +53,8 @@ patches:
       - op: add
         path: /spec/args/-
         value: "399712320588158469"
-# The publisher pins only the WebApp's image; the migration Job and the retention
-# CronJob run that same image.
+# Both migrations and the retention CronJob run the image the publisher pins
+# for the WebApp.
 replacements:
   - source:
       kind: WebApp
@@ -42,6 +64,13 @@ replacements:
       - select:
           kind: Job
           name: business-site-portal-migration
+        fieldPaths:
+          - spec.template.spec.containers.[name=migrate].image
+        options:
+          create: true
+      - select:
+          kind: Job
+          name: business-site-practice-migration
         fieldPaths:
           - spec.template.spec.containers.[name=migrate].image
         options:
