@@ -175,12 +175,23 @@ func recordClosedCustomerAccounts(ctx context.Context, tx pgx.Tx, issuer, worksp
 	if len(closedAccounts) == 0 {
 		return nil
 	}
-	saved, err := tx.Exec(ctx, `INSERT INTO portal_customer_account_closures(membership_event,closed_at,remove_by)
- SELECT h.incarnation,h.recorded_at,h.recorded_at+interval '720 hours'
- FROM portal_membership_transitions h
+	var recorded bool
+	err := tx.QueryRow(ctx, `WITH removed AS (
+ SELECT h.incarnation,h.recorded_at,h.subject FROM portal_membership_transitions h
  JOIN unnest($3::text[]) AS prior(incarnation) ON h.previous_incarnation=prior.incarnation::uuid
- WHERE h.issuer=$1 AND h.client_id=$2 AND h.role='client' AND h.kind='delete'`, issuer, workspace, closedAccounts)
-	if err != nil || saved.RowsAffected() != int64(len(closedAccounts)) {
+ WHERE h.issuer=$1 AND h.client_id=$2 AND h.role='client' AND h.kind='delete'
+), eligible AS (
+ SELECT h.incarnation,h.recorded_at FROM removed h
+ WHERE NOT EXISTS (SELECT 1 FROM portal_memberships m WHERE m.issuer=$1 AND m.subject=h.subject AND NOT m.revoked)
+ AND NOT EXISTS (SELECT 1 FROM portal_invitations i WHERE i.issuer=$1 AND i.subject=h.subject AND NOT i.revoked AND i.expires_at>now())
+), recorded AS (
+ INSERT INTO portal_customer_account_closures(membership_event,closed_at,remove_by)
+ SELECT incarnation,recorded_at,recorded_at+interval '720 hours' FROM eligible
+ RETURNING membership_event
+)
+ SELECT (SELECT count(*) FROM removed)=cardinality($3::text[])
+    AND (SELECT count(*) FROM eligible)=(SELECT count(*) FROM recorded)`, issuer, workspace, closedAccounts).Scan(&recorded)
+	if err != nil || !recorded {
 		return errTriageStorage
 	}
 	return nil
@@ -217,6 +228,11 @@ func (b *browser) removeCustomerMember(ctx context.Context, r *http.Request) (an
 		return nil, errOperatorInput
 	}
 	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE portal_invitations SET revoked=true
+ WHERE issuer=$1 AND subject=$2 AND client_id=$3 AND role='client' AND NOT revoked`,
+		issuer, input.Subject, input.Workspace); err != nil {
 		return nil, err
 	}
 	if customeridentity.DexUser(input.Subject, customeridentity.ZitadelConnectorID) != "" {

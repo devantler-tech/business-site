@@ -260,20 +260,24 @@ func renderedLinkPagesFor(name string, templates *template.Template, b *browser)
 					d := b.operatorData(r, "operator-customer-accounts", "fictional-operator")
 					d.CSRF = "fictional-csrf"
 					index := b.visible(customerAccountsPath) + "?lang=" + lang
+					workspace := customerAccountWorkspace{ID: "fictional-workspace", Name: "Fictional workspace"}
 					account := customerAccountRow{Subject: customeridentity.DexSubject("fictional-customer", customeridentity.ZitadelConnectorID), Name: "Ada Example", Email: "ada@example.test",
-						Workspace: "fictional-workspace", WorkspaceName: "Fictional workspace", Status: "active", ManageAccess: true}
+						Workspaces: []customerAccountWorkspace{workspace}, Status: "active"}
 					account.URL = index + "&account=" + account.Subject
+					account.Workspaces[0].RemoveURL = account.URL + "&view=remove&workspace=" + workspace.ID
 					page := customerAccountsPage{pageData: d, Query: "Ada", BackURL: index,
-						Confirmation: account.URL + "&view=remove", Previous: index + "&page=1", Next: index + "&page=3"}
+						Previous: index + "&page=1", Next: index + "&page=3"}
 					if view == "list" {
 						page.Accounts = []customerAccountRow{account}
 					} else {
 						page.Account = &account
 						page.Title = account.Name
-						page.ConfirmRemoval = view == "remove"
+						if view == "remove" {
+							page.Remove = &workspace
+						}
 						if view == "former" {
 							account.Status = view
-							account.ManageAccess = false
+							account.Workspaces = nil
 						}
 					}
 					return templates.ExecuteTemplate(w, name, page)
@@ -726,6 +730,10 @@ func registeredLinkTarget(mux *http.ServeMux, method string, target *url.URL) er
 				return errors.New("invalid target funding review")
 			}
 		case "workspace":
+			if pattern == "GET "+customerAccountsPath && query.Get("view") == "remove" &&
+				customerAccountID(query.Get("account")) != "" && validCustomerWorkspace(values[0]) {
+				continue
+			}
 			switch pattern {
 			case "GET /portal/operator/invitations/new", "GET /portal/operator/customers":
 				if validCustomerWorkspace(values[0]) || pattern == "GET /portal/operator/customers" && values[0] == operatorWorkspace {

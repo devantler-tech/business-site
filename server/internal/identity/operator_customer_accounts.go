@@ -19,10 +19,14 @@ const customerAccountsPath = "/portal/operator/customer-accounts"
 
 type customerAccountRow struct {
 	Subject, Name, Email, URL string
-	Workspace, WorkspaceName  string
+	Workspaces                []customerAccountWorkspace
 	Status                    string
-	ManageAccess              bool
 	Deadline                  *time.Time
+}
+
+type customerAccountWorkspace struct {
+	ID, Name, RemoveURL string
+	Invited, Revoked    bool
 }
 
 func (row customerAccountRow) RetentionDate() string {
@@ -52,9 +56,9 @@ type customerAccountsPage struct {
 	Accounts              []customerAccountRow
 	Account               *customerAccountRow
 	Query, Previous, Next string
-	BackURL, Confirmation string
+	BackURL               string
 	Page                  uint64
-	ConfirmRemoval        bool
+	Remove                *customerAccountWorkspace
 }
 
 func customerAccountID(subject string) string {
@@ -112,7 +116,11 @@ func (b *browser) loadCustomerAccounts(ctx context.Context, data *customerAccoun
 		return err
 	}
 	subject, view := query.Get("account"), query.Get("view")
+	workspace := query.Get("workspace")
 	if view != "" && (view != "remove" || subject == "") {
+		return errOperatorInput
+	}
+	if workspace != "" && (view != "remove" || !validCustomerWorkspace(workspace)) {
 		return errOperatorInput
 	}
 	target := url.Values{"lang": {data.Lang}}
@@ -160,20 +168,35 @@ func (b *browser) loadCustomerAccounts(ctx context.Context, data *customerAccoun
 	}
 	data.Accounts = rows
 	if subject != "" {
-		if len(data.Accounts) != 1 || view == "remove" && !data.Accounts[0].ManageAccess {
+		if len(data.Accounts) != 1 {
 			return errOperatorInput
 		}
 		data.Account = &data.Accounts[0]
 		data.Title = data.Account.Name
 		target.Set("account", subject)
-		data.ConfirmRemoval = view == "remove"
-		if data.ConfirmRemoval {
+		if view == "remove" {
+			for _, candidate := range data.Account.Workspaces {
+				if !candidate.Invited && (candidate.ID == workspace || workspace == "" && len(data.Account.Workspaces) == 1) {
+					data.Remove = &candidate
+				}
+			}
+			if data.Remove == nil {
+				return errOperatorInput
+			}
 			data.BackURL = base + target.Encode()
 			target.Set("view", "remove")
-		} else if data.Account.ManageAccess {
+			target.Set("workspace", data.Remove.ID)
+		} else {
 			target.Set("view", "remove")
-			data.Confirmation = base + target.Encode()
+			for i := range data.Account.Workspaces {
+				candidate := &data.Account.Workspaces[i]
+				if !candidate.Invited && validCustomerWorkspace(candidate.ID) {
+					target.Set("workspace", candidate.ID)
+					candidate.RemoveURL = base + target.Encode()
+				}
+			}
 			target.Del("view")
+			target.Del("workspace")
 		}
 	} else {
 		for i := range data.Accounts {
@@ -192,18 +215,23 @@ func (b *browser) loadCustomerAccounts(ctx context.Context, data *customerAccoun
 }
 
 type customerWorkspaceAccess struct {
-	Subject, Member, Invitation, WorkspaceName string
-	Revoked, Former                            bool
-	Deadline                                   *time.Time
+	Subject, Workspace, WorkspaceName string
+	Invited, Revoked, Former          bool
+	Deadline                          *time.Time
 }
 
-const customerAccountAccessSQL = `WITH invitations AS (
- SELECT DISTINCT ON (i.subject) i.subject,i.client_id
+const customerAccountAccessSQL = `WITH access AS (
+ SELECT subject,client_id,false AS invited,revoked FROM portal_memberships
+ WHERE issuer=$1 AND subject=ANY($2::text[]) AND role='client' AND client_id NOT IN ($3,$4)
+ UNION
+ SELECT i.subject,i.client_id,true,false
  FROM portal_invitations i
  WHERE i.issuer=$1 AND i.subject=ANY($2::text[]) AND i.role='client'
   AND NOT i.revoked AND i.expires_at>now() AND i.client_id NOT IN ($3,$4)
-  AND NOT EXISTS (SELECT 1 FROM portal_workspace_settings s WHERE s.workspace_id=i.client_id AND s.closed_at IS NOT NULL)
- ORDER BY i.subject,i.expires_at DESC,i.client_id
+  AND NOT EXISTS (SELECT 1 FROM portal_memberships m WHERE m.issuer=i.issuer AND m.subject=i.subject AND m.client_id=i.client_id)
+), open_access AS (
+ SELECT a.*,COALESCE(w.display_name,a.client_id) AS name FROM access a
+ LEFT JOIN portal_workspace_settings w ON w.workspace_id=a.client_id WHERE w.closed_at IS NULL
 ), former AS (
  SELECT DISTINCT ON (h.subject) h.subject,h.incarnation,c.remove_by
  FROM portal_membership_transitions h
@@ -211,17 +239,14 @@ const customerAccountAccessSQL = `WITH invitations AS (
  WHERE h.issuer=$1 AND h.subject=ANY($2::text[]) AND h.role='client' AND h.kind='delete' AND h.client_id NOT IN ($3,$4)
  ORDER BY h.subject,h.recorded_at DESC,h.incarnation
 )
- SELECT person.subject, COALESCE(m.client_id,''), COALESCE(i.client_id,''),
- COALESCE(w.display_name,m.client_id,i.client_id,''), COALESCE(m.revoked,false),
+ SELECT person.subject, COALESCE(a.client_id,''),COALESCE(a.name,''),
+ COALESCE(a.invited,false),COALESCE(a.revoked,false),
  h.incarnation IS NOT NULL, h.remove_by
  FROM unnest($2::text[]) AS person(subject)
- LEFT JOIN portal_memberships m ON m.issuer=$1 AND m.subject=person.subject AND m.role='client'
-  AND m.client_id NOT IN ($3,$4)
-  AND NOT EXISTS (SELECT 1 FROM portal_workspace_settings s WHERE s.workspace_id=m.client_id AND s.closed_at IS NOT NULL)
- LEFT JOIN invitations i ON m.subject IS NULL AND i.subject=person.subject
- LEFT JOIN portal_workspace_settings w ON w.workspace_id=COALESCE(m.client_id,i.client_id)
- LEFT JOIN former h ON m.subject IS NULL AND i.client_id IS NULL AND h.subject=person.subject
- WHERE NOT EXISTS (SELECT 1 FROM portal_memberships op WHERE op.issuer=$1 AND op.subject=person.subject AND op.role='operator')`
+ LEFT JOIN open_access a ON a.subject=person.subject
+ LEFT JOIN former h ON h.subject=person.subject
+ WHERE NOT EXISTS (SELECT 1 FROM portal_memberships op WHERE op.issuer=$1 AND op.subject=person.subject AND op.role='operator')
+ ORDER BY a.name,a.client_id`
 
 func (b *browser) customerAccountAccess(ctx context.Context, accounts []customeridentity.Account, lang string) ([]customerAccountRow, error) {
 	subjects := make([]string, 0, len(accounts))
@@ -242,23 +267,23 @@ func (b *browser) customerAccountAccess(ctx context.Context, accounts []customer
 	if err != nil {
 		return nil, err
 	}
-	access := make(map[string]customerWorkspaceAccess, len(records))
+	access := make(map[string][]customerWorkspaceAccess, len(accounts))
 	for _, record := range records {
-		access[record.Subject] = record
+		access[record.Subject] = append(access[record.Subject], record)
 	}
 	out := make([]customerAccountRow, 0, len(accounts))
 	for _, account := range accounts {
 		subject := customeridentity.DexSubject(account.ID, customeridentity.ZitadelConnectorID)
-		record, ok := access[subject]
+		records, ok := access[subject]
 		if !ok {
 			continue
 		}
-		out = append(out, accountRow(account, record, lang))
+		out = append(out, accountRow(account, records, lang))
 	}
 	return out, nil
 }
 
-func accountRow(account customeridentity.Account, access customerWorkspaceAccess, lang string) customerAccountRow {
+func accountRow(account customeridentity.Account, access []customerWorkspaceAccess, lang string) customerAccountRow {
 	name, email := account.Name, account.Email
 	if name == "" || name == email {
 		name, email = email, ""
@@ -269,20 +294,26 @@ func accountRow(account customeridentity.Account, access customerWorkspaceAccess
 			name = "Kunde uden navn"
 		}
 	}
-	row := customerAccountRow{Subject: access.Subject, Name: name, Email: email, WorkspaceName: access.WorkspaceName}
+	row := customerAccountRow{Subject: access[0].Subject, Name: name, Email: email}
+	var member, invited, revoked bool
+	for _, record := range access {
+		if record.Workspace == "" {
+			continue
+		}
+		row.Workspaces = append(row.Workspaces, customerAccountWorkspace{
+			ID: record.Workspace, Name: record.WorkspaceName, Invited: record.Invited, Revoked: record.Revoked,
+		})
+		invited = invited || record.Invited
+		revoked = revoked || record.Revoked
+		member = member || !record.Invited && !record.Revoked
+	}
 	switch {
-	case access.Member != "" && !access.Revoked:
-		row.Workspace, row.Status = access.Member, "active"
-		row.ManageAccess = validCustomerWorkspace(access.Member)
-	case access.Member != "":
-		// Preserve removal of a previously revoked membership without offering
-		// a way to block sign-in or silently grant workspace access.
-		row.Workspace, row.Status = access.Member, "former"
-		row.ManageAccess = validCustomerWorkspace(access.Member)
-	case access.Invitation != "":
-		row.Workspace, row.Status = access.Invitation, "invited"
-	case access.Former:
-		row.Status, row.Deadline = "former", access.Deadline
+	case member:
+		row.Status = "active"
+	case invited:
+		row.Status = "invited"
+	case revoked || access[0].Former:
+		row.Status, row.Deadline = "former", access[0].Deadline
 	default:
 		row.Status = "unassigned"
 	}

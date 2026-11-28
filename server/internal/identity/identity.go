@@ -250,7 +250,9 @@ func (s *Foundation) enrollOperator(ctx context.Context, p Principal) error {
 	if err = lockIdentity(ctx, tx, p.issuer, p.subject); err != nil {
 		return err
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES($1,$2,$3,'operator') ON CONFLICT(issuer,subject) DO NOTHING`, p.issuer, p.subject, operatorWorkspace); err != nil {
+	if _, err = tx.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role)
+ SELECT $1,$2,$3,'operator' WHERE NOT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2)
+ ON CONFLICT DO NOTHING`, p.issuer, p.subject, operatorWorkspace); err != nil {
 		return fmt.Errorf("create operator: %w", err)
 	}
 	if err = tx.Commit(ctx); err != nil {
@@ -324,11 +326,11 @@ func (s *Foundation) Invite(ctx context.Context, i Invitation) error {
 	}, nil)
 }
 
-// One identity has at most one pending invitation and none once it has any
-// membership, current or revoked, so sign-in never has to choose between them.
+// One identity has at most one pending invitation per workspace. Operator
+// identities and existing memberships for that workspace cannot be invited.
 const invitationIdentityAvailable = `NOT EXISTS (
- SELECT 1 FROM portal_invitations WHERE issuer=$1 AND subject=$2 AND NOT revoked AND expires_at>now())
- AND NOT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2)`
+ SELECT 1 FROM portal_invitations WHERE issuer=$1 AND subject=$2 AND client_id=$3 AND NOT revoked AND expires_at>now())
+ AND NOT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND (client_id=$3 OR role='operator'))`
 
 // invite retains the control-plane rules and permits the operator API to bind
 // its final commit to the original caller on its already locked connection.
@@ -372,7 +374,7 @@ func (s *Foundation) invite(ctx context.Context, i Invitation, existingWorkspace
 	}
 	token := digest(secret())
 	result, err := tx.Exec(ctx, `INSERT INTO portal_invitations(token_digest,issuer,subject,client_id,role,expires_at)
- SELECT $3,$1,$2,$4,$5,$6 WHERE `+invitationIdentityAvailable, i.Issuer, i.Subject, token, i.ClientID, i.Role, i.Expires)
+ SELECT $4,$1,$2,$3,$5,$6 WHERE `+invitationIdentityAvailable, i.Issuer, i.Subject, i.ClientID, token, i.Role, i.Expires)
 	if err != nil {
 		return fmt.Errorf("persist invitation: %w", err)
 	}
@@ -457,7 +459,7 @@ func (s *Foundation) completeSignInProof(ctx context.Context, nonce, raw string,
 	// A current member signs straight in. An identity without membership accepts
 	// its own pending invitation, bound to the exact issuer and subject.
 	if _, _, p.membershipIncarnation, err = s.membershipState(ctx, p); errors.Is(err, ErrDenied) {
-		if err = s.redeem(ctx, p); err != nil && !errors.Is(err, ErrDenied) {
+		if err = s.redeem(ctx, p, ""); err != nil && !errors.Is(err, ErrDenied) {
 			return Principal{}, err
 		}
 		// Current membership decides, including one a concurrent first sign-in of
@@ -485,11 +487,13 @@ func (s *Foundation) isCustomerSignIn(subject string) bool {
 	return s.canInvite(subject, "client") && customeridentity.DexUser(subject, customeridentity.ZitadelConnectorID) != ""
 }
 
-// redeem consumes the one pending invitation bound to this exact identity and
-// creates its membership in the same transaction. None, or more than one (which
-// Invite prevents), is refused rather than chosen between; a refusal rolls back.
-// Concurrent first sign-ins serialize on the deleted rows, so only one redeems.
-func (s *Foundation) redeem(ctx context.Context, p Principal) error {
+// redeem accepts the invitation for the selected workspace, or the sole
+// invitation at first sign-in. Invitation consumption and membership creation
+// stay in one transaction.
+func (s *Foundation) redeem(ctx context.Context, p Principal, selected string) error {
+	if !time.Now().Before(p.expires) {
+		return ErrDenied
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin invitation: %w", err)
@@ -505,7 +509,7 @@ func (s *Foundation) redeem(ctx context.Context, p Principal) error {
 	var workspace string
 	var invitations int
 	if err = tx.QueryRow(ctx, `SELECT COALESCE(min(client_id),''),count(*) FROM portal_invitations
- WHERE issuer=$1 AND subject=$2 AND NOT revoked AND expires_at>now()`, p.issuer, p.subject).Scan(&workspace, &invitations); err != nil {
+ WHERE issuer=$1 AND subject=$2 AND NOT revoked AND expires_at>now() AND ($3='' OR client_id=$3)`, p.issuer, p.subject, selected).Scan(&workspace, &invitations); err != nil {
 		return fmt.Errorf("read pending invitation: %w", err)
 	}
 	if invitations != 1 {
@@ -541,13 +545,16 @@ func (s *Foundation) redeem(ctx context.Context, p Principal) error {
 	if pending != 1 || !s.canInvite(p.subject, role) {
 		return ErrDenied
 	}
-	// An existing identity cannot gain a new client or revive revoked membership.
-	// No email matching, implicit account linking or entitlement transfer occurs.
-	result, err := tx.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES($1,$2,$3,$4) ON CONFLICT(issuer,subject) DO NOTHING`, p.issuer, p.subject, client, role)
+	result, err := tx.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role)
+ SELECT $1,$2,$3,$4 WHERE NOT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='operator')
+ ON CONFLICT DO NOTHING`, p.issuer, p.subject, client, role)
 	if err != nil {
 		return fmt.Errorf("create membership: %w", err)
 	}
 	if result.RowsAffected() != 1 {
+		return ErrDenied
+	}
+	if ctx.Err() != nil || !time.Now().Before(p.expires) {
 		return ErrDenied
 	}
 	if err = tx.Commit(ctx); err != nil {
@@ -597,7 +604,8 @@ func (s *Foundation) membershipState(ctx context.Context, p Principal) (string, 
 		return "", "", "", ErrDenied
 	}
 	var own, role, incarnation string
-	err := s.pool.QueryRow(ctx, `SELECT client_id,role,incarnation::text FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND NOT revoked AND ($3='' OR incarnation::text=$3)`, p.issuer, p.subject, p.membershipIncarnation).Scan(&own, &role, &incarnation)
+	err := s.pool.QueryRow(ctx, `SELECT client_id,role,incarnation::text FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND NOT revoked AND ($3='' OR incarnation::text=$3)
+ ORDER BY client_id LIMIT 1`, p.issuer, p.subject, p.membershipIncarnation).Scan(&own, &role, &incarnation)
 	// SQL completion is not authority to release expired or cancelled reads.
 	if ctx.Err() != nil || !time.Now().Before(p.expires) {
 		return "", "", "", ErrDenied

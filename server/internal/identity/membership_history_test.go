@@ -66,7 +66,7 @@ func TestMembershipConflictAndDeletionEvidence(t *testing.T) {
 	if membershipStamp(t, pool) != original || membershipEventCount(t, pool) != 1 {
 		t.Fatal("conflict-ignore created a phantom membership event")
 	}
-	if _, err := pool.Exec(ctx, insert+` ON CONFLICT(issuer,subject) DO UPDATE SET revoked=false`); err != nil {
+	if _, err := pool.Exec(ctx, insert+` ON CONFLICT(issuer,subject,client_id) DO UPDATE SET revoked=false`); err != nil {
 		t.Fatal(err)
 	}
 	if membershipStamp(t, pool) == original || membershipEventCount(t, pool) != 2 {

@@ -439,10 +439,10 @@ func TestRejectedAttemptsAndInvitationBindings(t *testing.T) {
 				if err := svc.Revoke(f.ctx, f.issuer, sub); err != nil {
 					t.Fatal(err)
 				}
-				if err := svc.Invite(f.ctx, Invitation{f.issuer, sub, "client-a", "client", expires}); !errors.Is(err, ErrDenied) {
+				if err := svc.Invite(f.ctx, Invitation{f.issuer, sub, "client-b", "client", expires}); !errors.Is(err, ErrDenied) {
 					t.Fatalf("a revoked member was re-invited: %v", err)
 				}
-				leftoverInvitation(t, pool, f, sub, "client-a")
+				leftoverInvitation(t, pool, f, sub, "client-b")
 			} else if err := svc.Invite(f.ctx, Invitation{f.issuer, sub, "client-a", "client", expires}); err != nil {
 				t.Fatal(err)
 			}
@@ -499,18 +499,16 @@ func leftoverInvitation(t *testing.T, pool *pgxpool.Pool, f brokerFixture, subje
 	}
 }
 
-// Inviting an existing member is refused. A current member signs straight in,
-// even with a leftover pending invitation, and gains nothing from it: the
-// invitation stays unused and its client is not added.
-func TestExistingMemberIgnoresAnotherInvitation(t *testing.T) {
+// A current member can receive another invitation and keeps their current
+// workspace at sign-in. Another membership requires accepting that invitation.
+func TestExistingMemberKeepsWorkspaceUntilAcceptingAnotherInvitation(t *testing.T) {
 	f := fixtureBroker(t)
 	pool := fixtureDB(t)
 	svc := enabled(t, pool, f)
 	_ = enroll(t, svc, f, "member", "client-b", "client")
-	if err := svc.Invite(f.ctx, Invitation{f.issuer, "member", "client-a", "client", time.Now().Add(time.Hour)}); !errors.Is(err, ErrDenied) {
-		t.Fatalf("an existing member was invited again: %v", err)
+	if err := svc.Invite(f.ctx, Invitation{f.issuer, "member", "client-a", "client", time.Now().Add(time.Hour)}); err != nil {
+		t.Fatalf("an existing member could not be invited to another workspace: %v", err)
 	}
-	leftoverInvitation(t, pool, f, "member", "client-a")
 	a, err := svc.Begin(f.ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -531,8 +529,8 @@ func TestExistingMemberIgnoresAnotherInvitation(t *testing.T) {
 	}
 }
 
-// One identity gets one pending invitation; sign-in never chooses between two.
-func TestOnePendingInvitationPerIdentity(t *testing.T) {
+// Keep one pending invitation per workspace and avoid choosing between them.
+func TestOnePendingInvitationPerWorkspace(t *testing.T) {
 	f := fixtureBroker(t)
 	pool := fixtureDB(t)
 	svc := enabled(t, pool, f)
@@ -540,8 +538,11 @@ func TestOnePendingInvitationPerIdentity(t *testing.T) {
 	if err := svc.Invite(f.ctx, Invitation{f.issuer, "twice", "client-a", "client", expires}); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.Invite(f.ctx, Invitation{f.issuer, "twice", "client-b", "client", expires}); !errors.Is(err, ErrDenied) {
-		t.Fatalf("a second pending invitation was created: %v", err)
+	if err := svc.Invite(f.ctx, Invitation{f.issuer, "twice", "client-b", "client", expires}); err != nil {
+		t.Fatalf("the second workspace was excluded: %v", err)
+	}
+	if err := svc.Invite(f.ctx, Invitation{f.issuer, "twice", "client-a", "client", expires}); !errors.Is(err, ErrDenied) {
+		t.Fatalf("a duplicate invitation was created: %v", err)
 	}
 	// Concurrent invitations of one identity serialize: exactly one is created.
 	var created atomic.Int32
@@ -561,7 +562,6 @@ func TestOnePendingInvitationPerIdentity(t *testing.T) {
 		t.Fatalf("concurrent invitations: created=%d stored=%d, want 1 and 1", created.Load(), concurrent)
 	}
 	// A second pending invitation that exists anyway is refused, not chosen.
-	leftoverInvitation(t, pool, f, "twice", "client-b")
 	if _, err := signIn(t, svc, f, "twice", nil); !errors.Is(err, ErrDenied) {
 		t.Fatalf("sign-in chose between two pending invitations: %v", err)
 	}
