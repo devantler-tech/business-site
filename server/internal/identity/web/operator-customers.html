@@ -89,10 +89,10 @@
   </section>
 {{end}}
 
-{{define "customer-delete-label"}}{{if eq . "da"}}Slet kundekonto{{else}}Delete customer account{{end}}{{end}}
+{{define "customer-delete-label"}}{{if eq . "da"}}Slet kundens konto{{else}}Delete customer account{{end}}{{end}}
 
 {{define "customer-delete-confirmation"}}
-  <p>{{if eq .Lang "da"}}Kundens login slettes permanent. Kunden mister adgang til alle arbejdsområder, og ventende invitationer annulleres. Fakturaer og andre dokumenter med lovpligtig opbevaring bevares.{{else}}This permanently deletes the customer’s sign-in, removes access to all workspaces, and cancels pending invitations. Invoices and other records that must be kept are retained.{{end}}</p>
+  <p>{{if eq .Lang "da"}}Kundens login slettes permanent. Kunden mister adgang til alle arbejdsområder, og alle åbne invitationer fjernes. Fakturaer og andre oplysninger, der skal gemmes, bevares.{{else}}This permanently deletes the customer’s sign-in, removes access to all workspaces, and cancels pending invitations. Invoices and other records that must be kept are retained.{{end}}</p>
   <form method="post" action="{{root}}/operator/api/customers/delete-account?lang={{.Lang}}">
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
     <input type="hidden" name="subject" value="{{.Account.Subject}}">

@@ -73,6 +73,11 @@ func TestDeleteCustomerAccountRequiresVerifiedProviderRemoval(t *testing.T) {
 		!strings.Contains(page, "Type DELETE to confirm") {
 		t.Fatalf("the account deletion confirmation was incomplete: %d", status)
 	}
+	danishDetail := customerAccountsPath + "?lang=da&account=" + subject + "&view=delete-account"
+	if status, page, _ := b.request("GET", danishDetail, nil, ""); status != http.StatusOK ||
+		!strings.Contains(page, "Slet kundens konto") || !strings.Contains(page, "alle åbne invitationer fjernes") {
+		t.Fatalf("the Danish account deletion confirmation was incomplete: %d", status)
+	}
 	protected := url.Values{"subject": {operatorSubject}, "confirm": {"DELETE"}, "csrf_token": form["csrf_token"]}
 	if status, _, _ := b.request("POST", path, protected, b.site.URL); status != http.StatusBadRequest || provider.calls != 0 {
 		t.Fatalf("operator identity reached customer account deletion: %d", status)
