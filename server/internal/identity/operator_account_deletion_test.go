@@ -19,13 +19,16 @@ type fixtureAccountDeletion struct {
 	journal *fixtureDeletionJournal
 	current CustomerDeletionTarget
 	calls   int
+	effects int
 	err     error
 }
 
 type fixtureDeletionJournal struct {
-	issuer string
-	target CustomerDeletionTarget
-	err    error
+	issuer     string
+	target     CustomerDeletionTarget
+	confirmed  CustomerDeletionTarget
+	err        error
+	confirmErr error
 }
 
 func (j *fixtureDeletionJournal) RecordDeletionIntent(_ context.Context, issuer string, target CustomerDeletionTarget) error {
@@ -36,6 +39,17 @@ func (j *fixtureDeletionJournal) RecordDeletionIntent(_ context.Context, issuer 
 		return errors.New("fixture journal refused an altered deletion target")
 	}
 	j.issuer, j.target = issuer, target
+	return nil
+}
+
+func (j *fixtureDeletionJournal) RecordDeletionConfirmation(_ context.Context, issuer string, target CustomerDeletionTarget) error {
+	if j.confirmErr != nil {
+		return j.confirmErr
+	}
+	if j.issuer != issuer || j.target != target {
+		return errors.New("fixture could not confirm the original deletion record")
+	}
+	j.confirmed = target
 	return nil
 }
 
@@ -62,6 +76,9 @@ func (f *fixtureAccountDeletion) DeleteCustomerAccount(_ context.Context, target
 		return ErrDenied
 	}
 	f.calls++
+	if f.err == nil && f.effects == 0 {
+		f.effects++
+	}
 	return f.err
 }
 
@@ -126,12 +143,13 @@ func TestDeleteCustomerAccountRequiresVerifiedProviderRemoval(t *testing.T) {
 	}
 	journal.err = nil
 	provider.current.CreatedAt = original.CreatedAt.Add(time.Nanosecond)
-	if status, _, _ := b.request("POST", path, form, b.site.URL); status != http.StatusServiceUnavailable || provider.calls != 0 || journal.target != original {
+	if status, _, _ := b.request("POST", path, form, b.site.URL); status != http.StatusServiceUnavailable || provider.calls != 0 ||
+		journal.target != original || journal.confirmed != (CustomerDeletionTarget{}) {
 		t.Fatalf("retry under a reused identity did not preserve the original deletion target: %d", status)
 	}
 	provider.current = original
 	if status, _, _ := b.request("POST", path, form, b.site.URL); status != http.StatusServiceUnavailable || provider.calls != 1 ||
-		journal.issuer != b.f.issuer || journal.target != original {
+		journal.issuer != b.f.issuer || journal.target != original || journal.confirmed != (CustomerDeletionTarget{}) {
 		t.Fatalf("unconfirmed provider removal appeared successful: %d", status)
 	}
 	var accessEnded bool
@@ -153,10 +171,22 @@ func TestDeleteCustomerAccountRequiresVerifiedProviderRemoval(t *testing.T) {
 	}
 	b.client.Jar = operatorJar
 	provider.err = nil
-	if status, result, _ := b.request("POST", path, form, b.site.URL); status != http.StatusOK || !strings.Contains(result, "\"deleted\":true") || provider.calls != 2 {
-		t.Fatalf("retry did not confirm deletion: status=%d effects=%d", status, provider.calls)
+	journal.confirmErr = errors.New("fixture confirmation unavailable")
+	if status, _, _ := b.request("POST", path, form, b.site.URL); status != http.StatusServiceUnavailable || provider.effects != 1 ||
+		journal.confirmed != (CustomerDeletionTarget{}) {
+		t.Fatalf("provider removal without an independent confirmation appeared complete: %d", status)
 	}
-	if status, _, _ := b.request("POST", path, form, b.site.URL); status != http.StatusOK || provider.calls != 2 {
+	var pendingConfirmation bool
+	if err := b.pool.QueryRow(t.Context(), `SELECT confirmed_at IS NULL
+ FROM portal_customer_deletions WHERE issuer=$1 AND subject=$2`, b.f.issuer, subject).Scan(&pendingConfirmation); err != nil || !pendingConfirmation {
+		t.Fatalf("missing independent confirmation was not recoverable: %v", err)
+	}
+	journal.confirmErr = nil
+	if status, result, _ := b.request("POST", path, form, b.site.URL); status != http.StatusOK ||
+		!strings.Contains(result, "\"deleted\":true") || provider.calls != 3 || provider.effects != 1 || journal.confirmed != original {
+		t.Fatalf("retry did not confirm deletion: status=%d attempts=%d", status, provider.calls)
+	}
+	if status, _, _ := b.request("POST", path, form, b.site.URL); status != http.StatusOK || provider.calls != 3 {
 		t.Fatalf("completed deletion repeated the provider operation: %d", status)
 	}
 	b.signOut()

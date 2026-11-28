@@ -18,11 +18,13 @@ type CustomerDeletionTarget struct {
 	CreatedAt    time.Time
 }
 
-// CustomerAccountDeletionJournal must put the authorized intent in storage
-// that survives restoration of both portal and sign-in databases. It returns
-// nil only after the exact target is durable. Retries are idempotent.
+// CustomerAccountDeletionJournal preserves both stages across restoration of
+// the portal and sign-in databases. Each write is durable and idempotent for
+// the exact target. Recovery may replay a confirmed entry. An intent without
+// confirmation requires resolution before the affected restored account can sign in.
 type CustomerAccountDeletionJournal interface {
 	RecordDeletionIntent(ctx context.Context, issuer string, target CustomerDeletionTarget) error
+	RecordDeletionConfirmation(ctx context.Context, issuer string, target CustomerDeletionTarget) error
 }
 
 // CustomerAccountDeletion is the separate authority for permanently removing a
@@ -165,6 +167,9 @@ func (b *browser) confirmCustomerAccountDeletion(ctx context.Context, issuer, su
 	if err := b.foundation.customerDeletion.DeleteCustomerAccount(ctx, target, func() bool {
 		return b.operatorMutationAllowed(ctx, tx)
 	}); err != nil {
+		return err
+	}
+	if err := b.foundation.customerDeletionJournal.RecordDeletionConfirmation(ctx, issuer, target); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE portal_customer_deletions SET confirmed_at=clock_timestamp()
