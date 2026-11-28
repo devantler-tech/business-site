@@ -36,8 +36,6 @@ Numina's public API, read on 2026-11-13 from `developers.numina.app/openapi.json
 - **Offers (quotes):** read-only. They are created in the Numina UI.
 - **Not in the API:** subscriptions and reminders, which are UI only. There are
   no webhooks, payment links or customer portal.
-- **Stripe:** the native integration books Stripe sales, fees and payouts. It is
-  switched on by contacting Numina.
 
 ## Decision
 
@@ -62,8 +60,9 @@ Numina's public API, read on 2026-11-13 from `developers.numina.app/openapi.json
      portal reads that state by polling. This is #549.
    - **Card or MobilePay.** Stripe Checkout takes one-off payments; a Stripe
      subscription takes monthly card payments. MobilePay is single-use only, so
-     it is never offered for a subscription. Stripe sends the receipt, and
-     Numina's Stripe integration books the sale, fee and payout. The order is
+     it is never offered for a subscription. Stripe sends the customer invoice.
+     [Bookkeeper](https://github.com/devantler-tech/bookkeeper/issues/25) owns
+     reconciliation from Stripe into Numina through the two APIs. The order is
      funded only by a signature-verified success event for its exact object: for
      Checkout, `checkout.session.completed` with `payment_status` `paid`, or
      `checkout.session.async_payment_succeeded`; for a subscription, `invoice.paid`
@@ -121,8 +120,8 @@ Numina's public API, read on 2026-11-13 from `developers.numina.app/openapi.json
     booking.
   - That EAN delivery happens on booking is inferred from the documentation, and
     must be checked with a real public customer before relying on it.
-- **Maintainer actions before the card path goes live:** switch on Numina's
-  Stripe integration through Numina support, and store the credentials above.
+- **Before opening the portal card path:** verify Bookkeeper's Stripe-to-Numina
+  reconciliation and store the credentials above.
 
 ## Alternatives
 
