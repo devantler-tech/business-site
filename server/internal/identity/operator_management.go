@@ -18,6 +18,7 @@ import (
 )
 
 var managementRoutes = []operatorRoute{
+	{"POST", "/customers/delete-account", "customers.accounts.delete", (*browser).deleteCustomerAccount},
 	{"POST", "/invitations/revoke", "invitations.revoke", (*browser).revokeCustomerInvitation},
 	{"POST", "/workspaces", "workspaces.create", (*browser).createCustomerWorkspace},
 	{"POST", "/workspaces/rename", "workspaces.rename", (*browser).renameCustomerWorkspace},

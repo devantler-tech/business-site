@@ -44,11 +44,13 @@
 
 {{define "operator-customer-account"}}
   <div class="operator-actions">
-    <a href="{{.BackURL}}">{{if .Remove}}{{if eq .Lang "da"}}Tilbage til kunden{{else}}Back to customer{{end}}{{else}}{{if eq .Lang "da"}}Tilbage til kunder{{else}}Back to customers{{end}}{{end}}</a>
+    <a href="{{.BackURL}}">{{if or .Remove .ConfirmDeletion}}{{if eq .Lang "da"}}Tilbage til kunden{{else}}Back to customer{{end}}{{else}}{{if eq .Lang "da"}}Tilbage til kunder{{else}}Back to customers{{end}}{{end}}</a>
   </div>
   <section class="operator-panel" aria-labelledby="customer-access">
-    <h2 id="customer-access">{{if .Remove}}{{template "customer-remove-label" .Lang}}{{else}}{{if eq .Lang "da"}}Konto og adgang{{else}}Account and access{{end}}{{end}}</h2>
-    {{if .Remove}}
+    <h2 id="customer-access">{{if .ConfirmDeletion}}{{template "customer-delete-label" .Lang}}{{else if .Remove}}{{template "customer-remove-label" .Lang}}{{else}}{{if eq .Lang "da"}}Konto og adgang{{else}}Account and access{{end}}{{end}}</h2>
+    {{if .ConfirmDeletion}}
+    {{template "customer-delete-confirmation" .}}
+    {{else if .Remove}}
     <p>{{if eq .Lang "da"}}Kunden mister straks adgangen til{{else}}The customer will immediately lose access to{{end}} <strong>{{.Remove.Name}}</strong>. {{template "customer-remove-explanation" .Lang}}</p>
     <form class="operator-actions" method="post" action="{{root}}/operator/api/members/remove?lang={{.Lang}}&amp;focus=customer">
       {{template "customer-account-fields" .}}
@@ -79,9 +81,30 @@
       {{end}}
     </ul>
     {{end}}
-    <p><a href="{{root}}/operator/invitations/new?lang={{.Lang}}">{{if eq .Lang "da"}}Inviter til et arbejdsområde{{else}}Invite to a workspace{{end}}</a></p>
+    <div class="operator-actions">
+      <a href="{{root}}/operator/invitations/new?lang={{.Lang}}">{{if eq .Lang "da"}}Inviter til et arbejdsområde{{else}}Invite to a workspace{{end}}</a>
+      {{if .DeleteURL}}<a href="{{.DeleteURL}}" class="operator-danger-link">{{template "customer-delete-label" .Lang}}</a>{{end}}
+    </div>
     {{end}}
   </section>
+{{end}}
+
+{{define "customer-delete-label"}}{{if eq . "da"}}Slet kundens konto{{else}}Delete customer account{{end}}{{end}}
+
+{{define "customer-delete-confirmation"}}
+  <p>{{if eq .Lang "da"}}Kundens login slettes permanent. Kunden mister adgang til alle arbejdsområder, og alle åbne invitationer fjernes. Fakturaer og andre oplysninger, der skal gemmes, bevares.{{else}}This permanently deletes the customer’s sign-in, removes access to all workspaces, and cancels pending invitations. Invoices and other records that must be kept are retained.{{end}}</p>
+  <form method="post" action="{{root}}/operator/api/customers/delete-account?lang={{.Lang}}">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <input type="hidden" name="subject" value="{{.Account.Subject}}">
+    <div class="operator-field">
+      <label for="confirm-account-deletion">{{if eq .Lang "da"}}Skriv DELETE for at bekræfte{{else}}Type DELETE to confirm{{end}}</label>
+      <input id="confirm-account-deletion" name="confirm" type="text" autocomplete="off" required maxlength="6">
+    </div>
+    <div class="operator-actions">
+      <button type="submit" class="operator-danger-button">{{template "customer-delete-label" .Lang}}</button>
+      <a href="{{.BackURL}}">{{if eq .Lang "da"}}Annuller{{else}}Cancel{{end}}</a>
+    </div>
+  </form>
 {{end}}
 
 {{define "customer-remove-label"}}{{if eq . "da"}}Fjern fra arbejdsområdet{{else}}Remove from workspace{{end}}{{end}}

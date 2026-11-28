@@ -377,6 +377,15 @@ only the timestamp of the last delivery attempt. Acceptance and invitation
 cleanup remove both rows through their foreign keys. The scheduled retention
 job clears recipients of revoked and expired invitations.
 
+Customer account deletion records the issuer, subject, provider organization and
+exact account creation time before ending workspace access. Pending and completed
+identities cannot receive invitations or open a workspace session. The runtime
+may add an intent and update only its confirmation time. The operator action
+requires a separately guarded provider capability and an independent journal
+for the intent and the verified provider outcome. Recovery can replay confirmed
+removals. An intent without confirmation must be resolved before the affected
+restored account can sign in.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

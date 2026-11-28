@@ -135,7 +135,9 @@ type Foundation struct {
 	previewStoreCheck               func(context.Context) error
 	previewStoreVerified            atomic.Bool
 	// customers is the optional organization-scoped provider for operator actions.
-	customers CustomerDirectory
+	customers               CustomerDirectory
+	customerDeletion        CustomerAccountDeletion
+	customerDeletionJournal CustomerAccountDeletionJournal
 	// agents is immutable policy and a distinct verifier, installed at startup.
 	agents *agentAccess
 }
@@ -252,6 +254,7 @@ func (s *Foundation) enrollOperator(ctx context.Context, p Principal) error {
 	}
 	if _, err = tx.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role)
  SELECT $1,$2,$3,'operator' WHERE NOT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2)
+ AND NOT `+customerDeletionExists+`
  ON CONFLICT DO NOTHING`, p.issuer, p.subject, operatorWorkspace); err != nil {
 		return fmt.Errorf("create operator: %w", err)
 	}
@@ -332,7 +335,8 @@ const invitationIdentityAvailable = `NOT EXISTS (
  SELECT 1 FROM portal_invitations WHERE issuer=$1 AND subject=$2 AND NOT revoked AND expires_at>now()
  AND (client_id=$3 OR role='operator' OR $4='operator'))
  AND NOT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2
- AND (client_id=$3 OR role='operator' OR $4='operator'))`
+ AND (client_id=$3 OR role='operator' OR $4='operator'))
+ AND NOT ` + customerDeletionExists
 
 // invite retains the control-plane rules and permits the operator API to bind
 // its final commit to the original caller on its already locked connection.
@@ -469,13 +473,14 @@ func (s *Foundation) completeSignInProof(ctx context.Context, nonce, raw string,
 		_, _, p.membershipIncarnation, err = s.membershipState(ctx, p)
 	}
 	if errors.Is(err, ErrDenied) && allowCustomerWithoutWorkspace && s.isCustomerSignIn(p.subject) && ctx.Err() == nil && time.Now().Before(p.expires) {
-		var operatorAccount bool
-		if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='operator')`, p.issuer, p.subject).Scan(&operatorAccount); err != nil {
-			return Principal{}, fmt.Errorf("check existing operator identity: %w", err)
+		var accountUnavailable bool
+		if err := s.pool.QueryRow(ctx, `SELECT `+customerDeletionExists+` OR EXISTS (
+ SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='operator')`, p.issuer, p.subject).Scan(&accountUnavailable); err != nil {
+			return Principal{}, fmt.Errorf("check customer account eligibility: %w", err)
 		}
 		// A verified customer account carries no workspace authority until a
 		// current membership incarnation is bound to the session.
-		if !operatorAccount && s.ready(ctx) && ctx.Err() == nil && time.Now().Before(p.expires) {
+		if !accountUnavailable && s.ready(ctx) && ctx.Err() == nil && time.Now().Before(p.expires) {
 			return p, nil
 		}
 	}
