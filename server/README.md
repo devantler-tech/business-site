@@ -281,7 +281,7 @@ The privacy notice keeps a former client's portal records for 3 years after thei
 portal membership ended (#614). The same executable's exclusive one-shot
 `--retention-purge --migration-database-file <file>` mode deletes them; a Kubernetes job
 passes `--migration-database-projection <file>` instead, as for the migration (MIGRATIONS.md).
-It runs as the migration role, because the web runtime can delete none of this history, and checks first
+It runs as the migration role, and checks first
 that the role owns the complete schema. A client is due when all their memberships were client
 memberships, none is still active, no invitation is pending, and the last membership change lies
 more than `identity.RetentionYears` (3) years back; a member's move to another client counts as a
@@ -297,6 +297,13 @@ prints only how many former clients lost records.
 Invoices and other accounting records live in Numina and Stripe for 5 years, and backups age
 out after 30 days. A daily CronJob in the package (`deploy/`) is to run it beside the portal
 migration Job, on the same image and migration credential, with `concurrencyPolicy: Forbid`.
+
+Closed workspaces shows the end of that retention period. A signed-in human operator
+can confirm early deletion for test cleanup or an approved customer request. The action
+removes workspace, contact, invitation, request and unaccepted proposal records once
+access has ended. Workspaces with protected financial, agreement, work or booking
+records remain subject to scheduled retention. Sign-in account closure history and the
+operator audit trail follow their own deadlines.
 
 ### Separate native identity preparation job
 

@@ -17,8 +17,20 @@ import (
 )
 
 type closedCustomerWorkspace struct {
-	Name string
-	At   time.Time
+	ID, Name, PurgeState string
+	At, RetentionStart   time.Time
+}
+
+func (w closedCustomerWorkspace) ClosedDate() string {
+	return w.At.In(copenhagen).Format(time.DateOnly)
+}
+
+func (w closedCustomerWorkspace) RetentionDate() string {
+	return w.RetentionStart.In(copenhagen).AddDate(RetentionYears, 0, 0).Format(time.DateOnly)
+}
+
+func (w closedCustomerWorkspace) Closure() string {
+	return w.At.UTC().Format(time.RFC3339Nano)
 }
 
 type staleWorkspaceInvitations struct {
@@ -54,7 +66,11 @@ func (b *browser) loadCustomerWorkspacePage(ctx context.Context, page *managemen
 	case "closed":
 		page.View = view
 		page.Intro = ""
-		return b.readClosedWorkspaces(ctx, page)
+		var err error
+		page.Closed, err = b.closedWorkspaces(ctx, "")
+		return err
+	case "purge-confirm":
+		return b.readWorkspacePurge(ctx, page, workspace)
 	case "cleanup":
 		page.View = view
 		page.Intro = ""
@@ -111,15 +127,24 @@ func workspaceMatchesSearch(workspace workspaceView, invitations []pendingInvita
 	return false
 }
 
-func (b *browser) readClosedWorkspaces(ctx context.Context, page *managementPage) error {
-	rows, err := b.foundation.pool.Query(ctx, `SELECT COALESCE(display_name,workspace_id),closed_at
- FROM portal_workspace_settings WHERE closed_at IS NOT NULL
- ORDER BY closed_at DESC,workspace_id LIMIT 100`)
+func (b *browser) closedWorkspaces(ctx context.Context, workspace string) ([]closedCustomerWorkspace, error) {
+	// Match the scheduled purge: the last membership event (including a
+	// successor event after a transfer) starts retention; use closure when
+	// this workspace never had a membership.
+	rows, err := b.foundation.pool.Query(ctx, `SELECT w.workspace_id,COALESCE(w.display_name,w.workspace_id),
+ public.portal_workspace_purge_state(w.workspace_id),w.closed_at,COALESCE(h.last_event,w.closed_at)
+ FROM (SELECT workspace_id,display_name,closed_at FROM portal_workspace_settings
+       WHERE closed_at IS NOT NULL AND ($1::text='' OR workspace_id=$1)
+       ORDER BY closed_at DESC,workspace_id LIMIT 100) w
+ LEFT JOIN LATERAL (SELECT max(greatest(a.recorded_at,n.recorded_at)) AS last_event
+  FROM portal_membership_transitions a
+  LEFT JOIN portal_membership_transitions n ON n.previous_incarnation=a.incarnation
+  WHERE a.client_id=w.workspace_id) h ON true
+ ORDER BY w.closed_at DESC,w.workspace_id`, workspace)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	page.Closed, err = pgx.CollectRows(rows, pgx.RowToStructByPos[closedCustomerWorkspace])
-	return err
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[closedCustomerWorkspace])
 }
 
 func (b *browser) readStaleWorkspaces(ctx context.Context, page *managementPage) error {
