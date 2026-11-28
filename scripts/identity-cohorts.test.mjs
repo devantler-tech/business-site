@@ -8,7 +8,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { load } from "js-yaml";
-import { checkCohorts, readEvidence, failureDiagnostic } from "./identity-cohorts.mjs";
+import { checkCohorts, readEvidence, failureDiagnostic, selectFamilies } from "./identity-cohorts.mjs";
 
 const workflow = load(readFileSync(".github/workflows/ci.yaml", "utf8"));
 const commands = [
@@ -17,11 +17,15 @@ const commands = [
   "go test -race -coverprofile=coverage-core.out -p=1 ./... -count=1 -timeout=90s -json -skip '^Test(Work(Approval|Review|Eligibility|Funding|Lease|QueueRevision)|Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)' | tee test-core.jsonl",
   "go test -race -coverprofile=coverage-work.out -p=1 ./... -count=1 -timeout=90s -json -run '^TestWork(Approval|Review|Eligibility|Funding|Lease|QueueRevision)' | tee test-work.jsonl",
   "go test -race -coverprofile=coverage-private.out -p=1 ./... -count=1 -timeout=90s -json -run '^Test(Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)' | tee test-private.jsonl",
-  "node ../scripts/identity-cohorts.mjs",
+  "node ../scripts/identity-cohorts.mjs core",
+  "node ../scripts/identity-cohorts.mjs work private",
 ];
-
-/** The observer's self-test needs npm; actual database evidence does not. */
-const commandJob = (w, index) => w.jobs[index === 0 ? "test-portal-quality" : "test-portal-identity"];
+// The observer's self-test needs npm; actual database evidence does not. Each
+// database job verifies its own cohorts against the complete compiled inventory.
+const jobNames = ["test-portal-quality", "test-portal-identity", "test-portal-flows"];
+const placements = [
+  [0, 0], [1, 1], [1, 2], [1, 5], [2, 1], [2, 3], [2, 4], [2, 6],
+].map(([job, command]) => ({ name: jobNames[job], command: commands[command] }));
 
 /** Require every actual cohort command once, unconditionally and in execution order. */
 function checkWorkflow(w) {
@@ -30,60 +34,75 @@ function checkWorkflow(w) {
   assert.ok(quality);
   assert.equal(quality.if, undefined);
   assert.ok(quality["continue-on-error"] == null || quality["continue-on-error"] === false);
-  assert.deepEqual(w.jobs["test-combined-runtime"].needs, ["test-portal-quality", "test-portal-identity"]);
+  assert.deepEqual(w.jobs["test-combined-runtime"].needs, ["test-portal-quality", "test-portal-identity", "test-portal-flows"]);
   assert.equal(job.if, undefined);
   assert.ok(job["continue-on-error"] == null || job["continue-on-error"] === false);
-  let previous = job.steps.findIndex((s) => s.run === "bash scripts/check-go-contact.sh");
-  assert.ok(previous >= 0);
-  for (const [i, command] of commands.entries()) {
-    const owner = commandJob(w, i);
-    const steps = [quality, job].flatMap((portal) => portal.steps).filter((s) => s.run === command);
+  const flows = w.jobs["test-portal-flows"];
+  assert.equal(flows.if, undefined);
+  assert.ok(flows["continue-on-error"] == null || flows["continue-on-error"] === false);
+  const provision = (s) => s.run?.startsWith("psql -h localhost");
+  assert.equal(flows.steps.filter(provision).length, 1, "the second database needs the same provisioned roles");
+  assert.deepEqual(flows.steps.find(provision), job.steps.find(provision));
+  const previous = {
+    "test-portal-identity": job.steps.findIndex((s) => s.run === "bash scripts/check-go-contact.sh"),
+    "test-portal-flows": flows.steps.findIndex(provision),
+  };
+  assert.ok(Object.values(previous).every((index) => index >= 0));
+  for (const [i, { name, command }] of placements.entries()) {
+    const owner = w.jobs[name];
+    const steps = owner.steps.filter((s) => s.run === command);
     assert.equal(steps.length, 1, `exactly one required invocation: ${command}`);
+    assert.equal(
+      jobNames.flatMap((portal) => w.jobs[portal].steps).filter((s) => s.run === command).length,
+      placements.filter((placement) => placement.command === command).length,
+      `no other portal job may run: ${command}`,
+    );
     const step = steps[0];
     const index = owner.steps.indexOf(step);
     if (i === 0) {
       const install = quality.steps.findIndex(s => s.run === "npm ci");
       assert.ok(install >= 0 && index > install);
     } else {
-      assert.ok(index > previous);
-      previous = index;
+      assert.ok(index > previous[name]);
+      previous[name] = index;
     }
     assert.equal(step.if, undefined);
     assert.ok(step["continue-on-error"] == null || step["continue-on-error"] === false);
     assert.equal(step["working-directory"] ?? owner.defaults?.run?.["working-directory"], i === 0 ? "." : "server");
-    if (i >= 2 && i <= 4) assert.equal(step.shell, "bash", "tee must preserve go failure through pipefail");
+    if (command.includes("| tee ")) assert.equal(step.shell, "bash", "tee must preserve go failure through pipefail");
   }
 }
 
 test("all three complete ordinary cohorts and their inventory/result checks are mandatory", () => checkWorkflow(workflow));
-for (let i = 0; i < commands.length; i++) {
+for (const [i, { name, command }] of placements.entries()) {
+  const next = jobNames[(jobNames.indexOf(name) + 1) % jobNames.length];
   for (const [fault, mutate] of [
     [
       "omitted",
       (w, step) => {
-        const job = commandJob(w, i);
+        const job = w.jobs[name];
         job.steps = job.steps.filter((s) => s !== step);
       },
     ],
     [
       "duplicated",
       (w, step) => {
-        commandJob(w, i).steps.push(structuredClone(step));
+        w.jobs[name].steps.push(structuredClone(step));
       },
     ],
     [
       "duplicated in the other portal job",
       (w, step) => {
-        const other = w.jobs[i === 0 ? "test-portal-identity" : "test-portal-quality"];
+        const other = w.jobs[next];
         other.steps.push(structuredClone(step));
       },
     ],
     [
       "moved to the other portal job",
       (w, step) => {
-        const owner = commandJob(w, i);
+        const owner = w.jobs[name];
         owner.steps = owner.steps.filter((s) => s !== step);
-        const other = w.jobs[i === 0 ? "test-portal-identity" : "test-portal-quality"];
+        const other = w.jobs[next];
         other.steps.push(step);
       },
     ],
@@ -108,7 +127,7 @@ for (let i = 0; i < commands.length; i++) {
   ])
     test(`workflow refuses ${fault} cohort boundary ${i}`, () => {
       const changed = structuredClone(workflow);
-      const step = commandJob(changed, i).steps.find((s) => s.run === commands[i]);
+      const step = changed.jobs[name].steps.find((s) => s.run === command);
       assert.ok(step);
       mutate(changed, step);
       assert.throws(() => checkWorkflow(changed));
@@ -124,7 +143,19 @@ for (const [name, from, to] of [
 ])
   test(`workflow refuses ${name}`, () => {
     const changed = structuredClone(workflow);
-    changed.jobs["test-portal-identity"].steps.find((s) => s.run === commands[3]).run = commands[3].replace(from, to);
+    changed.jobs["test-portal-flows"].steps.find((s) => s.run === commands[3]).run = commands[3].replace(from, to);
+    assert.throws(() => checkWorkflow(changed));
+  });
+for (const [name, mutate] of [
+  ["a conditional second database job", (w) => { w.jobs["test-portal-flows"].if = "false"; }],
+  ["an error-tolerant second database job", (w) => { w.jobs["test-portal-flows"]["continue-on-error"] = true; }],
+  ["an unprovisioned second database", (w) => { w.jobs["test-portal-flows"].steps = w.jobs["test-portal-flows"].steps.filter((s) => !s.run?.startsWith("psql")); }],
+  ["a second database provisioned conditionally", (w) => { w.jobs["test-portal-flows"].steps.find((s) => s.run?.startsWith("psql")).if = "false"; }],
+  ["a verifier that drops the private cohort", (w) => { w.jobs["test-portal-flows"].steps.find((s) => s.run === commands[6]).run = "node ../scripts/identity-cohorts.mjs work"; }],
+])
+  test(`workflow refuses ${name}`, () => {
+    const changed = structuredClone(workflow);
+    mutate(changed);
     assert.throws(() => checkWorkflow(changed));
   });
 test("workflow refuses a pipeline without explicit bash pipefail", () => {
@@ -192,6 +223,32 @@ test("all subtests stay within their selected parent and packages without test f
     { packages: 2, tests: 18, core: 4, work: 6, private: 8 },
   );
 });
+/** Verify a subset of families, each with one coverage profile, against the complete inventory. */
+function checkSubset(selected, results, inventoryEvents = inventory) {
+  return checkCohorts([inventoryEvents, ...results].map(jsonLines), results.map(() => coverage), selected);
+}
+test("each job verifies its own cohorts against the complete inventory", () => {
+  assert.deepEqual(checkSubset(["core"], [core]), { packages: 1, tests: 4, core: 4, work: 0, private: 0 });
+  assert.deepEqual(checkSubset(["work", "private"], [work, privateFlows]), {
+    packages: 1, tests: 14, core: 0, work: 6, private: 8,
+  });
+  assert.deepEqual(selectFamilies([]), ["core", "work", "private"]);
+  assert.deepEqual(selectFamilies(["private", "work"]), ["work", "private"]);
+});
+for (const [fault, change] of [
+  ["no family", () => checkSubset([], [])],
+  ["an unknown family", () => checkSubset(["other"], [core])],
+  ["a repeated family", () => checkSubset(["core", "core"], [core, core])],
+  ["reordered families", () => checkSubset(["private", "work"], [privateFlows, work])],
+  ["unknown CLI family", () => selectFamilies(["core", "other"])],
+  ["repeated CLI family", () => selectFamilies(["work", "work"])],
+  ["fewer results than families", () => checkSubset(["work", "private"], [work])],
+  ["another family's results", () => checkSubset(["core"], [work])],
+  ["a family missing a test", () => checkSubset(["work", "private"], [work, execution(privateNames.slice(1))])],
+  ["a family running a foreign test", () => checkSubset(["core"], [execution([...ordinary])])],
+  ["an empty selected family", () => checkSubset(["work"], [execution([])], [event("start"), event("output", { Output: "TestBroker\n" }), event("pass")])],
+])
+  test(`cohort selection refuses ${fault}`, () => assert.throws(change, assert.AssertionError));
 for (const [fault, change] of [
   ["empty inventory", () => check([])],
   ["duplicate inventory", () => check([...inventory.slice(0, -1), inventory[1], event("pass")])],
@@ -325,8 +382,9 @@ test("actual CLI diagnostics identify refusals without echoing evidence or priva
   }))
     fs.writeFileSync(join(dir, name), contents);
   /** Execute the real CLI in an owned private fixture directory. */
-  const run = () => {
-    const result = spawnSync(process.execPath, [fileURLToPath(new URL("./identity-cohorts.mjs", import.meta.url))], {
+  const run = (...families) => {
+    const script = fileURLToPath(new URL("./identity-cohorts.mjs", import.meta.url));
+    const result = spawnSync(process.execPath, [script, ...families], {
       cwd: dir,
       encoding: "utf8",
       timeout: 3000,
@@ -335,6 +393,14 @@ test("actual CLI diagnostics identify refusals without echoing evidence or priva
     return result;
   };
   assert.equal(run().status, 0, "all unrelated inputs must be valid first");
+  assert.match(run("core").stdout, /: 4 tests in 1 packages; core=4;/);
+  assert.match(run("work", "private").stdout, /: 14 tests in 1 packages; work=6, private=8;/);
+  const unknown = run("FICTIONAL_PRIVATE_SENTINEL");
+  assert.equal(unknown.status, 1);
+  assert.equal(
+    unknown.stderr.trim(),
+    "Ordinary Go cohort evidence is incomplete or failed: requested families must be known and distinct",
+  );
   fs.writeFileSync(
     join(dir, "test-core.jsonl"),
     jsonLines(core.map((e) => ({ ...e, Package: "example.test/FICTIONAL_PRIVATE_SENTINEL" }))),

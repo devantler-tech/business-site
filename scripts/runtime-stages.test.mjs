@@ -11,17 +11,22 @@ const workflow = load(readFileSync('.github/workflows/ci.yaml', 'utf8'));
 /** Check the real job boundaries, not a simulated runner or elapsed-time promise. */
 function assertStages(w) {
   const identity = w.jobs['test-portal-identity'];
+  const flows = w.jobs['test-portal-flows'];
   const quality = w.jobs['test-portal-quality'];
   const runtime = w.jobs['test-combined-runtime'];
-  assert.ok(identity && quality && runtime, 'quality, database tests and packaging need separate budgets');
-  assert.deepEqual(runtime.needs, ['test-portal-quality', 'test-portal-identity']);
+  assert.ok(identity && flows && quality && runtime, 'quality, both database tests and packaging need separate budgets');
+  assert.deepEqual(runtime.needs, ['test-portal-quality', 'test-portal-identity', 'test-portal-flows']);
   assert.equal(quality.services, undefined, 'quality observers do not need a database');
   assert.equal(quality.needs, undefined, 'quality checks run independently of database tests');
-  assert.equal(identity.needs, undefined, 'database tests run independently of quality setup');
-  assert.equal(identity.steps.some(s => /\bnpm\b|\bnpx\b/.test(s.run ?? '')), false, 'database checks must not reinstall frontend tooling');
+  for (const database of [identity, flows]) {
+    assert.equal(database.needs, undefined, 'database tests run independently of quality setup');
+    assert.equal(database.steps.some(s => /\bnpm\b|\bnpx\b/.test(s.run ?? '')), false, 'database checks must not reinstall frontend tooling');
+    assert.equal(database.steps.some(s => s.run?.includes('scripts/package-runtime.sh')), false);
+  }
+  for (const shared of ['runs-on', 'services', 'env', 'defaults']) assert.deepEqual(flows[shared], identity[shared], 'both database stages need the same isolated fixture');
   assert.ok(quality.steps.some(s => s.run === 'npm ci'));
   assert.ok(quality.steps.some(s => s.run === 'node --test scripts/identity-cohorts.test.mjs'));
-  for (const [name, job] of [['test-portal-quality', quality], ['test-portal-identity', identity], ['test-combined-runtime', runtime]]) {
+  for (const [name, job] of [['test-portal-quality', quality], ['test-portal-identity', identity], ['test-portal-flows', flows], ['test-combined-runtime', runtime]]) {
     assert.equal(job.if, undefined);
     assert.ok(job['continue-on-error'] == null || job['continue-on-error'] === false);
     assert.equal(job['timeout-minutes'], 10, 'do not extend the existing job budget');
@@ -31,8 +36,6 @@ function assertStages(w) {
       assert.ok(w.jobs[gate].steps[0].with['job-results'].includes('${{ needs.' + name + '.result }}'));
     }
   }
-  assert.equal(identity.steps.some(s => s.run === 'npm --prefix web ci'), false);
-  assert.equal(identity.steps.some(s => s.run?.includes('scripts/package-runtime.sh')), false);
   assert.equal(runtime.services, undefined, 'packaging does not provision the identity database again');
   const checkout = runtime.steps.find(s => s.uses?.startsWith('actions/checkout@'));
   assert.equal(checkout?.with?.['fetch-depth'], 0);
@@ -102,7 +105,7 @@ test('the actual renderer startup command propagates failure even after plausibl
 // Hosted execution is still required to prove the real commands finish in time.
 function delayedSetup(w, failingStage = '') {
   const attempted = [];
-  for (const name of ['test-portal-quality', 'test-portal-identity', 'test-combined-runtime']) {
+  for (const name of ['test-portal-quality', 'test-portal-identity', 'test-portal-flows', 'test-combined-runtime']) {
     const job = w.jobs[name];
     if (!job) continue;
     attempted.push(name);
@@ -128,7 +131,7 @@ test('delayed setup exhausts a collapsed budget but fits independently bounded s
   delete collapsed.jobs['test-combined-runtime'];
   assert.equal(delayedSetup(collapsed).timeout, true);
   assert.deepEqual(delayedSetup(workflow), {
-    attempted: ['test-portal-quality', 'test-portal-identity', 'test-combined-runtime'], published: true, timeout: false,
+    attempted: ['test-portal-quality', 'test-portal-identity', 'test-portal-flows', 'test-combined-runtime'], published: true, timeout: false,
   });
 });
 
@@ -154,6 +157,16 @@ for (const [name, mutate] of [
   ['conditional package stage', w => { w.jobs['test-combined-runtime'].if = 'false'; }],
   ['ignored package stage failure', w => { w.jobs['test-combined-runtime']['continue-on-error'] = true; }],
   ['missing identity dependency', w => { w.jobs['test-combined-runtime'].needs = []; }],
+  ['missing flows stage', w => { delete w.jobs['test-portal-flows']; }],
+  ['conditional flows stage', w => { w.jobs['test-portal-flows'].if = 'false'; }],
+  ['ignored flows failure', w => { w.jobs['test-portal-flows']['continue-on-error'] = true; }],
+  ['extended flows budget', w => { w.jobs['test-portal-flows']['timeout-minutes'] = 15; }],
+  ['flows waiting for another database stage', w => { w.jobs['test-portal-flows'].needs = ['test-portal-identity']; }],
+  ['flows without the isolated database', w => { delete w.jobs['test-portal-flows'].services; }],
+  ['flows against a different fixture', w => { w.jobs['test-portal-flows'].env.PORTAL_TEST_DATABASE_URL += '&x=1'; }],
+  ['frontend setup inside flows stage', w => { w.jobs['test-portal-flows'].steps.push({run: 'npm ci'}); }],
+  ['packaging inside flows stage', w => { w.jobs['test-portal-flows'].steps.push({run: 'bash scripts/package-runtime.sh --release'}); }],
+  ['missing flows dependency', w => { w.jobs['test-combined-runtime'].needs = ['test-portal-quality', 'test-portal-identity']; }],
   ['extended identity budget', w => { w.jobs['test-portal-identity']['timeout-minutes'] = 15; }],
   ['extended package budget', w => { w.jobs['test-combined-runtime']['timeout-minutes'] = 15; }],
   ['package writes permission', w => { w.jobs['test-combined-runtime'].permissions.packages = 'write'; }],
@@ -170,7 +183,7 @@ for (const [name, mutate] of [
     runtime.steps = runtime.steps.filter(s => s.id !== 'tenant-renderer');
     runtime.steps.push(setup);
   }],
-  ...['validation', 'status'].flatMap(gate => ['test-portal-quality', 'test-portal-identity', 'test-combined-runtime'].flatMap(stage => [
+  ...['validation', 'status'].flatMap(gate => ['test-portal-quality', 'test-portal-identity', 'test-portal-flows', 'test-combined-runtime'].flatMap(stage => [
     [`${gate} omits ${stage}`, w => { w.jobs[gate].needs = w.jobs[gate].needs.filter(n => n !== stage); }],
     [`${gate} ignores ${stage} result`, w => { w.jobs[gate].steps[0].with['job-results'] = w.jobs[gate].steps[0].with['job-results'].replace('${{ needs.' + stage + '.result }}', 'success'); }],
   ])),

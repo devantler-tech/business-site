@@ -577,7 +577,11 @@ The current compiled inventory (including examples and fuzz seeds) must match th
 three successful executions exactly once;
 missing, duplicated, skipped, incomplete or failed results are refused. Each
 cohort retains its separate atomic coverage profile; none alone represents
-combined coverage. No cohort can be conditional or error-tolerant in CI.
+combined coverage. In CI `test-portal-identity` runs the core cohort and
+`test-portal-flows` runs the other two, each with its own database and job budget.
+Each job lists the complete inventory and verifies only its own families
+(`identity-cohorts.mjs core` and `identity-cohorts.mjs work private`); together they
+cover every test exactly once. No cohort can be conditional or error-tolerant in CI.
 All three run package binaries one at a time with `-p=1`,
 so executable-building packages do not compete with identity's real expiry and
 database checks. This does not limit concurrency within a test or change race
