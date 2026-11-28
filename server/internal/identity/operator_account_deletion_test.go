@@ -73,6 +73,10 @@ func TestDeleteCustomerAccountRequiresVerifiedProviderRemoval(t *testing.T) {
 		!strings.Contains(page, "Type DELETE to confirm") {
 		t.Fatalf("the account deletion confirmation was incomplete: %d", status)
 	}
+	protected := url.Values{"subject": {operatorSubject}, "confirm": {"DELETE"}, "csrf_token": form["csrf_token"]}
+	if status, _, _ := b.request("POST", path, protected, b.site.URL); status != http.StatusBadRequest || provider.calls != 0 {
+		t.Fatalf("operator identity reached customer account deletion: %d", status)
+	}
 	badConfirmation := url.Values{"subject": {subject}, "confirm": {"remove"}, "csrf_token": form["csrf_token"]}
 	if status, _, _ := b.request("POST", path, badConfirmation, b.site.URL); status != http.StatusBadRequest || provider.calls != 0 {
 		t.Fatalf("incorrect account confirmation reached provider removal: %d", status)
@@ -80,12 +84,12 @@ func TestDeleteCustomerAccountRequiresVerifiedProviderRemoval(t *testing.T) {
 	if status, _, _ := b.request("POST", path, form, b.site.URL); status != http.StatusServiceUnavailable || provider.calls != 1 {
 		t.Fatalf("unconfirmed provider removal appeared successful: %d", status)
 	}
-	var protected bool
+	var accessEnded bool
 	if err := b.pool.QueryRow(t.Context(), `SELECT
  NOT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2)
  AND NOT EXISTS (SELECT 1 FROM portal_invitations WHERE issuer=$1 AND subject=$2 AND NOT revoked)
  AND EXISTS (SELECT 1 FROM portal_customer_deletions WHERE issuer=$1 AND subject=$2 AND confirmed_at IS NULL)`,
-		b.f.issuer, subject).Scan(&protected); err != nil || !protected {
+		b.f.issuer, subject).Scan(&accessEnded); err != nil || !accessEnded {
 		t.Fatalf("provider failure left stale workspace access or lost the deletion intent: %v", err)
 	}
 	pending := Invitation{Issuer: b.f.issuer, Subject: subject, ClientID: "client-d", Role: "client", Expires: time.Now().Add(time.Hour)}
