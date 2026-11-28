@@ -17,6 +17,8 @@ function assertStages(w) {
   assert.ok(identity && quality && runtime, 'quality, database tests and packaging need separate budgets');
   assert.ok(goStatic, 'database-free Go checks keep their own job');
   assert.equal(goStatic.services, undefined, 'database-free Go checks do not need a database');
+  assert.deepEqual(goStatic.defaults, { run: { 'working-directory': 'server' } }, 'the default shell keeps -e');
+  assert.equal(w.defaults?.run?.shell, undefined, 'the default shell keeps -e');
   // Exact step text: an added line such as `set +e` or `true` could otherwise mask a check.
   assert.deepEqual(goStatic.steps.filter(s => s.run).map(s => s.run), [
     'go mod verify\ntest -z "$(gofmt -l .)"\ngo vet ./...\n',
@@ -171,6 +173,8 @@ for (const [name, mutate] of [
   ['masked vet failure', w => { const s = w.jobs['test-portal-go-static'].steps.find(s => s.run?.includes('go vet')); s.run = s.run.replace('go vet ./...', 'go vet ./... || true'); }],
   ['masked formatting failure', w => { const s = w.jobs['test-portal-go-static'].steps.find(s => s.run?.includes('go vet')); s.run = 'set +e\n' + s.run; }],
   ['errexit-free Go check shell', w => { w.jobs['test-portal-go-static'].steps.find(s => s.run?.includes('go vet')).shell = 'bash {0}'; }],
+  ['errexit-free Go job shell', w => { w.jobs['test-portal-go-static'].defaults.run.shell = 'bash {0}'; }],
+  ['errexit-free workflow shell', w => { w.defaults = { run: { shell: 'bash {0}' } }; }],
   ['missing package stage', w => { delete w.jobs['test-combined-runtime']; }],
   ['conditional package stage', w => { w.jobs['test-combined-runtime'].if = 'false'; }],
   ['ignored package stage failure', w => { w.jobs['test-combined-runtime']['continue-on-error'] = true; }],
