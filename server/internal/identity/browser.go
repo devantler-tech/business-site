@@ -432,6 +432,10 @@ func (b *browser) operatorSignIn(w http.ResponseWriter, r *http.Request) {
 // subject instead. A current member goes home, so a link here cannot sign anyone
 // out. A browser that keeps being refused gets one static page, never a loop.
 func (b *browser) startSignIn(w http.ResponseWriter, r *http.Request, connector string) {
+	if b.signedInCustomer(r.Context()) {
+		http.Redirect(w, r, "/portal/?lang="+language(r), http.StatusSeeOther)
+		return
+	}
 	switch _, _, err := b.foundation.membership(r.Context(), b.principal(r.Context())); {
 	case err == nil:
 		http.Redirect(w, r, "/portal/?lang="+language(r), http.StatusSeeOther)
@@ -618,7 +622,7 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 	if contactFlow {
 		p, err = b.foundation.confirmContact(ctx, b.principal(r.Context()), binding, raw, nonce)
 	} else {
-		p, err = b.foundation.completeProof(ctx, nonce, raw)
+		p, err = b.foundation.completeSignInProof(ctx, nonce, raw, true)
 	}
 	if err != nil {
 		switch {
@@ -640,6 +644,7 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 	b.sessions.Put(r.Context(), "subject", p.subject)
 	b.sessions.Put(r.Context(), "expires", p.expires.Unix())
 	b.sessions.Put(r.Context(), "membership_incarnation", p.membershipIncarnation)
+	b.sessions.Put(r.Context(), "customer_signed_in", b.foundation.isCustomerSignIn(p.subject))
 	b.sessions.Put(r.Context(), "lang", lang)
 	deadline := time.Now().Add(30 * time.Minute)
 	if p.expires.Before(deadline) {
@@ -668,6 +673,15 @@ func (b *browser) principal(ctx context.Context) Principal {
 	)
 }
 
+// This session marker records a verified customer login only. Workspace and
+// operator handlers still require a current membership-bound principal.
+func (b *browser) signedInCustomer(ctx context.Context) bool {
+	return b.sessions.GetBool(ctx, "customer_signed_in") &&
+		b.sessions.GetString(ctx, "issuer") == b.foundation.broker.issuer &&
+		time.Now().Before(time.Unix(b.sessions.GetInt64(ctx, "expires"), 0)) &&
+		b.foundation.isCustomerSignIn(b.sessions.GetString(ctx, "subject"))
+}
+
 func (b *browser) sessionPrincipal(issuer, subject, incarnation string, expiry int64, previewIncarnation string) Principal {
 	if incarnation == "" {
 		// Legacy authenticated payloads must sign in again; pre-authentication
@@ -691,6 +705,14 @@ func (b *browser) home(w http.ResponseWriter, r *http.Request) {
 	p := b.principal(ctx)
 	client, role, err := b.foundation.membership(ctx, p)
 	if err != nil {
+		if b.signedInCustomer(ctx) {
+			if errors.Is(err, ErrDenied) {
+				b.render(w, r, http.StatusOK, "no-workspaces", "", nosurf.Token(r))
+			} else {
+				b.render(w, r, http.StatusServiceUnavailable, "unavailable", "", "")
+			}
+			return
+		}
 		// Opening the portal without a membership goes straight to the login;
 		// signIn shows the unavailable page instead if the lookup itself failed.
 		b.signIn(w, r)

@@ -106,10 +106,14 @@ func TestOperatorCustomersShowPeopleAndCurrentOperators(t *testing.T) {
 			strings.Contains(body, "<code>") || strings.Contains(body, "Ada <Example>") {
 			t.Fatalf("directory showed an opaque account or unescaped data: status=%d", status)
 		}
-		for _, fragment := range []string{"<strong>Ada &lt;Example&gt;</strong>", "<span>ada@example.test</span>", `name="subject" value="` + customerSubject + `"`} {
+		for _, fragment := range []string{"<strong>Ada &lt;Example&gt;</strong>", "<span>ada@example.test</span>", "view=remove&amp;member=" + customerSubject} {
 			if !strings.Contains(body, fragment) {
 				t.Errorf("%s directory missing %q", lang, fragment)
 			}
+		}
+		_, removalPage, _ := b.request("GET", "/portal/operator/customers?lang="+lang+"&workspace=client-a&view=remove&member="+customerSubject, nil, "")
+		if !strings.Contains(removalPage, `name="subject" value="`+customerSubject+`"`) {
+			t.Errorf("%s confirmation did not bind the selected customer", lang)
 		}
 		_, pendingPage, _ := b.request("GET", "/portal/operator/customers?lang="+lang+"&workspace=client-b", nil, "")
 		_, operatorPage, _ := b.request("GET", "/portal/operator/customers?lang="+lang+"&workspace="+operatorWorkspace, nil, "")
@@ -122,8 +126,9 @@ func TestOperatorCustomersShowPeopleAndCurrentOperators(t *testing.T) {
 	b.refused(b.start())
 	b.as(customerSubject)
 	b.finish(b.start())
+	callsBeforeDenied := calls.Load()
 	status, body, _ := b.request("GET", "/portal/operator/customers", nil, "")
-	if status != http.StatusForbidden || calls.Load() != 6 || strings.Contains(body, "pending@example.test") {
+	if status != http.StatusForbidden || calls.Load() != callsBeforeDenied || strings.Contains(body, "pending@example.test") {
 		t.Fatalf("a customer could read profiles from the operator directory: status=%d calls=%d", status, calls.Load())
 	}
 }

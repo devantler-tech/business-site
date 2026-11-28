@@ -32,6 +32,10 @@
 {{else if eq .Kind `appointment-cancellation-error`}}
 <p role="alert">{{if eq .Lang `da`}}Aftalen kan ikke aflyses her. Gå tilbage til dine aftaler for at se den aktuelle status.{{else}}This appointment cannot be cancelled here. Return to your appointments to check its current status.{{end}}</p>
 <p><a href="{{root}}/appointments?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til dine aftaler{{else}}Back to your appointments{{end}}</a></p>
+{{else if eq .Kind `no-workspaces`}}
+<h2>{{if eq .Lang `da`}}Ingen arbejdsområder endnu{{else}}No workspaces yet{{end}}</h2>
+<p>{{if eq .Lang `da`}}Du er logget ind. Kontakt Devantler Tech, hvis du har brug for adgang til et arbejdsområde.{{else}}You’re signed in. Contact Devantler Tech if you need access to a workspace.{{end}}</p>
+<form method="post" action="{{root}}/logout?lang={{.Lang}}"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><button type="submit">{{.Logout}}</button></form>
 {{else if eq .Kind `no-access`}}<p role="alert">{{if eq .Lang `da`}}Portalen kræver en invitation, og den konto, du loggede ind med, er ikke inviteret. Kontakt Devantler Tech, hvis du havde ventet adgang.{{else}}The portal is invitation-only, and the account you signed in with has not been invited. Contact Devantler Tech if you expected access.{{end}}</p>
 {{if .CSRF}}<form method="post" action="{{root}}/sign-in/retry?lang={{.Lang}}">
   <input type="hidden" name="csrf_token" value="{{.CSRF}}">

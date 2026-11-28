@@ -22,7 +22,6 @@ type customerAccountRow struct {
 	Workspace, WorkspaceName  string
 	Status                    string
 	ManageAccess              bool
-	ChangeSignIn              bool
 	Deadline                  *time.Time
 }
 
@@ -35,16 +34,10 @@ func (row customerAccountRow) StatusLabel(lang string) string {
 	switch row.Status {
 	case "active":
 		en, da = "Active", "Aktiv"
-	case "suspended":
-		en, da = "Sign-in paused", "Login på pause"
-	case "access-paused":
-		en, da = "Workspace access paused", "Adgang på pause"
-	case "locked":
-		en, da = "Sign-in locked", "Login låst"
-	case "invited":
-		en, da = "Invited", "Inviteret"
 	case "former":
 		en, da = "Former customer", "Tidligere kunde"
+	case "invited":
+		en, da = "Invited", "Inviteret"
 	default:
 		en, da = "No workspace", "Intet arbejdsområde"
 	}
@@ -278,19 +271,14 @@ func accountRow(account customeridentity.Account, access customerWorkspaceAccess
 	}
 	row := customerAccountRow{Subject: access.Subject, Name: name, Email: email, WorkspaceName: access.WorkspaceName}
 	switch {
-	case access.Member != "":
+	case access.Member != "" && !access.Revoked:
 		row.Workspace, row.Status = access.Member, "active"
 		row.ManageAccess = validCustomerWorkspace(access.Member)
-		row.ChangeSignIn = row.ManageAccess && account.SignInChangeAllowed
-		if access.Revoked {
-			row.Status = "access-paused"
-		}
-		if account.Suspended {
-			row.Status = "suspended"
-		}
-		if account.Locked {
-			row.Status = "locked"
-		}
+	case access.Member != "":
+		// Preserve removal of a previously revoked membership without offering
+		// a way to block sign-in or silently grant workspace access.
+		row.Workspace, row.Status = access.Member, "former"
+		row.ManageAccess = validCustomerWorkspace(access.Member)
 	case access.Invitation != "":
 		row.Workspace, row.Status = access.Invitation, "invited"
 	case access.Former:

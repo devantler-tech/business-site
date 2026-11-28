@@ -30,13 +30,12 @@ func TestOperatorReactivationRetryPreservesMembership(t *testing.T) {
 	}
 }
 
-// TestOperatorAnonymousSessionsCannotBlockDeactivation exercises real cookie-free
+// TestOperatorAnonymousSessionsCannotBlockRemoval exercises real cookie-free
 // sign-in requests, rather than assuming every stored session is authenticated.
-func TestOperatorAnonymousSessionsCannotBlockDeactivation(t *testing.T) {
-	var disabled atomic.Bool
-	b := managementMemberFixture(t, func(_ context.Context, _ string, active bool) error {
-		disabled.Store(!active)
-		return nil
+func TestOperatorAnonymousSessionsCannotBlockRemoval(t *testing.T) {
+	b := managementMemberFixture(t, func(context.Context, string, bool) error {
+		t.Error("removing membership contacted the sign-in provider")
+		return ErrDenied
 	})
 	operatorJar := b.client.Jar
 	b.client.Jar = nil
@@ -50,34 +49,36 @@ func TestOperatorAnonymousSessionsCannotBlockDeactivation(t *testing.T) {
 	if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_sessions WHERE expiry>now()`).Scan(&count); err != nil || count < 1001 {
 		t.Fatal("anonymous session pressure was not exercised", count, err)
 	}
-	status, _, _ := b.request("POST", operatorAPIRoot+"/members/deactivate", operatorMembershipForm(b, customerSubject, "client-a"), b.site.URL)
-	revoked := b.customerRevoked()
-	if status != http.StatusOK || !revoked || !disabled.Load() {
-		t.Fatal("unrelated anonymous sessions prevented customer revocation", status, revoked, disabled.Load())
+	status, _, _ := b.request("POST", operatorAPIRoot+"/members/remove", operatorMembershipForm(b, customerSubject, "client-a"), b.site.URL)
+	if status != http.StatusOK || b.memberships(customerSubject, "client") != 0 {
+		t.Fatal("unrelated anonymous sessions prevented membership removal", status)
 	}
 }
 
-// TestOperatorMemberTransitionsSerializeAcrossReplicas catches a provider update
-// running after a later, independently constructed replica has restored access.
+// TestOperatorMemberTransitionsSerializeAcrossReplicas catches membership
+// removal racing ahead of legacy account recovery on another replica.
 func TestOperatorMemberTransitionsSerializeAcrossReplicas(t *testing.T) {
-	deactivating, release, reactivating := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	reactivating, release := make(chan struct{}), make(chan struct{})
 	resume := onceRelease(release)
 	t.Cleanup(resume)
-	var providerDisabled atomic.Bool
+	var providerEnabled atomic.Bool
 	b := managementMemberFixture(t, func(ctx context.Context, _ string, active bool) error {
-		if active {
-			close(reactivating)
-		} else {
-			close(deactivating)
-			select {
-			case <-release:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
+		if !active {
+			t.Error("workspace removal blocked the customer’s sign-in")
+			return ErrDenied
 		}
-		providerDisabled.Store(!active)
+		close(reactivating)
+		select {
+		case <-release:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		providerEnabled.Store(true)
 		return nil
 	})
+	if _, err := b.pool.Exec(t.Context(), `UPDATE portal_memberships SET revoked=true WHERE subject=$1`, customerSubject); err != nil {
+		t.Fatal(err)
+	}
 	replica := New(b.pool, b.svc.broker, b.svc.flags)
 	if err := replica.LinkOperators([]string{operatorSubject}); err != nil {
 		t.Fatal(err)
@@ -94,16 +95,16 @@ func TestOperatorMemberTransitionsSerializeAcrossReplicas(t *testing.T) {
 		status, _, _ := b.request("POST", operatorAPIRoot+"/members/"+action, form, b.site.URL)
 		results <- status
 	}
-	go call("deactivate")
+	go call("reactivate")
 	select {
-	case <-deactivating:
+	case <-reactivating:
 	case <-time.After(5 * time.Second):
-		t.Fatal("deactivation never reached the provider")
+		t.Fatal("legacy account recovery never reached the provider")
 	}
 	b.mu.Lock()
 	b.handler = handler
 	b.mu.Unlock()
-	go call("reactivate")
+	go call("remove")
 	t.Cleanup(func() {
 		resume()
 		for range 2 {
@@ -118,8 +119,8 @@ func TestOperatorMemberTransitionsSerializeAcrossReplicas(t *testing.T) {
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		select {
-		case <-reactivating:
-			t.Fatal("another replica reactivated while provider deactivation was unfinished")
+		case <-done:
+			t.Fatal("another replica removed membership before legacy recovery finished")
 		default:
 		}
 		var waiting bool
@@ -140,8 +141,7 @@ func TestOperatorMemberTransitionsSerializeAcrossReplicas(t *testing.T) {
 			t.Fatal("serialized member action failed", status)
 		}
 	}
-	var revoked bool
-	if err := observer.QueryRow(t.Context(), `SELECT revoked FROM portal_memberships WHERE subject=$1`, customerSubject).Scan(&revoked); err != nil || revoked || providerDisabled.Load() {
-		t.Fatal("completed transitions left provider and portal access inconsistent", revoked, providerDisabled.Load(), err)
+	if b.memberships(customerSubject, "client") != 0 || !providerEnabled.Load() {
+		t.Fatal("completed transitions did not leave an enabled account without workspace access")
 	}
 }

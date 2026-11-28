@@ -86,12 +86,13 @@ func assertMemberConnectionClean(t *testing.T, b *browserFixture, originalPID ui
 func TestOperatorMemberTransitionUsesOneConnection(t *testing.T) {
 	b := configureOperatorBrowser(t, oneConnectionMemberBrowser(t))
 	linkManagedMember(t, b, func(context.Context, string, bool) error { return nil })
+	if _, err := b.pool.Exec(t.Context(), `UPDATE portal_memberships SET revoked=true WHERE subject=$1`, customerSubject); err != nil {
+		t.Fatal(err)
+	}
 	b.client.Timeout = 2 * time.Second
 	form := operatorMembershipForm(b, customerSubject, "client-a")
-	for _, action := range []string{"deactivate", "reactivate"} {
-		if status, _, _ := b.request("POST", operatorAPIRoot+"/members/"+action, form, b.site.URL); status != http.StatusOK {
-			t.Fatal("member action could not finish with one available connection", action, status)
-		}
+	if status, _, _ := b.request("POST", operatorAPIRoot+"/members/reactivate", form, b.site.URL); status != http.StatusOK {
+		t.Fatal("legacy recovery could not finish with one available connection", status)
 	}
 }
 

@@ -68,23 +68,7 @@
       {{end}}
     </dl>
     {{if .Account.ManageAccess}}
-    {{if .Account.ChangeSignIn}}
-    <p class="operator-help">{{if eq .Lang "da"}}En pause stopper login og bevarer kundens medlemskab.{{else}}Pausing sign-in keeps the customer’s workspace membership.{{end}}</p>
-    {{end}}
     <div class="operator-actions">
-      {{if .Account.ChangeSignIn}}
-      {{$suspended := or (eq .Account.Status "suspended") (eq .Account.Status "access-paused")}}
-      <form method="post" action="{{root}}/operator/api/members/{{if $suspended}}reactivate{{else}}deactivate{{end}}?lang={{.Lang}}&amp;focus=customer">
-        {{template "customer-account-fields" .}}
-        <button type="submit" class="operator-secondary">{{if $suspended}}{{template "customer-resume-label" .Lang}}{{else}}{{template "customer-pause-label" .Lang}}{{end}}</button>
-      </form>
-      {{if eq .Account.Status "access-paused"}}
-      <form method="post" action="{{root}}/operator/api/members/deactivate?lang={{.Lang}}&amp;focus=customer">
-        {{template "customer-account-fields" .}}
-        <button type="submit" class="operator-secondary">{{template "customer-retry-pause-label" .Lang}}</button>
-      </form>
-      {{end}}
-      {{end}}
       <a href="{{.Confirmation}}" class="operator-danger-link">{{template "customer-remove-label" .Lang}}</a>
     </div>
     {{else if or (eq .Account.Status "former") (eq .Account.Status "unassigned")}}
@@ -94,9 +78,6 @@
   </section>
 {{end}}
 
-{{define "customer-pause-label"}}{{if eq . "da"}}Sæt login på pause{{else}}Pause sign-in{{end}}{{end}}
-{{define "customer-resume-label"}}{{if eq . "da"}}Gendan login{{else}}Restore sign-in{{end}}{{end}}
-{{define "customer-retry-pause-label"}}{{if eq . "da"}}Prøv at sætte login på pause igen{{else}}Retry sign-in pause{{end}}{{end}}
 {{define "customer-remove-label"}}{{if eq . "da"}}Fjern fra arbejdsområdet{{else}}Remove from workspace{{end}}{{end}}
 {{define "customer-remove-explanation"}}{{if eq . "da"}}Kunden beholder sin konto og skal have en ny invitation for at få adgang igen.{{else}}They keep their sign-in account and need a new invitation to return.{{end}}{{end}}
 

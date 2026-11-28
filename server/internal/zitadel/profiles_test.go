@@ -94,7 +94,7 @@ func TestSearchAccountsScopesAndPagesHumanCustomers(t *testing.T) {
 				if !errors.Is(err, ErrUnavailable) || more || len(accounts) > 0 {
 					t.Fatalf("unexpected account was returned: %v", err)
 				}
-			} else if err != nil || !more || len(accounts) != customeridentity.AccountPageSize || accounts[0].ID != "user-0" || !accounts[0].Suspended {
+			} else if err != nil || !more || len(accounts) != customeridentity.AccountPageSize || accounts[0].ID != "user-0" {
 				t.Fatalf("paged customer directory was not returned: %v", err)
 			}
 		})

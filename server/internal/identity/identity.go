@@ -432,6 +432,10 @@ func (s *Foundation) consumeAttempt(ctx context.Context, state, browser string) 
 }
 
 func (s *Foundation) completeProof(ctx context.Context, nonce, raw string) (Principal, error) {
+	return s.completeSignInProof(ctx, nonce, raw, false)
+}
+
+func (s *Foundation) completeSignInProof(ctx context.Context, nonce, raw string, allowCustomerWithoutWorkspace bool) (Principal, error) {
 	if !s.ready(ctx) {
 		return Principal{}, ErrDenied
 	}
@@ -451,8 +455,7 @@ func (s *Foundation) completeProof(ctx context.Context, nonce, raw string) (Prin
 		return p, nil
 	}
 	// A current member signs straight in. An identity without membership accepts
-	// its own pending invitation, which was bound to this exact issuer/subject
-	// when it was created; anyone else has nothing to accept and is refused.
+	// its own pending invitation, bound to the exact issuer and subject.
 	if _, _, p.membershipIncarnation, err = s.membershipState(ctx, p); errors.Is(err, ErrDenied) {
 		if err = s.redeem(ctx, p); err != nil && !errors.Is(err, ErrDenied) {
 			return Principal{}, err
@@ -461,10 +464,19 @@ func (s *Foundation) completeProof(ctx context.Context, nonce, raw string) (Prin
 		// the same identity has just created; a revoked membership still refuses.
 		_, _, p.membershipIncarnation, err = s.membershipState(ctx, p)
 	}
+	if errors.Is(err, ErrDenied) && allowCustomerWithoutWorkspace && s.isCustomerSignIn(p.subject) && ctx.Err() == nil && time.Now().Before(p.expires) {
+		// A verified customer account carries no workspace authority until a
+		// current membership incarnation is bound to the session.
+		return p, nil
+	}
 	if err != nil {
 		return Principal{}, err
 	}
 	return p, nil
+}
+
+func (s *Foundation) isCustomerSignIn(subject string) bool {
+	return s.canInvite(subject, "client") && customeridentity.DexUser(subject, customeridentity.ZitadelConnectorID) != ""
 }
 
 // redeem consumes the one pending invitation bound to this exact identity and

@@ -252,7 +252,7 @@ func (b *browser) operatorAPI(route operatorRoute) http.HandlerFunc {
 func (b *browser) operatorFormReturn(r *http.Request, action string, result []byte) string {
 	query := url.Values{"lang": {language(r)}}
 	switch {
-	case r.URL.Query().Get("focus") == "customer" && (action == "members.deactivate" || action == "members.reactivate" || action == "members.remove"):
+	case r.URL.Query().Get("focus") == "customer" && action == "members.remove":
 		if subject := r.PostForm.Get("subject"); customerAccountID(subject) != "" {
 			query.Set("account", subject)
 		}

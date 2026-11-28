@@ -57,7 +57,10 @@ func TestOperatorRenamesWorkspaceAndRemovesItsMember(t *testing.T) {
 	}
 	b.signOut()
 	b.as(customerSubject)
-	b.refused(b.start())
+	b.finish(b.start())
+	if status, body, _ := b.request("GET", "/portal/?lang=en", nil, ""); status != http.StatusOK || !strings.Contains(body, "No workspaces yet") {
+		t.Fatalf("removed customer must be able to sign in without workspace access: %d", status)
+	}
 }
 
 func TestOperatorMemberRemovalRequiresItsAccountDeadline(t *testing.T) {
@@ -140,7 +143,11 @@ func TestOperatorDeletesWorkspaceAndClosesItsInvitations(t *testing.T) {
 	}
 	b.signOut()
 	b.as(customerSubject)
-	b.refused(b.start())
+	b.finish(b.start())
+	if status, body, _ := b.request("GET", "/portal/?lang=en", nil, ""); status != http.StatusOK || !strings.Contains(body, "No workspaces yet") {
+		t.Fatalf("a closed workspace must leave the sign-in account usable: %d", status)
+	}
+	b.signOut()
 	b.as("waiting-client")
 	b.refused(b.start())
 	b.as("unrelated-client")

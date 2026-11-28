@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
-	"sync/atomic"
 	"testing"
 
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
@@ -25,7 +24,6 @@ func TestCustomerAccountsShowsCustomersAfterWorkspaceAccessEnds(t *testing.T) {
 	}
 	const activeAccount = `{"userId":"north-customer","state":"USER_STATE_ACTIVE","details":{"resourceOwner":"customers"},"human":{"profile":{"displayName":"North Customer"},"email":{"email":"north@example.test","isVerified":true}}}`
 	const formerAccount = `{"userId":"retired-customer","state":"USER_STATE_INACTIVE","details":{"resourceOwner":"customers"},"human":{"profile":{"displayName":"Retired Customer"},"email":{"email":"retired@example.test"}}}`
-	var paused atomic.Bool
 	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("x-zitadel-orgid") != "customers" {
 			t.Error("customer organization was not bound")
@@ -46,17 +44,7 @@ func TestCustomerAccountsShowsCustomersAfterWorkspaceAccessEnds(t *testing.T) {
 		case "/v2/users/retired-customer":
 			_, _ = fmt.Fprintf(w, `{"user":%s}`, formerAccount)
 		case "/v2/users/north-customer":
-			account := activeAccount
-			if paused.Load() {
-				account = strings.Replace(account, "USER_STATE_ACTIVE", "USER_STATE_INACTIVE", 1)
-			}
-			_, _ = fmt.Fprintf(w, `{"user":%s}`, account)
-		case "/management/v1/users/north-customer/_deactivate":
-			paused.Store(true)
-			_, _ = io.WriteString(w, "{}")
-		case "/management/v1/users/north-customer/_reactivate":
-			paused.Store(false)
-			_, _ = io.WriteString(w, "{}")
+			_, _ = fmt.Fprintf(w, `{"user":%s}`, activeAccount)
 		default:
 			t.Errorf("unexpected provider path %s", r.URL.Path)
 			http.NotFound(w, r)
@@ -103,21 +91,10 @@ func TestCustomerAccountsShowsCustomersAfterWorkspaceAccessEnds(t *testing.T) {
 
 	detail := directory + "?account=" + current + "&lang=en"
 	status, page, _ = b.request("GET", detail, nil, "")
-	if status != http.StatusOK || !strings.Contains(page, "Pause sign-in") || !strings.Contains(page, "Remove from workspace") {
-		t.Fatalf("current account is missing access controls: %d", status)
+	if status != http.StatusOK || strings.Contains(page, "/members/deactivate") || strings.Contains(page, "Restore sign-in") ||
+		!strings.Contains(page, "Remove from workspace") {
+		t.Fatalf("current account should offer only workspace removal: %d", status)
 	}
-	submitCustomerAccountAction(t, b, "deactivate", detail, "client-a", current, detail)
-	status, page, _ = b.request("GET", detail, nil, "")
-	if status != http.StatusOK || !paused.Load() || !strings.Contains(page, "Sign-in paused") ||
-		!strings.Contains(page, "Restore sign-in") || !strings.Contains(page, "client-a") {
-		t.Fatalf("pausing sign-in did not preserve the existing workspace: %d", status)
-	}
-	submitCustomerAccountAction(t, b, "reactivate", detail, "client-a", current, detail)
-	status, page, _ = b.request("GET", detail, nil, "")
-	if status != http.StatusOK || paused.Load() || !strings.Contains(page, "Pause sign-in") {
-		t.Fatalf("could not restore the same workspace membership: %d", status)
-	}
-
 	confirmation := detail + "&view=remove"
 	status, page, _ = b.request("GET", confirmation, nil, "")
 	if status != http.StatusOK || !strings.Contains(page, "Remove from workspace") || !strings.Contains(page, "client-a") ||
@@ -126,7 +103,7 @@ func TestCustomerAccountsShowsCustomersAfterWorkspaceAccessEnds(t *testing.T) {
 	}
 	submitCustomerAccountAction(t, b, "remove", confirmation, "client-a", current, detail)
 	status, page, _ = b.request("GET", detail, nil, "")
-	if status != http.StatusOK || !strings.Contains(page, "Former customer") || strings.Contains(page, "Pause sign-in") {
+	if status != http.StatusOK || !strings.Contains(page, "Former customer") || strings.Contains(page, "Remove from workspace") {
 		t.Fatalf("removed customer still shows live workspace access: %d", status)
 	}
 }

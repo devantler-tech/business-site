@@ -53,7 +53,7 @@ func TestPortalLinkPreprocessor(t *testing.T) {
 		}
 		return
 	}
-	for name, want := range map[string]int{"portal.html": 24, "contact.html": 12, "requests.html": 38, "triage.html": 24, "work-review.html": 18, "operator.html": 40} {
+	for name, want := range map[string]int{"portal.html": 26, "contact.html": 12, "requests.html": 38, "triage.html": 24, "work-review.html": 18, "operator.html": 40} {
 		t.Run(name, func(t *testing.T) {
 			pages, err := renderedLinkPages(name)
 			if err != nil || len(pages) != want {
@@ -255,13 +255,13 @@ func renderedLinkPagesFor(name string, templates *template.Template, b *browser)
 		}
 		switch name {
 		case "operator.html":
-			for _, view := range []string{"list", "active", "suspended", "remove"} {
+			for _, view := range []string{"list", "active", "former", "remove"} {
 				err := add(customerAccountsPath, func(w *httptest.ResponseRecorder, r *http.Request) error {
 					d := b.operatorData(r, "operator-customer-accounts", "fictional-operator")
 					d.CSRF = "fictional-csrf"
 					index := b.visible(customerAccountsPath) + "?lang=" + lang
 					account := customerAccountRow{Subject: customeridentity.DexSubject("fictional-customer", customeridentity.ZitadelConnectorID), Name: "Ada Example", Email: "ada@example.test",
-						Workspace: "fictional-workspace", WorkspaceName: "Fictional workspace", Status: "active", ManageAccess: true, ChangeSignIn: true}
+						Workspace: "fictional-workspace", WorkspaceName: "Fictional workspace", Status: "active", ManageAccess: true}
 					account.URL = index + "&account=" + account.Subject
 					page := customerAccountsPage{pageData: d, Query: "Ada", BackURL: index,
 						Confirmation: account.URL + "&view=remove", Previous: index + "&page=1", Next: index + "&page=3"}
@@ -271,8 +271,9 @@ func renderedLinkPagesFor(name string, templates *template.Template, b *browser)
 						page.Account = &account
 						page.Title = account.Name
 						page.ConfirmRemoval = view == "remove"
-						if view == "suspended" {
+						if view == "former" {
 							account.Status = view
+							account.ManageAccess = false
 						}
 					}
 					return templates.ExecuteTemplate(w, name, page)
@@ -360,7 +361,7 @@ func renderedLinkPagesFor(name string, templates *template.Template, b *browser)
 				}
 			}
 		case "portal.html":
-			for _, kind := range []string{"no-access", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict"} {
+			for _, kind := range []string{"no-access", "no-workspaces", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict"} {
 				uri := "/portal/"
 				switch kind {
 				case "no-access", "unavailable":
@@ -749,10 +750,7 @@ func registeredLinkTarget(mux *http.ServeMux, method string, target *url.URL) er
 				return errors.New("invalid workspace member")
 			}
 		case "focus":
-			if values[0] == "customer" && slices.Contains([]string{
-				"POST /portal/operator/api/members/deactivate", "POST /portal/operator/api/members/reactivate",
-				"POST /portal/operator/api/members/remove",
-			}, pattern) {
+			if values[0] == "customer" && pattern == "POST /portal/operator/api/members/remove" {
 				continue
 			}
 			if values[0] != "workspace" || !slices.Contains([]string{

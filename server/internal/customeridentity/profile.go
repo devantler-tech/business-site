@@ -13,6 +13,4 @@ const AccountPageSize = 25
 type Account struct {
 	ID string
 	Profile
-	Suspended, Locked   bool
-	SignInChangeAllowed bool
 }

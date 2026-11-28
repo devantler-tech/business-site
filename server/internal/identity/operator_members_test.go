@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
-	"strings"
-	"sync/atomic"
 	"testing"
 
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
@@ -104,7 +102,6 @@ func TestOperatorMemberAccessTransitions(t *testing.T) {
 	}
 	b.as(operatorSubject)
 	b.finish(b.startAt(operatorLink))
-	operatorJar := b.client.Jar
 	if err := b.svc.LinkCustomerDirectory(&managementDirectory{change: func(ctx context.Context, user string, active bool) error {
 		if user != "345678901234567890" {
 			t.Error("wrong upstream identity", user)
@@ -117,18 +114,17 @@ func TestOperatorMemberAccessTransitions(t *testing.T) {
 	}}); err != nil {
 		t.Fatal(err)
 	}
-	for _, action := range []string{"deactivate", "reactivate"} {
-		form := operatorMembershipForm(b, customerSubject, "client-a")
-		status, _, _ := b.request("POST", operatorAPIRoot+"/members/"+action, form, b.site.URL)
-		if status != http.StatusOK {
-			t.Fatalf("%s status=%d", action, status)
-		}
-		b.client.Jar, _ = cookiejar.New(nil)
-		b.client.Jar.SetCookies(address, customerCookies)
-		if status, _, _ := b.request("GET", "/portal/", nil, ""); status == http.StatusOK {
-			t.Fatalf("old customer session survived %s", action)
-		}
-		b.client.Jar = operatorJar
+	if _, err := b.pool.Exec(t.Context(), `UPDATE portal_memberships SET revoked=true WHERE subject=$1`, customerSubject); err != nil {
+		t.Fatal(err)
+	}
+	form := operatorMembershipForm(b, customerSubject, "client-a")
+	if status, _, _ := b.request("POST", operatorAPIRoot+"/members/reactivate", form, b.site.URL); status != http.StatusOK {
+		t.Fatalf("legacy recovery status=%d", status)
+	}
+	b.client.Jar, _ = cookiejar.New(nil)
+	b.client.Jar.SetCookies(address, customerCookies)
+	if status, _, _ := b.request("GET", "/portal/contact", nil, ""); status == http.StatusOK {
+		t.Fatal("old customer session retained workspace access after legacy recovery")
 	}
 	b.client.Jar, _ = cookiejar.New(nil)
 	b.as(customerSubject)
@@ -143,54 +139,20 @@ func TestOperatorMemberAccessTransitions(t *testing.T) {
 	}
 }
 
-// TestOperatorProviderFailureLeavesPortalClosed catches a network/API failure
-// that rolls local deactivation back or allows reactivation before confirmation.
+// TestOperatorProviderFailureLeavesPortalClosed catches access being granted
+// before recovery of a legacy revoked membership is confirmed.
 func TestOperatorProviderFailureLeavesPortalClosed(t *testing.T) {
 	b := managementMemberFixture(t, func(context.Context, string, bool) error {
 		return errors.New("fictional provider unavailable")
 	})
-	for _, action := range []string{"deactivate", "reactivate"} {
-		form := operatorMembershipForm(b, customerSubject, "client-a")
-		status, _, _ := b.request("POST", operatorAPIRoot+"/members/"+action, form, b.site.URL)
-		if status != http.StatusServiceUnavailable {
-			t.Fatalf("failed provider %s status=%d", action, status)
-		}
-		var revoked bool
-		if err := b.pool.QueryRow(t.Context(), `SELECT revoked FROM portal_memberships WHERE subject=$1`, customerSubject).Scan(&revoked); err != nil || !revoked {
-			t.Fatal("provider failure left portal access enabled", action, revoked, err)
-		}
+	if _, err := b.pool.Exec(t.Context(), `UPDATE portal_memberships SET revoked=true WHERE subject=$1`, customerSubject); err != nil {
+		t.Fatal(err)
 	}
-}
-
-// TestOperatorRetriesDeactivationWithoutRestoringAccess catches a phone flow
-// that offers only reactivation after provider failure and cannot finish closing
-// provider access while the portal membership stays disabled.
-func TestOperatorRetriesDeactivationWithoutRestoringAccess(t *testing.T) {
-	var calls, enableCalls atomic.Int32
-	b := managementMemberFixture(t, func(_ context.Context, _ string, active bool) error {
-		if active {
-			enableCalls.Add(1)
-		}
-		if calls.Add(1) == 1 {
-			return errors.New("fictional provider unavailable")
-		}
-		return nil
-	})
 	form := operatorMembershipForm(b, customerSubject, "client-a")
-	if status, _, _ := b.request("POST", operatorAPIRoot+"/members/deactivate", form, b.site.URL); status != http.StatusServiceUnavailable {
-		t.Fatal("the failed provider did not retain its failure", status)
+	if status, _, _ := b.request("POST", operatorAPIRoot+"/members/reactivate", form, b.site.URL); status != http.StatusServiceUnavailable {
+		t.Fatalf("failed provider recovery status=%d", status)
 	}
-	status, body, _ := b.request("GET", "/portal/operator/customers?lang=en&workspace=client-a", nil, "")
-	if status != http.StatusOK || !strings.Contains(body, "Retry sign-in pause") {
-		t.Fatal("disabled member has no deactivation retry in the inventory", status)
-	}
-	form = workNativeForm(t, body, `members/deactivate\?lang=en&amp;focus=workspace`)
-	status, headers := managementNativeRequest(b, operatorAPIRoot+"/members/deactivate?lang=en&focus=workspace", form)
-	if status != http.StatusSeeOther || headers.Get("Location") != "/portal/operator/customers?lang=en&workspace=client-a" {
-		t.Fatal("native deactivation retry did not complete", status)
-	}
-	var revoked bool
-	if err := b.pool.QueryRow(t.Context(), `SELECT revoked FROM portal_memberships WHERE subject=$1`, customerSubject).Scan(&revoked); err != nil || !revoked || calls.Load() != 2 || enableCalls.Load() != 0 {
-		t.Fatal("retry restored access or skipped the provider", revoked, calls.Load(), enableCalls.Load(), err)
+	if !b.customerRevoked() {
+		t.Fatal("provider failure left portal access enabled")
 	}
 }
