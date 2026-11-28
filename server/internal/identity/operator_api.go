@@ -300,8 +300,7 @@ func (b *browser) pendingInvitations(ctx context.Context) ([]pendingInvitation, 
 	return b.pendingInvitationsFor(ctx, "")
 }
 
-func (b *browser) pendingInvitationsFor(ctx context.Context, workspace string) ([]pendingInvitation, error) {
-	rows, err := b.foundation.pool.Query(ctx, `SELECT i.subject,i.client_id,i.role,i.expires_at,
+const pendingInvitationsSQL = `SELECT i.subject,i.client_id,i.role,i.expires_at,
  CASE WHEN n.invitation_digest IS NULL OR n.native_setup THEN ''
       WHEN d.delivered_at IS NOT NULL THEN 'sent'
       WHEN n.last_attempt_at IS NOT NULL THEN 'retrying' ELSE 'queued' END
@@ -309,7 +308,10 @@ func (b *browser) pendingInvitationsFor(ctx context.Context, workspace string) (
  LEFT JOIN portal_workspace_invitation_notices n ON n.invitation_digest=i.token_digest
  LEFT JOIN portal_workspace_invitation_deliveries d ON d.invitation_digest=i.token_digest
  WHERE i.issuer=$1 AND NOT i.revoked AND i.expires_at>now() AND ($3='' OR i.client_id=$3)
- ORDER BY i.expires_at,i.client_id LIMIT $2`, b.foundation.broker.issuer, operatorListLimit+1, workspace)
+ ORDER BY i.expires_at,i.client_id LIMIT $2`
+
+func (b *browser) pendingInvitationsFor(ctx context.Context, workspace string) ([]pendingInvitation, error) {
+	rows, err := b.foundation.pool.Query(ctx, pendingInvitationsSQL, b.foundation.broker.issuer, operatorListLimit+1, workspace)
 	if err != nil {
 		return nil, fmt.Errorf("list invitations: %w", err)
 	}

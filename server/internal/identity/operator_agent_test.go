@@ -193,7 +193,7 @@ func TestMachineAPIExpiresDuringPrivateRead(t *testing.T) {
 	b := newBrowserFixture(t)
 	subject := linkFixtureAgent(t, b, nil)
 	b.invite("private-pending-customer", "private-workspace", "client")
-	pause := installCompletedRead(t, b, "FROM portal_invitations WHERE")
+	pause := installCompletedRead(t, b, pendingInvitationsSQL)
 	resume := onceRelease(pause.release)
 	t.Cleanup(resume)
 	raw := b.f.token(t, subject, "", map[string]any{"aud": fixtureAgentAudience, "exp": time.Now().Add(2 * time.Second).Unix()})
