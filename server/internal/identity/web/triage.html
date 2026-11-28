@@ -30,6 +30,24 @@
     <dd class="request-brief">{{.Scope}}</dd>
   </dl>
   {{end}}
+  {{if $.HostingPeriodID}}
+  <form method="post" action="{{root}}/operator/requests/{{(index $.Requests 0).ID}}/hosting-periods">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <input type="hidden" name="period_id" value="{{$.HostingPeriodID}}">
+    <input type="hidden" name="lang" value="{{$.Lang}}">
+    <label for="hosting-agreement">{{if eq $.Lang `da`}}Accepteret hostingtilbud{{else}}Accepted hosting proposal{{end}}</label>
+    <select id="hosting-agreement" name="acceptance_id" required>
+      <option value="">{{if eq $.Lang `da`}}Vælg et tilbud{{else}}Choose a proposal{{end}}</option>
+      {{range $.HostingAgreements}}<option value="{{.ID}}">Version {{.Proposal.Version}} · {{.Recorded.UTC.Format `2006-01-02`}} · {{.Proposal.MonthlyDKK}} DKK{{if eq $.Lang `da`}}/md.{{else}}/month{{end}}</option>{{end}}
+    </select>
+    <label for="hosting-start">{{if eq $.Lang `da`}}Aftalt start (UTC){{else}}Agreed start (UTC){{end}}</label>
+    <input id="hosting-start" type="datetime-local" name="starts_at" required>
+    <label for="hosting-end">{{if eq $.Lang `da`}}Aftalt udløb (UTC){{else}}Agreed end (UTC){{end}}</label>
+    <input id="hosting-end" type="datetime-local" name="ends_at" required>
+    <label><input type="checkbox" name="confirm" value="yes" required> {{if eq $.Lang `da`}}Kundens accepterede vilkår dækker hele perioden.{{else}}The customer's accepted terms cover this entire period.{{end}}</label>
+    <button type="submit">{{if eq $.Lang `da`}}Registrér hostingperiode{{else}}Record hosting period{{end}}</button>
+  </form>
+  {{end}}
 </section>
 {{end}}
 {{if .ProposalsEnabled}}
