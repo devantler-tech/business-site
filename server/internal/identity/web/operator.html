@@ -29,6 +29,7 @@
       {{end}}
     </div>
     {{if eq .Kind "operator-customers"}}{{template "operator-directory" .}}
+    {{else if eq .Kind "operator-customer-accounts"}}{{template "operator-customer-accounts" .}}
     {{else if eq .Kind "operator-invite"}}{{template "operator-invite-form" .}}
     {{else if eq .Kind "operator-audit"}}{{template "operator-activity" .}}
     {{else if eq .Kind "operator-calendar-conflicts"}}{{template "operator-calendar-conflicts" .}}
@@ -43,6 +44,7 @@
   <ul>
     <li><a href="{{root}}/operator?lang={{.Lang}}" aria-current="{{if eq .Kind `operator`}}page{{else}}false{{end}}">{{if eq .Lang "da"}}Oversigt{{else}}Overview{{end}}</a></li>
     <li><a href="{{root}}/operator/customers?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-customers`}}{{if .View}}location{{else}}page{{end}}{{else if or (eq .Kind `operator-invite`) (eq .Kind `operator-support`)}}location{{else}}false{{end}}">{{if eq .Lang "da"}}Arbejdsområder{{else}}Workspaces{{end}}</a></li>
+    <li><a href="{{root}}/operator/customer-accounts?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-customer-accounts`}}{{if .Account}}location{{else}}page{{end}}{{else}}false{{end}}">{{if eq .Lang "da"}}Kunder{{else}}Customers{{end}}</a></li>
     {{if .TriageEnabled}}<li><a href="{{root}}/operator/requests?lang={{.Lang}}" aria-current="{{if or (eq .Kind `triage`) (eq .Kind `work-review`)}}location{{else}}false{{end}}">{{template "operator-requests-label" .}}</a></li>{{end}}
     {{if .CalendarConflictsEnabled}}<li><a href="{{root}}/operator/calendar-conflicts?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-calendar-conflicts`}}page{{else}}false{{end}}">{{if eq .Lang "da"}}Kalenderstatus{{else}}Calendar review{{end}}</a></li>
     {{end}}<li><a href="{{root}}/operator/audit?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-audit`}}page{{else}}false{{end}}">{{if eq .Lang "da"}}Revisionslog{{else}}Audit log{{end}}</a></li>

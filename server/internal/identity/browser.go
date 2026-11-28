@@ -50,7 +50,7 @@ func templateFuncs(root, site string) template.FuncMap {
 // when the portal shares a host with the public site, "" when it has its own host;
 // links to the public website use {{public .Lang}}.
 func pages(root, site string) *template.Template {
-	return template.Must(template.New("portal").Funcs(templateFuncs(root, site)).ParseFS(browserFiles, "web/portal.html", "web/operator.html", "web/operator-workspaces.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/work-review.html"))
+	return template.Must(template.New("portal").Funcs(templateFuncs(root, site)).ParseFS(browserFiles, "web/portal.html", "web/operator.html", "web/operator-workspaces.html", "web/operator-customers.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/work-review.html"))
 }
 
 // internalRoot is where every private route is registered and gated.
@@ -325,6 +325,7 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /portal/operator/audit", b.operatorAuditPage)
 	mux.HandleFunc("GET /portal/operator/calendar-conflicts", b.operatorCalendarConflicts)
 	mux.HandleFunc("GET /portal/operator/customers", b.operatorCustomersPage)
+	mux.HandleFunc("GET "+customerAccountsPath, b.operatorCustomerAccountsPage)
 	mux.HandleFunc("POST /portal/operator/customers/cleanup", b.operatorAPI(operatorRoute{
 		method: "POST", action: "invitations.cleanup", run: (*browser).cleanupCustomerInvitations,
 	}))

@@ -55,3 +55,48 @@ func TestProfilesRequireExactCustomerOrganizationAndIDs(t *testing.T) {
 		})
 	}
 }
+
+func TestSearchAccountsScopesAndPagesHumanCustomers(t *testing.T) {
+	rows := make([]string, 0, customeridentity.AccountPageSize+1)
+	for i := 0; i <= customeridentity.AccountPageSize; i++ {
+		rows = append(rows, fmt.Sprintf(`{"userId":"user-%d","state":"USER_STATE_INACTIVE","details":{"resourceOwner":"customers"},"human":{"profile":{"displayName":"Ada Example"}}}`, i))
+	}
+	const organization = `"organizationIdQuery":{"organizationId":"customers"}`
+	const searchEmail = `"emailQuery":{"emailAddress":"ada@example.test","method":"TEXT_QUERY_METHOD_CONTAINS_IGNORE_CASE"}`
+	for _, test := range []struct {
+		name, response string
+		refuse         bool
+	}{
+		{"full page", strings.Join(rows, ","), false},
+		{"outside organization", strings.Replace(rows[0], "customers", "staff", 1), true},
+		{"machine account", `{"userId":"machine","details":{"resourceOwner":"customers"},"machine":{}}`, true},
+		{"duplicate", rows[0] + "," + rows[0], true},
+		{"deleted", strings.Replace(rows[0], "USER_STATE_INACTIVE", "USER_STATE_DELETED", 1), true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := directoryFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				var received json.RawMessage
+				if r.Method != http.MethodPost || r.URL.Path != "/v2/users" ||
+					r.Header.Get("x-zitadel-orgid") != "customers" || json.NewDecoder(r.Body).Decode(&received) != nil {
+					t.Error("incorrect customer account request")
+					http.Error(w, "", http.StatusBadRequest)
+					return
+				}
+				for _, bound := range []string{organization, searchEmail, `"typeQuery":{"type":"TYPE_HUMAN"}`, `"offset":"25"`, `"limit":26`} {
+					if !strings.Contains(string(received), bound) {
+						t.Errorf("query lacks %s", bound)
+					}
+				}
+				_, _ = fmt.Fprintf(w, `{"result":[%s]}`, test.response)
+			})
+			accounts, more, err := c.SearchAccounts(t.Context(), "ada@example.test", 25)
+			if test.refuse {
+				if !errors.Is(err, ErrUnavailable) || more || len(accounts) > 0 {
+					t.Fatalf("unexpected account was returned: %v", err)
+				}
+			} else if err != nil || !more || len(accounts) != customeridentity.AccountPageSize || accounts[0].ID != "user-0" || !accounts[0].Suspended {
+				t.Fatalf("paged customer directory was not returned: %v", err)
+			}
+		})
+	}
+}

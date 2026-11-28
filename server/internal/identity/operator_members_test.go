@@ -20,6 +20,14 @@ type managementDirectory struct {
 	profiles func([]string) map[string]customeridentity.Profile
 }
 
+func (*managementDirectory) SearchAccounts(context.Context, string, uint64) ([]customeridentity.Account, bool, error) {
+	return nil, false, ErrDenied
+}
+
+func (*managementDirectory) Account(context.Context, string) (customeridentity.Account, error) {
+	return customeridentity.Account{}, ErrDenied
+}
+
 func (d *managementDirectory) Profiles(_ context.Context, ids []string) (map[string]customeridentity.Profile, error) {
 	if d.profiles == nil {
 		return nil, ErrDenied
