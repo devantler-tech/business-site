@@ -126,7 +126,17 @@ func checkWorkspaceRole(ctx context.Context, pool queryRower) error {
   SELECT 1 FROM pg_roles r WHERE (r.rolname=current_user OR pg_has_role(current_user,r.oid,'MEMBER')) AND (
    has_column_privilege(r.oid,'portal_workspace_settings','workspace_id','UPDATE')
    OR has_any_column_privilege(r.oid,'portal_workspace_settings','REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,UPDATE WITH GRANT OPTION')
-   OR has_table_privilege(r.oid,'portal_workspace_settings','DELETE,TRUNCATE,TRIGGER,MAINTAIN')))`).Scan(&allowed)
+   OR has_table_privilege(r.oid,'portal_workspace_settings','DELETE,TRUNCATE,TRIGGER,MAINTAIN')))
+ AND has_table_privilege(current_user,'portal_customer_deletions','SELECT')
+ AND has_table_privilege(current_user,'portal_customer_deletions','INSERT')
+ AND has_column_privilege(current_user,'portal_customer_deletions','confirmed_at','UPDATE')
+ AND NOT EXISTS (SELECT 1 FROM pg_roles r
+   WHERE (r.rolname=current_user OR pg_has_role(current_user,r.oid,'MEMBER')) AND (
+     has_column_privilege(r.oid,'portal_customer_deletions','issuer','UPDATE')
+     OR has_column_privilege(r.oid,'portal_customer_deletions','subject','UPDATE')
+     OR has_column_privilege(r.oid,'portal_customer_deletions','requested_at','UPDATE')
+     OR has_any_column_privilege(r.oid,'portal_customer_deletions','REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,UPDATE WITH GRANT OPTION')
+     OR has_table_privilege(r.oid,'portal_customer_deletions','DELETE,TRUNCATE,TRIGGER,MAINTAIN')))`).Scan(&allowed)
 	if err != nil || !allowed {
 		return ErrDenied
 	}

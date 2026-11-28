@@ -175,7 +175,8 @@ GRANT SELECT,INSERT ON portal_orders,portal_numina_contacts TO portal_runtime;
 GRANT SELECT,INSERT,UPDATE ON portal_order_charges,portal_card_checkouts TO portal_runtime;
 GRANT SELECT,INSERT ON portal_stripe_events TO portal_runtime;
 GRANT SELECT,INSERT ON portal_order_ends,portal_card_cancellations,portal_charge_reversals,portal_order_withdrawals,portal_withdrawal_cancellations,portal_order_completions,portal_withdrawal_settlements,portal_mail_outbox,portal_mail_deliveries,portal_launch_places,portal_order_addons,portal_request_closures,portal_addon_ends,portal_addon_removals TO portal_runtime;
-GRANT SELECT,INSERT ON portal_operator_audit TO portal_runtime;
+GRANT SELECT,INSERT ON portal_operator_audit,portal_customer_deletions TO portal_runtime;
+GRANT UPDATE(confirmed_at) ON portal_customer_deletions TO portal_runtime;
 GRANT SELECT,INSERT ON portal_workspace_invitation_notices,portal_workspace_invitation_deliveries TO portal_runtime;
 GRANT UPDATE(last_attempt_at) ON portal_workspace_invitation_notices TO portal_runtime;
 GRANT SELECT,INSERT ON portal_workspaces TO portal_runtime;
@@ -188,6 +189,7 @@ GRANT EXECUTE ON FUNCTION public.portal_workspace_purge_state(text),public.porta
 REVOKE ALL ON portal_preview_receipts FROM portal_runtime;
 DELETE FROM portal_preview_receipts;
 DELETE FROM portal_operator_audit;
+DELETE FROM portal_customer_deletions;
 DELETE FROM portal_service_consumers;
 DELETE FROM portal_service_fulfillments;
 DELETE FROM portal_work_current;

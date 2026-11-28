@@ -190,6 +190,32 @@
         }
       }
     },
+    "/operator/api/customers/delete-account": {
+      "post": {
+        "operationId": "customers.accounts.delete",
+        "summary": "Permanently delete a customer sign-in account",
+        "description": "Available to human operators when the guarded identity-provider deletion capability is configured.",
+        "security": [{ "portalSession": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DeleteCustomerAccount" }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": { "$ref": "#/components/schemas/DeleteCustomerAccount" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "The exact provider account was confirmed absent and portal access was removed" },
+          "400": { "$ref": "#/components/responses/InvalidInput" },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
     "/operator/api/members/remove": {
       "post": {
         "operationId": "members.remove",
@@ -390,6 +416,16 @@
       }
     },
     "schemas": {
+      "DeleteCustomerAccount": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["subject", "confirm"],
+        "properties": {
+          "subject": { "type": "string", "minLength": 1, "maxLength": 512 },
+          "confirm": { "type": "string", "enum": ["DELETE"] },
+          "csrf_token": { "type": "string" }
+        }
+      },
       "WorkEligibilityPage": {
         "type": "object",
         "additionalProperties": false,

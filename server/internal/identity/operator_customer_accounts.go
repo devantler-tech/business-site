@@ -56,7 +56,8 @@ type customerAccountsPage struct {
 	Accounts              []customerAccountRow
 	Account               *customerAccountRow
 	Query, Previous, Next string
-	BackURL               string
+	BackURL, DeleteURL    string
+	ConfirmDeletion       bool
 	Page                  uint64
 	Remove                *customerAccountWorkspace
 }
@@ -117,7 +118,7 @@ func (b *browser) loadCustomerAccounts(ctx context.Context, data *customerAccoun
 	}
 	subject, view := query.Get("account"), query.Get("view")
 	workspace := query.Get("workspace")
-	if view != "" && (view != "remove" || subject == "") {
+	if view != "" && ((view != "remove" && view != "delete-account") || subject == "") {
 		return errOperatorInput
 	}
 	if workspace != "" && (view != "remove" || !validCustomerWorkspace(workspace)) {
@@ -174,6 +175,19 @@ func (b *browser) loadCustomerAccounts(ctx context.Context, data *customerAccoun
 		data.Account = &data.Accounts[0]
 		data.Title = data.Account.Name
 		target.Set("account", subject)
+		canDelete := b.foundation.customerDeletion != nil && subject != previewSubject
+		if view == "delete-account" && !canDelete {
+			return errOperatorInput
+		}
+		if view == "delete-account" {
+			data.ConfirmDeletion = true
+			data.BackURL = base + target.Encode()
+			target.Set("view", view)
+		} else if canDelete && view == "" {
+			target.Set("view", "delete-account")
+			data.DeleteURL = base + target.Encode()
+			target.Del("view")
+		}
 		if view == "remove" {
 			for _, candidate := range data.Account.Workspaces {
 				if !candidate.Invited && (candidate.ID == workspace || workspace == "" && len(data.Account.Workspaces) == 1) {
@@ -186,7 +200,7 @@ func (b *browser) loadCustomerAccounts(ctx context.Context, data *customerAccoun
 			data.BackURL = base + target.Encode()
 			target.Set("view", "remove")
 			target.Set("workspace", data.Remove.ID)
-		} else {
+		} else if view == "" {
 			target.Set("view", "remove")
 			for i := range data.Account.Workspaces {
 				candidate := &data.Account.Workspaces[i]
