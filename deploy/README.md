@@ -403,7 +403,11 @@ verifier and independent paired-artifact readback remain mandatory under #276.
 
 Release initiation requires a manual dispatch from `main` that confirms the full
 signed source commit. The publisher accepts stable releases created and published
-by the configured GitHub release App.
+by either botantler GitHub App, `botantler-1[bot]` or `botantler-2[bot]`, each pinned to its
+numeric id. The GitHub token broker (devantler-tech/monorepo ADR 0020) mints each release
+token from whichever App has more rate limit left, so either App may author a release. The
+App that authors a release must also publish it; any other account, including a look-alike
+login, is refused.
 
 `release-runtime.yaml` admits a complete successful original main-push CI attempt whose source
 equals its frozen caller commit. It independently reads current API metadata, downloads only the
