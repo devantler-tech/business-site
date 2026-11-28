@@ -89,10 +89,10 @@ Any future multi-period amendment must satisfy this same invariant atomically.
 The **governing revision** is the current revision of the period containing fresh
 database time. The uniqueness of the entitlement and current period heads, plus
 non-overlap, prove that there is at most one. Historical revisions do not enter
-this query. A separate existence query over current heads determines whether a
-later period remains; neither query loads authorization history or selects the
-newest revision across unrelated periods. This avoids a history-read bound or an
-early renewal changing the coverage in force.
+this query. If no revision governs, use the next agreed period. Neither query
+loads authorization history or selects the newest revision across unrelated
+periods. This avoids a history-read bound or an early renewal changing the
+coverage in force.
 
 For example, recording February's renewal while January is active does not
 replace January's head. Shortening January's current revision to 15 January
@@ -106,15 +106,14 @@ the first rule in this order that matches:
 
 | Order | State | Matches when | New included-task authorization |
 |---|---|---|---|
-| 1 | unavailable | facts are missing, unreadable, overflowed or inconsistent | paused |
+| 1 | unavailable | facts are missing, unreadable, overflowed or inconsistent, or no revision governs and all later revisions are cancelled or disputed | paused |
 | 2 | cancelled | the governing revision records a cancellation | paused |
 | 3 | disputed | the governing revision records a dispute | paused |
 | 4 | active | a governing revision exists | permitted while that revision's authorization history is below its bound |
-| 5 | future | no revision governs and a current period revision starts later, including before the first period or in a gap | paused |
+| 5 | future | no revision governs and an agreed current period revision starts later, including before the first period or in a gap | paused |
 | 6 | ended | no revision governs and no current period revision starts later | paused |
 
-Rules 4 to 6 between them cover every readable entitlement, so no reading is
-left unclassified.
+These rules cover every readable entitlement.
 
 Paused stops automated eligibility only. It never terminates a contract, adds a
 payment or grace period, denies a contractual remedy or creates a refund rule;

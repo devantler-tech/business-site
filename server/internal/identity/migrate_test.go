@@ -112,11 +112,12 @@ func rewindAppointmentReservationsFixture(t *testing.T, pool *pgxpool.Pool) {
 
 func rewindHostingPeriodsFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_workspace_invitation_deliveries,portal_workspace_invitation_notices;
+	if _, err := pool.Exec(t.Context(), `DROP FUNCTION portal_operator_hosting_coverage(text,text,text,text,uuid);
+ DROP TABLE portal_workspace_invitation_deliveries,portal_workspace_invitation_notices;
  DROP FUNCTION portal_purge_closed_workspace(text,timestamptz,text,text,text),portal_workspace_purge_state(text);
  DROP TABLE portal_hosting_period_heads,portal_hosting_period_revisions,portal_hosting_entitlements;
  DROP FUNCTION portal_guard_hosting_period_operator();
- DELETE FROM portal_schema_version WHERE version IN (48,49,50)`); err != nil {
+ DELETE FROM portal_schema_version WHERE version IN (48,49,50,51)`); err != nil {
 		t.Fatal("historical fixture could not remove hosting period storage", err)
 	}
 }
