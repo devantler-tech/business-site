@@ -212,11 +212,12 @@ func (b *browser) operatorAPI(route operatorRoute) http.HandlerFunc {
 			case http.StatusConflict:
 				b.render(w, r, status, "operator-workspace-billing-error", "", "")
 			case http.StatusBadRequest:
-				if route.action == "invitations.create" {
+				switch route.action {
+				case "invitations.create":
 					b.render(w, r, status, "operator-invitation-error", "", "")
-				} else if route.action == "workspaces.purge" {
+				case "workspaces.purge":
 					b.render(w, r, status, "operator-workspace-purge-error", "", "")
-				} else {
+				default:
 					b.render(w, r, status, "operator-action-error", "", "")
 				}
 			default:
